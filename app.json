@@ -7,7 +7,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Precisamos da câmera pra escanear o QR code de pareamento com o NeuroAxis."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,6 +23,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Precisamos da câmera pra escanear o QR code de pareamento com o NeuroAxis."
+        }
+      ]
+    ]
   }
 }

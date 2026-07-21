@@ -1,20 +1,50 @@
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import PairingScreen from './src/screens/PairingScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
 
 export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [pairing, setPairing] = useState<Pairing | null>(null);
+
+  useEffect(() => {
+    loadPairing().then((p) => {
+      setPairing(p);
+      setLoading(false);
+    });
+  }, []);
+
+  const handlePaired = useCallback(() => {
+    loadPairing().then(setPairing);
+  }, []);
+
+  const handleUnpair = useCallback(() => {
+    clearPairing().then(() => setPairing(null));
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+        <StatusBar style="auto" />
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
+    <>
+      {pairing ? (
+        <ChatScreen pairing={pairing} onUnpair={handleUnpair} />
+      ) : (
+        <PairingScreen onPaired={handlePaired} />
+      )}
       <StatusBar style="auto" />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
