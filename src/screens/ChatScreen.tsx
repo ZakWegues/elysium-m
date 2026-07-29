@@ -13,10 +13,12 @@ export default function ChatScreen({
   pairing,
   onUnpair,
   onOpenTelemetry,
+  onOpenPresets,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
   onOpenTelemetry: () => void;
+  onOpenPresets: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([
     { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}` },
@@ -183,6 +185,9 @@ export default function ChatScreen({
       <View style={styles.header}>
         <Text style={styles.headerText}>NeuroAxis Portal</Text>
         <View style={styles.headerActions}>
+          <Pressable onPress={onOpenPresets}>
+            <Text style={styles.telemetryLink}>Presets</Text>
+          </Pressable>
           <Pressable onPress={onOpenTelemetry}>
             <Text style={styles.telemetryLink}>Telemetria</Text>
           </Pressable>

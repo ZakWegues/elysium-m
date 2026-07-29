@@ -4,9 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import TelemetryScreen from './src/screens/TelemetryScreen';
+import PresetsScreen from './src/screens/PresetsScreen';
 import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
 
-type Screen = 'chat' | 'telemetry';
+type Screen = 'chat' | 'telemetry' | 'presets';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -45,8 +46,15 @@ export default function App() {
       {pairing ? (
         screen === 'telemetry' ? (
           <TelemetryScreen pairing={pairing} onBack={() => setScreen('chat')} />
+        ) : screen === 'presets' ? (
+          <PresetsScreen pairing={pairing} onBack={() => setScreen('chat')} />
         ) : (
-          <ChatScreen pairing={pairing} onUnpair={handleUnpair} onOpenTelemetry={() => setScreen('telemetry')} />
+          <ChatScreen
+            pairing={pairing}
+            onUnpair={handleUnpair}
+            onOpenTelemetry={() => setScreen('telemetry')}
+            onOpenPresets={() => setScreen('presets')}
+          />
         )
       ) : (
         <PairingScreen onPaired={handlePaired} />
