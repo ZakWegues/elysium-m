@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { Pairing } from '../lib/pairing';
 import { sendCommand } from '../lib/api';
+import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 
 type Message = { id: string; from: 'me' | 'reply' | 'error'; text: string };
+type MicStatus = 'checking' | 'ready' | 'denied';
 
 export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
   const [messages, setMessages] = useState<Message[]>([
@@ -12,6 +15,80 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
   ]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [micStatus, setMicStatus] = useState<MicStatus>('checking');
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const voiceConnRef = useRef<VoiceConnection | null>(null);
+
+  function errMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  function pushError(text: string) {
+    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text }]);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let perm;
+      try {
+        perm = await requestRecordingPermissionsAsync();
+      } catch (err) {
+        if (!cancelled) {
+          setMicStatus('denied');
+          pushError(`Falha na permissão: ${errMessage(err)}`);
+        }
+        return;
+      }
+      if (cancelled) return;
+      if (!perm.granted) {
+        setMicStatus('denied');
+        return;
+      }
+
+      try {
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      } catch (err) {
+        if (!cancelled) {
+          setMicStatus('denied');
+          pushError(`Falha no audio mode: ${errMessage(err)}`);
+        }
+        return;
+      }
+
+      if (!cancelled) setMicStatus('ready');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      voiceConnRef.current?.close();
+      voiceConnRef.current = null;
+    };
+  }, []);
+
+  async function ensureVoiceConnection(): Promise<VoiceConnection> {
+    if (voiceConnRef.current) return voiceConnRef.current;
+    const conn = openVoiceConnection(pairing, () => {
+      if (voiceConnRef.current === conn) voiceConnRef.current = null;
+    });
+    voiceConnRef.current = conn;
+    try {
+      await conn.ready;
+    } catch (err) {
+      if (voiceConnRef.current === conn) voiceConnRef.current = null;
+      throw err;
+    }
+    return conn;
+  }
+
+  function speakReply(reply: string) {
+    Speech.speak(reply, { language: 'pt-BR' });
+  }
 
   async function handleSend() {
     const text = draft.trim();
@@ -23,10 +100,68 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
     try {
       const reply = await sendCommand(pairing, text);
       setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply }]);
-      Speech.speak(reply, { language: 'pt-BR' });
+      speakReply(reply);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'erro desconhecido';
-      setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text: `Falha: ${message}` }]);
+      pushError(`Falha: ${errMessage(err)}`);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleRecordStart() {
+    if (sending || recording) return;
+    if (micStatus !== 'ready') {
+      Alert.alert('Microfone indisponível', 'Permissão de microfone não foi concedida.');
+      return;
+    }
+
+    try {
+      await recorder.prepareToRecordAsync();
+    } catch (err) {
+      pushError(`Falha ao preparar gravação: ${errMessage(err)}`);
+      return;
+    }
+
+    try {
+      recorder.record();
+    } catch (err) {
+      pushError(`Falha ao iniciar gravação: ${errMessage(err)}`);
+      return;
+    }
+
+    setRecording(true);
+  }
+
+  async function handleRecordStop() {
+    if (!recording) return;
+    setRecording(false);
+
+    try {
+      await recorder.stop();
+    } catch (err) {
+      pushError(`Falha ao parar gravação: ${errMessage(err)}`);
+      return;
+    }
+
+    const uri = recorder.uri;
+    if (!uri) {
+      pushError('Falha ao ler o áudio gravado: uri vazia após stop()');
+      return;
+    }
+
+    setSending(true);
+    setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)' }]);
+
+    try {
+      const conn = await ensureVoiceConnection();
+      const { transcript, reply } = await conn.sendAudio(uri);
+      if (transcript) {
+        setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript }]);
+      }
+      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply }]);
+      speakReply(reply);
+    } catch (err) {
+      pushError(errMessage(err));
     } finally {
       setSending(false);
     }
@@ -79,6 +214,14 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
           returnKeyType="send"
           editable={!sending}
         />
+        <Pressable
+          style={[styles.micButton, recording && styles.micButtonActive, micStatus !== 'ready' && styles.micButtonDisabled]}
+          onPressIn={handleRecordStart}
+          onPressOut={handleRecordStop}
+          disabled={sending || micStatus !== 'ready'}
+        >
+          <Text style={styles.sendButtonText}>{recording ? '●' : '🎤'}</Text>
+        </Pressable>
         <Pressable style={styles.sendButton} onPress={handleSend} disabled={sending}>
           <Text style={styles.sendButtonText}>Enviar</Text>
         </Pressable>
@@ -125,6 +268,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  micButton: {
+    backgroundColor: '#888',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  micButtonActive: { backgroundColor: '#c0392b' },
+  micButtonDisabled: { backgroundColor: '#ccc' },
   sendButton: {
     backgroundColor: '#4da3ff',
     borderRadius: 8,

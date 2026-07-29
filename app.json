@@ -31,7 +31,8 @@
         {
           "cameraPermission": "Precisamos da câmera pra escanear o QR code de pareamento com o NeuroAxis."
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }
