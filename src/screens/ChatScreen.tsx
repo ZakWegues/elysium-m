@@ -9,7 +9,15 @@ import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 type Message = { id: string; from: 'me' | 'reply' | 'error'; text: string };
 type MicStatus = 'checking' | 'ready' | 'denied';
 
-export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+export default function ChatScreen({
+  pairing,
+  onUnpair,
+  onOpenTelemetry,
+}: {
+  pairing: Pairing;
+  onUnpair: () => void;
+  onOpenTelemetry: () => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([
     { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}` },
   ]);
@@ -174,9 +182,14 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
     >
       <View style={styles.header}>
         <Text style={styles.headerText}>NeuroAxis Portal</Text>
-        <Pressable onPress={onUnpair}>
-          <Text style={styles.unpair}>Desparear</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={onOpenTelemetry}>
+            <Text style={styles.telemetryLink}>Telemetria</Text>
+          </Pressable>
+          <Pressable onPress={onUnpair}>
+            <Text style={styles.unpair}>Desparear</Text>
+          </Pressable>
+        </View>
       </View>
 
       <FlatList
@@ -243,6 +256,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ccc',
   },
   headerText: { fontSize: 18, fontWeight: '600' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  telemetryLink: { color: '#4da3ff', fontSize: 14 },
   unpair: { color: '#c0392b', fontSize: 14 },
   list: { padding: 16, gap: 8 },
   bubble: { borderRadius: 12, padding: 12, maxWidth: '80%', backgroundColor: '#eee', alignSelf: 'flex-start' },

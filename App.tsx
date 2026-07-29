@@ -3,11 +3,15 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import TelemetryScreen from './src/screens/TelemetryScreen';
 import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
+
+type Screen = 'chat' | 'telemetry';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [pairing, setPairing] = useState<Pairing | null>(null);
+  const [screen, setScreen] = useState<Screen>('chat');
 
   useEffect(() => {
     loadPairing().then((p) => {
@@ -21,7 +25,10 @@ export default function App() {
   }, []);
 
   const handleUnpair = useCallback(() => {
-    clearPairing().then(() => setPairing(null));
+    clearPairing().then(() => {
+      setPairing(null);
+      setScreen('chat');
+    });
   }, []);
 
   if (loading) {
@@ -36,7 +43,11 @@ export default function App() {
   return (
     <>
       {pairing ? (
-        <ChatScreen pairing={pairing} onUnpair={handleUnpair} />
+        screen === 'telemetry' ? (
+          <TelemetryScreen pairing={pairing} onBack={() => setScreen('chat')} />
+        ) : (
+          <ChatScreen pairing={pairing} onUnpair={handleUnpair} onOpenTelemetry={() => setScreen('telemetry')} />
+        )
       ) : (
         <PairingScreen onPaired={handlePaired} />
       )}
