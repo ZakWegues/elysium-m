@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
-import { BlurView } from 'expo-blur';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
@@ -10,7 +9,7 @@ import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { errMessage } from '../lib/errors';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { useTheme } from '../theme';
-import { ScreenHeader, Text } from '../components/ui';
+import { GlassFill, ScreenHeader, Text } from '../components/ui';
 
 type MicStatus = 'checking' | 'ready' | 'denied';
 
@@ -242,7 +241,7 @@ export default function ChatScreen({
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: palette.background }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
@@ -293,8 +292,7 @@ export default function ChatScreen({
       )}
 
       <View style={{ overflow: 'hidden' }}>
-        <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurfaceStrong }]} />
+        <GlassFill intensity={65} strong edge={false} />
         <View
           style={[
             styles.inputRow,
@@ -352,7 +350,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
   },
   input: {
     flex: 1,

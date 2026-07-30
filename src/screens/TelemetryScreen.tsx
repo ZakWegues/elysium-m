@@ -43,7 +43,7 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
   const statusColor = status === 'open' ? palette.success : palette.error;
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.background }}>
+    <View style={{ flex: 1 }}>
       <ScreenHeader
         title="Telemetria"
         right={

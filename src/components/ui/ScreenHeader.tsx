@@ -1,7 +1,7 @@
 import { StyleSheet, View, ViewProps } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
+import { GlassFill } from './GlassSurface';
 import { Text } from './Text';
 
 export function ScreenHeader({
@@ -15,8 +15,7 @@ export function ScreenHeader({
 
   return (
     <View style={{ overflow: 'hidden' }}>
-      <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurface }]} />
+      <GlassFill intensity={60} strong edge={false} />
       <View
         style={[
           styles.row,
@@ -24,7 +23,7 @@ export function ScreenHeader({
             paddingTop: insets.top + tokens.spacing.sm,
             paddingHorizontal: tokens.spacing.lg,
             paddingBottom: tokens.spacing.md,
-            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomWidth: 1,
             borderBottomColor: palette.glassBorder,
           },
           style,

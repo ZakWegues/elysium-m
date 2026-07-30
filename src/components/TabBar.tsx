@@ -1,9 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
-import { Text } from './ui';
+import { GlassFill, Text } from './ui';
 
 export type Screen = 'chat' | 'mailbox' | 'telemetry' | 'presets' | 'settings' | 'conversations';
 
@@ -31,8 +30,7 @@ export function TabBar({
 
   return (
     <View style={{ overflow: 'hidden' }}>
-      <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurface }]} />
+      <GlassFill intensity={65} strong edge={false} />
       <View
         style={[
           styles.row,
@@ -76,7 +74,7 @@ export function TabBar({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     paddingTop: 8,
   },
   tab: {

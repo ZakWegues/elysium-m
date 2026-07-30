@@ -4,3 +4,5 @@ export { Card } from './Card';
 export { ScreenHeader } from './ScreenHeader';
 export { MetricBar } from './MetricBar';
 export { GlassModal } from './GlassModal';
+export { GlassFill } from './GlassSurface';
+export { AppBackground } from './AppBackground';

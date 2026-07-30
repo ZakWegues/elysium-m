@@ -37,10 +37,11 @@ const shared = {
   error: '#C0392B',
   errorSoft: '#F8D7DA',
   success: '#2E8B47',
-  glassSurface: 'rgba(255,255,255,0.55)',
-  glassSurfaceStrong: 'rgba(255,255,255,0.78)',
-  glassBorder: 'rgba(255,255,255,0.65)',
-  glassBackdrop: 'rgba(20,22,26,0.35)',
+  // Bem translúcidos de propósito — o blur por baixo é que dá corpo, não a tinta.
+  glassSurface: 'rgba(255,255,255,0.18)',
+  glassSurfaceStrong: 'rgba(255,255,255,0.34)',
+  glassBorder: 'rgba(255,255,255,0.55)',
+  glassBackdrop: 'rgba(18,20,24,0.28)',
 };
 
 export const palettes: Record<ThemeName, Palette> = {

@@ -50,7 +50,7 @@ export default function ConversationsScreen({
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.background }}>
+    <View style={{ flex: 1 }}>
       <ScreenHeader
         title="Conversas"
         right={

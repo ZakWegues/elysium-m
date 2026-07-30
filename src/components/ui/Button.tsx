@@ -1,6 +1,6 @@
-import { ActivityIndicator, Pressable, PressableProps, StyleSheet, View } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { ActivityIndicator, Pressable, PressableProps, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme';
+import { GlassFill } from './GlassSurface';
 import { Text } from './Text';
 
 type Variant = 'primary' | 'secondary' | 'destructive' | 'ghost' | 'glass';
@@ -44,19 +44,14 @@ export function Button({
           paddingHorizontal: tokens.spacing.lg,
           opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
           overflow: 'hidden',
-          borderWidth: isGlass ? StyleSheet.hairlineWidth : 0,
+          borderWidth: isGlass ? 1 : 0,
           borderColor: isGlass ? palette.glassBorder : 'transparent',
         },
         typeof style === 'function' ? undefined : style,
       ]}
       {...rest}
     >
-      {isGlass && (
-        <>
-          <BlurView intensity={50} tint="light" style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurface }]} />
-        </>
-      )}
+      {isGlass && <GlassFill intensity={55} />}
       {loading ? (
         <ActivityIndicator color={textColors[variant]} />
       ) : (

@@ -14,7 +14,7 @@ import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
-import { GlassModal } from './src/components/ui';
+import { AppBackground, GlassModal } from './src/components/ui';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -102,6 +102,7 @@ function AppInner() {
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.background }}>
+      <AppBackground />
       <View style={{ flex: 1 }}>
         {screen === 'telemetry' && <TelemetryScreen pairing={pairing} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}

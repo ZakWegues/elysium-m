@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { BlurView } from 'expo-blur';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import { File } from 'expo-file-system';
@@ -19,7 +18,7 @@ import {
 import { loadFavorites, saveCache, loadCache, toggleFavorite as toggleFavoriteStore } from '../lib/mailboxStore';
 import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
-import { ScreenHeader, Text } from '../components/ui';
+import { GlassFill, ScreenHeader, Text } from '../components/ui';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -187,7 +186,7 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
   const ordered = messages.slice().sort((a, b) => a.createdAt - b.createdAt);
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.background }}>
+    <View style={{ flex: 1 }}>
       <ScreenHeader title="Caixa de recados" />
 
       {loading && (
@@ -284,8 +283,7 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
       />
 
       <View style={{ overflow: 'hidden' }}>
-        <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurfaceStrong }]} />
+        <GlassFill intensity={65} strong edge={false} />
         <View
           style={[
             styles.composer,
@@ -343,7 +341,7 @@ const styles = StyleSheet.create({
   previewImage: { width: 220, height: 220 },
   previewLoading: { alignItems: 'center', justifyContent: 'center' },
   imageFavorite: { position: 'absolute', top: 8, right: 8 },
-  composer: { borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
+  composer: { borderTopWidth: 1, gap: 8 },
   composerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   attachmentChip: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

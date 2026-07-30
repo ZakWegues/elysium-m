@@ -1,6 +1,6 @@
 import { StyleSheet, View, ViewProps } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useTheme } from '../../theme';
+import { GlassFill } from './GlassSurface';
 
 export function Card({ glass = false, style, children, ...rest }: ViewProps & { glass?: boolean }) {
   const { palette, tokens } = useTheme();
@@ -10,7 +10,7 @@ export function Card({ glass = false, style, children, ...rest }: ViewProps & { 
       style={[
         {
           borderRadius: tokens.radii.lg,
-          borderWidth: StyleSheet.hairlineWidth,
+          borderWidth: glass ? 1 : StyleSheet.hairlineWidth,
           borderColor: glass ? palette.glassBorder : palette.border,
           padding: tokens.spacing.lg,
           overflow: 'hidden',
@@ -20,12 +20,7 @@ export function Card({ glass = false, style, children, ...rest }: ViewProps & { 
       ]}
       {...rest}
     >
-      {glass && (
-        <>
-          <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurface }]} />
-        </>
-      )}
+      {glass && <GlassFill intensity={45} />}
       {children}
     </View>
   );
