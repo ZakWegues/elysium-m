@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import { File } from 'expo-file-system';
@@ -32,6 +32,8 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
   const [draft, setDraft] = useState('');
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
   const [sending, setSending] = useState(false);
+  const [imageCache, setImageCache] = useState<Record<string, string>>({});
+  const fetchingImages = useRef<Set<string>>(new Set());
   const listRef = useRef<FlatList<MailboxMessage>>(null);
 
   const refresh = useCallback(async () => {
@@ -79,6 +81,26 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
   useEffect(() => {
     listRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
+
+  useEffect(() => {
+    const toFetch = messages.filter(
+      (m) =>
+        m.attachment?.mimeType.startsWith('image/') &&
+        !imageCache[m.id] &&
+        !fetchingImages.current.has(m.id)
+    );
+    toFetch.forEach((m) => {
+      fetchingImages.current.add(m.id);
+      fetchMessageContent(pairing, m.id)
+        .then((content) => {
+          if (content.attachment?.base64) {
+            setImageCache((prev) => ({ ...prev, [m.id]: content.attachment!.base64 }));
+          }
+        })
+        .catch((err) => console.warn('[mailbox] falha ao carregar preview de imagem', m.id, err))
+        .finally(() => fetchingImages.current.delete(m.id));
+    });
+  }, [messages, pairing, imageCache]);
 
   async function handlePaste() {
     const text = await Clipboard.getStringAsync();
@@ -191,10 +213,13 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
           const mine = item.from === 'mobile';
           const bg = mine ? palette.primary : palette.surfaceRaised;
           const color = mine ? palette.onPrimary : palette.text;
+          const isImage = item.attachment?.mimeType.startsWith('image/') ?? false;
           return (
             <Pressable
               style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '80%' }}
-              onPress={() => handleOpenAttachment(item)}
+              onPress={() => {
+                if (item.attachment && !isImage) handleOpenAttachment(item);
+              }}
               onLongPress={() => handleToggleFavorite(item.id)}
             >
               <View
@@ -202,20 +227,48 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
                   styles.bubble,
                   {
                     borderRadius: tokens.radii.lg,
-                    padding: tokens.spacing.md,
+                    padding: isImage ? tokens.spacing.xs : tokens.spacing.md,
                     backgroundColor: bg,
                     borderWidth: mine ? 0 : StyleSheet.hairlineWidth,
                     borderColor: palette.border,
                   },
                 ]}
               >
-                <View style={styles.bubbleHeader}>
-                  {item.attachment && <Feather name="paperclip" size={14} color={color} />}
-                  {favorites[item.id] && <Feather name="star" size={12} color="#F5A623" />}
-                </View>
-                <Text variant="body" color={color}>
-                  {item.text ?? item.attachment?.name ?? '(sem conteúdo)'}
-                </Text>
+                {!isImage && (
+                  <View style={styles.bubbleHeader}>
+                    {item.attachment && <Feather name="paperclip" size={14} color={color} />}
+                    {favorites[item.id] && <Feather name="star" size={12} color="#F5A623" />}
+                  </View>
+                )}
+
+                {isImage ? (
+                  imageCache[item.id] ? (
+                    <Image
+                      source={{ uri: `data:${item.attachment!.mimeType};base64,${imageCache[item.id]}` }}
+                      style={[styles.previewImage, { borderRadius: tokens.radii.md }]}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.previewImage, styles.previewLoading, { borderRadius: tokens.radii.md }]}>
+                      <ActivityIndicator size="small" color={mine ? palette.onPrimary : palette.primary} />
+                    </View>
+                  )
+                ) : (
+                  <Text variant="body" color={color}>
+                    {item.text ?? item.attachment?.name ?? '(sem conteúdo)'}
+                  </Text>
+                )}
+
+                {isImage && favorites[item.id] && (
+                  <View style={styles.imageFavorite}>
+                    <Feather name="star" size={12} color="#F5A623" />
+                  </View>
+                )}
+                {isImage && item.text && (
+                  <Text variant="caption" color={color} style={{ marginTop: tokens.spacing.xs }}>
+                    {item.text}
+                  </Text>
+                )}
               </View>
               <Text
                 variant="caption"
@@ -282,6 +335,9 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', paddingVertical: 32 },
   bubble: { gap: 4 },
   bubbleHeader: { flexDirection: 'row', gap: 4 },
+  previewImage: { width: 220, height: 220 },
+  previewLoading: { alignItems: 'center', justifyContent: 'center' },
+  imageFavorite: { position: 'absolute', top: 8, right: 8 },
   composer: { borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
   composerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   attachmentChip: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 },
