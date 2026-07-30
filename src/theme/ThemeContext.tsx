@@ -18,16 +18,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [name, setName] = useState<ThemeName>('default');
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (stored && stored in palettes) {
-        setName(stored as ThemeName);
-      }
-    });
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((stored) => {
+        if (stored && stored in palettes) {
+          setName(stored as ThemeName);
+        }
+      })
+      .catch((err) => console.error('[theme] falha lendo tema salvo', err));
   }, []);
 
   function setTheme(next: ThemeName) {
+    console.log('[theme] setTheme', next);
     setName(next);
-    AsyncStorage.setItem(STORAGE_KEY, next);
+    AsyncStorage.setItem(STORAGE_KEY, next).catch((err) =>
+      console.error('[theme] falha salvando tema', err)
+    );
   }
 
   const value: ThemeContextValue = {
