@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
+import { fromByteArray } from 'base64-js';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
@@ -115,15 +116,13 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
     try {
       let attachmentPayload: { name: string; mimeType: string; base64: string } | undefined;
       if (attachment) {
-        const base64 = await FileSystem.readAsStringAsync(attachment.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        if (base64.length * 0.75 > MAILBOX_MAX_ATTACHMENT_BYTES) {
+        const bytes = new Uint8Array(await new File(attachment.uri).arrayBuffer());
+        if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) {
           Alert.alert('Arquivo grande demais', 'Limite de 5MB por anexo.');
           setSending(false);
           return;
         }
-        attachmentPayload = { name: attachment.name, mimeType: attachment.mimeType, base64 };
+        attachmentPayload = { name: attachment.name, mimeType: attachment.mimeType, base64: fromByteArray(bytes) };
       }
 
       await sendMessage(pairing, {
