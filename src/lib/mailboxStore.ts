@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MailboxItem } from './mailbox';
+import { MailboxMessage } from './mailbox';
 
 const FAVORITES_KEY = 'neuroaxis_mailbox_favorites';
 const CACHE_KEY = 'neuroaxis_mailbox_cache';
 
-type Cache = { inbox: MailboxItem[]; outbox: MailboxItem[] };
+type Cache = { messages: MailboxMessage[] };
 
 export async function loadFavorites(): Promise<Record<string, boolean>> {
   const raw = await AsyncStorage.getItem(FAVORITES_KEY);
@@ -25,11 +25,11 @@ export async function toggleFavorite(id: string): Promise<Record<string, boolean
 
 export async function loadCache(): Promise<Cache> {
   const raw = await AsyncStorage.getItem(CACHE_KEY);
-  if (!raw) return { inbox: [], outbox: [] };
+  if (!raw) return { messages: [] };
   try {
     return JSON.parse(raw);
   } catch {
-    return { inbox: [], outbox: [] };
+    return { messages: [] };
   }
 }
 

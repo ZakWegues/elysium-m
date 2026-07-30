@@ -10,7 +10,7 @@ import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
 import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
-import { listInbox } from './src/lib/mailbox';
+import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
@@ -47,10 +47,10 @@ function AppInner() {
   const refreshMailboxBadge = useCallback(async () => {
     if (!pairing) return;
     try {
-      const items = await listInbox(pairing);
-      setMailboxUnread(items.filter((item) => !item.readAt).length);
+      const items = await listMessages(pairing);
+      setMailboxUnread(items.filter((item) => item.from === 'pc' && !item.readAt).length);
     } catch (err) {
-      console.warn('[mailbox-badge] falha ao consultar inbox', err);
+      console.warn('[mailbox-badge] falha ao consultar thread', err);
     }
   }, [pairing]);
 
