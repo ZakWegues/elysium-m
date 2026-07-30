@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/telemetry';
-import { findMetric } from '../lib/telemetryFormat';
+import { findMetric, HIDDEN_KEYS } from '../lib/telemetryFormat';
 import { useTheme } from '../theme';
 import { Card, MetricBar, ScreenHeader, Text } from '../components/ui';
 
@@ -25,24 +25,21 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TelemetryFrame | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const loggedOnce = useRef(false);
 
   useEffect(() => {
-    const close = openTelemetryStream(pairing, (frame) => {
-      if (!loggedOnce.current) {
-        loggedOnce.current = true;
-        // Payload real de telemetria ainda não confirmado contra o desktop —
-        // log único pra ajustar METRICS em src/lib/telemetryFormat.ts se necessário.
-        console.log('[telemetry] primeiro payload recebido:', JSON.stringify(frame));
-      }
-      setSnapshot(frame);
-    }, setStatus);
+    const close = openTelemetryStream(pairing, setSnapshot, setStatus);
     return close;
   }, [pairing.ip, pairing.port, pairing.token]);
 
-  const entries = snapshot ? Object.entries(snapshot).filter(([key]) => key !== 'type') : [];
-  const known = entries.filter(([key]) => findMetric(key));
-  const unknown = entries.filter(([key]) => !findMetric(key));
+  const entries = snapshot
+    ? Object.entries(snapshot).filter(([key, value]) => {
+        if (key === 'type' || HIDDEN_KEYS.has(key)) return false;
+        if (findMetric(key) && value === null) return false; // ex: battery_pct null em desktop sem bateria
+        return true;
+      })
+    : [];
+  const known = entries.filter(([key, value]) => findMetric(key) && typeof value === 'number');
+  const unknown = entries.filter(([key, value]) => !(findMetric(key) && typeof value === 'number'));
   const statusColor = status === 'open' ? palette.success : palette.error;
 
   return (
@@ -72,8 +69,12 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
           <Card style={{ gap: tokens.spacing.lg }}>
             {known.map(([key, value]) => {
               const metric = findMetric(key)!;
-              const percent = typeof value === 'number' ? value : 0;
-              return <MetricBar key={key} icon={metric.icon} label={metric.label} percent={percent} />;
+              const percent = value as number;
+              const charging = key.startsWith('battery') && typeof snapshot?.battery_charging === 'boolean'
+                ? snapshot.battery_charging
+                : undefined;
+              const detail = charging !== undefined ? `${Math.round(percent)}%${charging ? ' · carregando' : ''}` : undefined;
+              return <MetricBar key={key} icon={metric.icon} label={metric.label} percent={percent} detail={detail} />;
             })}
           </Card>
         )}

@@ -9,15 +9,21 @@ export type MetricDef = {
   icon: React.ComponentProps<typeof Feather>['name'];
 };
 
-// Variantes de nome já usadas no fallback genérico de TelemetryScreen desde a Fase 4 —
-// não é um chute novo, é o que já roda em produção. Nomes de campo exatos do payload
-// ainda não foram confirmados contra o código-fonte do desktop (repo separado).
+// Confirmado contra payload real do desktop (log [telemetry] no Metro):
+// {"type":"telemetry","timestamp":...,"cpu_pct":50,"ram_pct":62,"battery_pct":null,"battery_charging":false}
+// Sem campo de disco hoje. battery_pct vem null em desktops sem bateria - tratado à parte
+// em TelemetryScreen (não exibido como barra quando null). Mantidas variantes antigas
+// como fallback caso o payload mude.
 export const METRICS: MetricDef[] = [
-  { keys: ['cpu', 'cpuPercent', 'cpuUsage'], label: 'CPU', kind: 'percent', icon: 'cpu' },
-  { keys: ['ram', 'ramPercent', 'memory', 'memoryPercent'], label: 'RAM', kind: 'percent', icon: 'server' },
-  { keys: ['disk', 'diskPercent', 'diskUsage'], label: 'Disco', kind: 'percent', icon: 'hard-drive' },
-  { keys: ['battery', 'batteryPercent', 'batteryLevel'], label: 'Bateria', kind: 'percent', icon: 'battery' },
+  { keys: ['cpu_pct', 'cpu', 'cpuPercent', 'cpuUsage'], label: 'CPU', kind: 'percent', icon: 'cpu' },
+  { keys: ['ram_pct', 'ram', 'ramPercent', 'memory', 'memoryPercent'], label: 'RAM', kind: 'percent', icon: 'server' },
+  { keys: ['disk_pct', 'disk', 'diskPercent', 'diskUsage'], label: 'Disco', kind: 'percent', icon: 'hard-drive' },
+  { keys: ['battery_pct', 'battery', 'batteryPercent', 'batteryLevel'], label: 'Bateria', kind: 'percent', icon: 'battery' },
 ];
+
+// Campos de metadado/companion que nunca devem aparecer como linha própria na tela -
+// timestamp é metadado do frame, battery_charging é consumido junto da métrica de bateria.
+export const HIDDEN_KEYS = new Set(['timestamp', 'battery_charging']);
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
