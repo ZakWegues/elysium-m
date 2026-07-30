@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { toByteArray } from 'base64-js';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
+import { openAuthedWebSocket, streamUrl } from './ws';
 
 type StreamResult = { transcript?: string; reply: string };
 
@@ -19,13 +20,8 @@ export type VoiceConnection = {
 };
 
 export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): VoiceConnection {
-  const url = `ws://${pairing.ip}:${pairing.port}/api/stream`;
-  const WebSocketCtor = WebSocket as unknown as new (
-    url: string,
-    protocols: null,
-    options: { headers: Record<string, string> }
-  ) => WebSocket;
-  const ws = new WebSocketCtor(url, null, { headers: { Authorization: `Bearer ${pairing.token}` } });
+  const url = streamUrl(pairing);
+  const ws = openAuthedWebSocket(pairing);
 
   let pending: Pending | null = null;
 

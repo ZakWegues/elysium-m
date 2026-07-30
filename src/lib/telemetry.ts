@@ -1,4 +1,5 @@
 import { Pairing } from './pairing';
+import { openAuthedWebSocket, streamUrl } from './ws';
 
 export type TelemetryFrame = Record<string, unknown> & { type: 'telemetry' };
 export type TelemetryStatus = 'connecting' | 'open' | 'closed';
@@ -10,12 +11,7 @@ export function openTelemetryStream(
   onSnapshot: (data: TelemetryFrame) => void,
   onStatusChange?: (status: TelemetryStatus) => void
 ): () => void {
-  const url = `ws://${pairing.ip}:${pairing.port}/api/stream`;
-  const WebSocketCtor = WebSocket as unknown as new (
-    url: string,
-    protocols: null,
-    options: { headers: Record<string, string> }
-  ) => WebSocket;
+  const url = streamUrl(pairing);
 
   let stopped = false;
   let ws: WebSocket | null = null;
@@ -26,7 +22,7 @@ export function openTelemetryStream(
     if (stopped) return;
     onStatusChange?.('connecting');
 
-    const socket = new WebSocketCtor(url, null, { headers: { Authorization: `Bearer ${pairing.token}` } });
+    const socket = openAuthedWebSocket(pairing);
     ws = socket;
 
     socket.onopen = () => {
