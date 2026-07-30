@@ -29,6 +29,7 @@ export default function ChatScreen({
   const [micStatus, setMicStatus] = useState<MicStatus>('checking');
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
+  const listRef = useRef<FlatList<Message>>(null);
 
   function errMessage(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
@@ -95,6 +96,10 @@ export default function ChatScreen({
     }
     return conn;
   }
+
+  useEffect(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, [messages.length]);
 
   function speakReply(reply: string) {
     Speech.speak(reply, { language: 'pt-BR' });
@@ -198,6 +203,7 @@ export default function ChatScreen({
       </View>
 
       <FlatList
+        ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
