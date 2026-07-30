@@ -7,16 +7,28 @@ import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { errMessage } from '../lib/errors';
+import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { useTheme } from '../theme';
 import { ScreenHeader, Text } from '../components/ui';
 
-type Message = { id: string; from: 'me' | 'reply' | 'error'; text: string };
 type MicStatus = 'checking' | 'ready' | 'denied';
 
-export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+export default function ChatScreen({
+  pairing,
+  onUnpair,
+  sessionId,
+  onSessionChange,
+  onOpenConversations,
+}: {
+  pairing: Pairing;
+  onUnpair: () => void;
+  sessionId: string | null;
+  onSessionChange: (id: string) => void;
+  onOpenConversations: () => void;
+}) {
   const { palette, tokens } = useTheme();
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}` },
+  const [messages, setMessages] = useState<StoredMessage[]>([
+    { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}`, ts: Date.now() },
   ]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -24,11 +36,60 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
   const [micStatus, setMicStatus] = useState<MicStatus>('checking');
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
-  const listRef = useRef<FlatList<Message>>(null);
+  const listRef = useRef<FlatList<StoredMessage>>(null);
+  const sessionIdRef = useRef<string | null>(sessionId ?? null);
+  const favoriteRef = useRef(false);
+  const createdAtRef = useRef(Date.now());
 
   function pushError(text: string) {
-    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text }]);
+    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text, ts: Date.now() }]);
   }
+
+  // Carrega uma conversa diferente quando o usuário escolhe outra na tela de Conversas
+  // (ou "+ Nova"). Se sessionId já bate com o que este componente controla, é uma
+  // mudança que ele mesmo originou (ver efeito de persistência abaixo) - ignora pra não
+  // recarregar do storage e sobrescrever mensagens recém-digitadas com uma versão velha.
+  useEffect(() => {
+    if (sessionId === sessionIdRef.current) return;
+
+    (async () => {
+      if (sessionId) {
+        const sessions = await listSessions();
+        const found = sessions.find((s) => s.id === sessionId);
+        if (found) {
+          sessionIdRef.current = found.id;
+          favoriteRef.current = found.favorite;
+          createdAtRef.current = found.createdAt;
+          setMessages(found.messages);
+          return;
+        }
+      }
+      sessionIdRef.current = null;
+      favoriteRef.current = false;
+      createdAtRef.current = Date.now();
+      setMessages([{ id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}`, ts: Date.now() }]);
+    })();
+  }, [sessionId, pairing.ip, pairing.port]);
+
+  useEffect(() => {
+    const hasRealContent = messages.some((m) => m.id !== 'welcome');
+    if (!hasRealContent) return;
+
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = `session-${Date.now()}`;
+      createdAtRef.current = Date.now();
+      onSessionChange(sessionIdRef.current);
+    }
+
+    saveSession({
+      id: sessionIdRef.current,
+      title: deriveTitle(messages),
+      createdAt: createdAtRef.current,
+      updatedAt: Date.now(),
+      favorite: favoriteRef.current,
+      messages,
+    });
+  }, [messages]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,12 +161,12 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
     const text = draft.trim();
     if (!text || sending) return;
     setDraft('');
-    setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text }]);
+    setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
 
     try {
       const reply = await sendCommand(pairing, text);
-      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply }]);
+      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply, ts: Date.now() }]);
       speakReply(reply);
     } catch (err) {
       if (err instanceof AuthError) {
@@ -161,15 +222,15 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
     }
 
     setSending(true);
-    setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)' }]);
+    setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)', ts: Date.now() }]);
 
     try {
       const conn = await ensureVoiceConnection();
       const { transcript, reply } = await conn.sendAudio(uri);
       if (transcript) {
-        setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript }]);
+        setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       }
-      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply }]);
+      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply, ts: Date.now() }]);
       speakReply(reply);
     } catch (err) {
       pushError(errMessage(err));
@@ -184,7 +245,14 @@ export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; on
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
-      <ScreenHeader title="NeuroAxis Portal" />
+      <ScreenHeader
+        title="NeuroAxis Portal"
+        right={
+          <Pressable onPress={onOpenConversations} hitSlop={8}>
+            <Feather name="clock" size={22} color={palette.textMuted} />
+          </Pressable>
+        }
+      />
 
       <FlatList
         ref={listRef}
