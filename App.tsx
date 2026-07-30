@@ -72,7 +72,7 @@ function AppInner() {
       <View style={{ flex: 1 }}>
         {screen === 'telemetry' && <TelemetryScreen pairing={pairing} />}
         {screen === 'presets' && <PresetsScreen pairing={pairing} onUnpair={handleUnpair} />}
-        {screen === 'mailbox' && <MailboxScreen />}
+        {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'settings' && <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'chat' && <ChatScreen pairing={pairing} onUnpair={handleUnpair} />}
       </View>
