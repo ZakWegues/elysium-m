@@ -14,7 +14,15 @@ const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap
   { screen: 'settings', label: 'Ajustes', icon: 'settings' },
 ];
 
-export function TabBar({ active, onNavigate }: { active: Screen; onNavigate: (screen: Screen) => void }) {
+export function TabBar({
+  active,
+  onNavigate,
+  badges,
+}: {
+  active: Screen;
+  onNavigate: (screen: Screen) => void;
+  badges?: Partial<Record<Screen, number>>;
+}) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -32,9 +40,19 @@ export function TabBar({ active, onNavigate }: { active: Screen; onNavigate: (sc
       {TABS.map((tab) => {
         const isActive = tab.screen === active;
         const color = isActive ? palette.primary : palette.textMuted;
+        const badgeCount = badges?.[tab.screen] ?? 0;
         return (
           <Pressable key={tab.screen} style={styles.tab} onPress={() => onNavigate(tab.screen)}>
-            <Feather name={tab.icon} size={22} color={color} />
+            <View>
+              <Feather name={tab.icon} size={22} color={color} />
+              {badgeCount > 0 && (
+                <View style={[styles.badge, { backgroundColor: palette.error }]}>
+                  <Text variant="caption" color="#fff" style={styles.badgeText}>
+                    {badgeCount > 9 ? '9+' : badgeCount}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text variant="caption" color={color} style={styles.label}>
               {tab.label}
             </Text>
@@ -58,5 +76,20 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 11,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    fontSize: 10,
+    lineHeight: 12,
   },
 });

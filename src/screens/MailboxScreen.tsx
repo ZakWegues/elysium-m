@@ -7,6 +7,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
 import {
+  ackInboxItem,
   fetchInboxContent,
   listInbox,
   listOutbox,
@@ -148,6 +149,10 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
     try {
       await fetchInboxContent(pairing, item.id);
       Alert.alert(item.kind === 'link' ? 'Link' : 'Item', item.text ?? '(anexo)');
+      if (!item.readAt) {
+        await ackInboxItem(pairing, item.id);
+        refresh();
+      }
     } catch (err) {
       Alert.alert('Falha ao abrir', errMessage(err));
     }

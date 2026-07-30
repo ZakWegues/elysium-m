@@ -10,9 +10,12 @@ import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
 import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
+import { listInbox } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
+
+const MAILBOX_BADGE_POLL_MS = 45000;
 
 export default function App() {
   return (
@@ -32,6 +35,7 @@ function AppInner() {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [screen, setScreen] = useState<Screen>('chat');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [mailboxUnread, setMailboxUnread] = useState(0);
 
   useEffect(() => {
     loadPairing().then((p) => {
@@ -39,6 +43,28 @@ function AppInner() {
       setLoading(false);
     });
   }, []);
+
+  const refreshMailboxBadge = useCallback(async () => {
+    if (!pairing) return;
+    try {
+      const items = await listInbox(pairing);
+      setMailboxUnread(items.filter((item) => !item.readAt).length);
+    } catch (err) {
+      console.warn('[mailbox-badge] falha ao consultar inbox', err);
+    }
+  }, [pairing]);
+
+  useEffect(() => {
+    if (!pairing) return;
+    refreshMailboxBadge();
+    const interval = setInterval(refreshMailboxBadge, MAILBOX_BADGE_POLL_MS);
+    return () => clearInterval(interval);
+  }, [pairing, refreshMailboxBadge]);
+
+  // Reconsulta ao sair da Caixa (usuário pode ter lido itens lá) em vez de esperar o poll.
+  useEffect(() => {
+    if (screen !== 'mailbox') refreshMailboxBadge();
+  }, [screen, refreshMailboxBadge]);
 
   const handlePaired = useCallback(() => {
     loadPairing().then(setPairing);
@@ -99,7 +125,7 @@ function AppInner() {
           />
         )}
       </View>
-      <TabBar active={screen} onNavigate={setScreen} />
+      <TabBar active={screen} onNavigate={setScreen} badges={{ mailbox: mailboxUnread }} />
       <StatusBar style="auto" />
     </View>
   );
