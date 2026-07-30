@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
@@ -35,18 +35,10 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
   const [draft, setDraft] = useState('');
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
   const [sending, setSending] = useState(false);
-  const loggedOnce = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const [inboxItems, outboxItems] = await Promise.all([listInbox(pairing), listOutbox(pairing)]);
-      if (!loggedOnce.current) {
-        loggedOnce.current = true;
-        // Contrato /api/mailbox ainda não testado ponta a ponta contra o desktop real -
-        // log único pra pegar mismatch de campo cedo (mesmo risco já visto com reply/error
-        // e telemetria). Remover depois de confirmar.
-        console.log('[mailbox] primeira resposta inbox/outbox:', JSON.stringify({ inboxItems, outboxItems }));
-      }
       setInbox(inboxItems);
       setOutbox(outboxItems);
       saveCache({ inbox: inboxItems, outbox: outboxItems });
