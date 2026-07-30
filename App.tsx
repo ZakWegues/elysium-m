@@ -47,7 +47,7 @@ export default function App() {
         screen === 'telemetry' ? (
           <TelemetryScreen pairing={pairing} onBack={() => setScreen('chat')} />
         ) : screen === 'presets' ? (
-          <PresetsScreen pairing={pairing} onBack={() => setScreen('chat')} />
+          <PresetsScreen pairing={pairing} onBack={() => setScreen('chat')} onUnpair={handleUnpair} />
         ) : (
           <ChatScreen
             pairing={pairing}

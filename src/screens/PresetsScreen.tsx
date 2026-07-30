@@ -1,14 +1,22 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Pairing } from '../lib/pairing';
-import { sendCommand } from '../lib/api';
+import { AuthError, sendCommand } from '../lib/api';
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function PresetsScreen({ pairing, onBack }: { pairing: Pairing; onBack: () => void }) {
+export default function PresetsScreen({
+  pairing,
+  onBack,
+  onUnpair,
+}: {
+  pairing: Pairing;
+  onBack: () => void;
+  onUnpair: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [reply, setReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +30,11 @@ export default function PresetsScreen({ pairing, onBack }: { pairing: Pairing; o
       setReply(result);
       Speech.speak(result, { language: 'pt-BR' });
     } catch (err) {
+      if (err instanceof AuthError) {
+        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
+        onUnpair();
+        return;
+      }
       setError(errMessage(err));
     } finally {
       setBusy(false);

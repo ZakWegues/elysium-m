@@ -1,5 +1,7 @@
 import { baseUrl, Pairing } from './pairing';
 
+export class AuthError extends Error {}
+
 export async function checkHealth(pairing: Pairing): Promise<boolean> {
   try {
     const res = await fetch(`${baseUrl(pairing)}/api/health`, {
@@ -20,6 +22,9 @@ export async function sendCommand(pairing: Pairing, text: string): Promise<strin
     },
     body: JSON.stringify({ text }),
   });
+  if (res.status === 401 || res.status === 403) {
+    throw new AuthError('token inválido ou expirado');
+  }
   if (!res.ok) {
     throw new Error(`servidor respondeu ${res.status}`);
   }

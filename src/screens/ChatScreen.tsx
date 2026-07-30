@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pre
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { Pairing } from '../lib/pairing';
-import { sendCommand } from '../lib/api';
+import { AuthError, sendCommand } from '../lib/api';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 
 type Message = { id: string; from: 'me' | 'reply' | 'error'; text: string };
@@ -117,6 +117,11 @@ export default function ChatScreen({
       setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply }]);
       speakReply(reply);
     } catch (err) {
+      if (err instanceof AuthError) {
+        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
+        onUnpair();
+        return;
+      }
       pushError(`Falha: ${errMessage(err)}`);
     } finally {
       setSending(false);
