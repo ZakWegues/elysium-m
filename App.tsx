@@ -6,10 +6,19 @@ import ChatScreen from './src/screens/ChatScreen';
 import TelemetryScreen from './src/screens/TelemetryScreen';
 import PresetsScreen from './src/screens/PresetsScreen';
 import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 type Screen = 'chat' | 'telemetry' | 'presets';
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
+  );
+}
+
+function AppInner() {
   const [loading, setLoading] = useState(true);
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [screen, setScreen] = useState<Screen>('chat');

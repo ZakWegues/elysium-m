@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { toByteArray } from 'base64-js';
+import { errMessage } from './errors';
 import { Pairing } from './pairing';
 
 type StreamResult = { transcript?: string; reply: string };
@@ -16,10 +17,6 @@ export type VoiceConnection = {
   sendAudio(audioUri: string): Promise<StreamResult>;
   close(): void;
 };
-
-function errMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): VoiceConnection {
   const url = `ws://${pairing.ip}:${pairing.port}/api/stream`;

@@ -3,10 +3,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, Text
 import * as Speech from 'expo-speech';
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
-
-function errMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
+import { errMessage } from '../lib/errors';
 
 export default function PresetsScreen({
   pairing,

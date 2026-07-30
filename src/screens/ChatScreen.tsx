@@ -5,6 +5,7 @@ import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, s
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
+import { errMessage } from '../lib/errors';
 
 type Message = { id: string; from: 'me' | 'reply' | 'error'; text: string };
 type MicStatus = 'checking' | 'ready' | 'denied';
@@ -30,10 +31,6 @@ export default function ChatScreen({
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
-
-  function errMessage(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
-  }
 
   function pushError(text: string) {
     setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text }]);
