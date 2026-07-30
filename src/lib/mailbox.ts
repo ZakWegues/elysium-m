@@ -28,12 +28,23 @@ async function request<T>(pairing: Pairing, path: string, init?: RequestInit): P
   if (res.status === 401 || res.status === 403) {
     throw new AuthError('token inválido ou expirado');
   }
-  if (res.status === 413) {
-    throw new Error('anexo grande demais (máximo 5MB)');
-  }
+
   if (!res.ok) {
-    throw new Error(`servidor respondeu ${res.status}`);
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = typeof body?.error === 'string' ? body.error : JSON.stringify(body);
+    } catch {
+      // corpo de erro vazio ou não-JSON, segue sem detalhe
+    }
+    console.error(`[mailbox] ${init?.method ?? 'GET'} ${path} -> ${res.status}`, detail || '(sem corpo)');
+
+    if (res.status === 413) {
+      throw new Error(detail || 'anexo grande demais (máximo 5MB)');
+    }
+    throw new Error(detail ? `servidor respondeu ${res.status}: ${detail}` : `servidor respondeu ${res.status}`);
   }
+
   return res.json() as Promise<T>;
 }
 
