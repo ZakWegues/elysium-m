@@ -1,19 +1,14 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
 import { errMessage } from '../lib/errors';
+import { useTheme } from '../theme';
+import { Button, Card, ScreenHeader, Text } from '../components/ui';
 
-export default function PresetsScreen({
-  pairing,
-  onBack,
-  onUnpair,
-}: {
-  pairing: Pairing;
-  onBack: () => void;
-  onUnpair: () => void;
-}) {
+export default function PresetsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+  const { palette, tokens } = useTheme();
   const [busy, setBusy] = useState(false);
   const [reply, setReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,82 +44,58 @@ export default function PresetsScreen({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack}>
-          <Text style={styles.back}>‹ Chat</Text>
-        </Pressable>
-        <Text style={styles.title}>Presets</Text>
-        <View style={styles.backSpacer} />
-      </View>
+    <View style={{ flex: 1, backgroundColor: palette.background }}>
+      <ScreenHeader title="Presets" />
+      <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.lg }}>
+        <Button title="Listar presets" onPress={handleList} loading={busy} />
 
-      <Pressable style={styles.actionButton} onPress={handleList} disabled={busy}>
-        <Text style={styles.actionButtonText}>Listar presets</Text>
-      </Pressable>
-
-      <View style={styles.runRow}>
-        <TextInput
-          style={styles.input}
-          value={presetName}
-          onChangeText={setPresetName}
-          placeholder="Nome do preset"
-          editable={!busy}
-          onSubmitEditing={handleRun}
-          returnKeyType="go"
-        />
-        <Pressable style={styles.actionButton} onPress={handleRun} disabled={busy || !presetName.trim()}>
-          <Text style={styles.actionButtonText}>Executar</Text>
-        </Pressable>
-      </View>
-
-      {busy && (
-        <View style={styles.busyRow}>
-          <ActivityIndicator size="small" />
-          <Text style={styles.busyText}>Falando com o NeuroAxis...</Text>
+        <View style={{ gap: tokens.spacing.sm }}>
+          <TextInput
+            style={[
+              styles.input,
+              { borderColor: palette.border, borderRadius: tokens.radii.md, color: palette.text },
+            ]}
+            value={presetName}
+            onChangeText={setPresetName}
+            placeholder="Nome do preset"
+            placeholderTextColor={palette.textMuted}
+            editable={!busy}
+            onSubmitEditing={handleRun}
+            returnKeyType="go"
+          />
+          <Button title="Executar" variant="secondary" onPress={handleRun} disabled={busy || !presetName.trim()} />
         </View>
-      )}
 
-      {reply && (
-        <View style={styles.replyBox}>
-          <Text style={styles.replyText}>{reply}</Text>
-        </View>
-      )}
+        {busy && (
+          <View style={styles.busyRow}>
+            <ActivityIndicator size="small" color={palette.primary} />
+            <Text variant="caption">Falando com o NeuroAxis...</Text>
+          </View>
+        )}
 
-      {error && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>Falha: {error}</Text>
-        </View>
-      )}
-    </ScrollView>
+        {reply && (
+          <Card>
+            <Text variant="body">{reply}</Text>
+          </Card>
+        )}
+
+        {error && (
+          <Card style={{ backgroundColor: palette.errorSoft, borderColor: palette.errorSoft }}>
+            <Text variant="body" color={palette.error}>
+              Falha: {error}
+            </Text>
+          </Card>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 24, paddingTop: 56, gap: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  back: { color: '#4da3ff', fontSize: 16 },
-  backSpacer: { width: 44 },
-  title: { fontSize: 18, fontWeight: '600' },
-  actionButton: {
-    backgroundColor: '#4da3ff',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  actionButtonText: { color: '#fff', fontWeight: '600' },
-  runRow: { gap: 8 },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   busyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  busyText: { color: '#666' },
-  replyBox: { backgroundColor: '#eee', borderRadius: 12, padding: 16 },
-  replyText: { color: '#000', fontSize: 15 },
-  errorBox: { backgroundColor: '#f8d7da', borderRadius: 12, padding: 16 },
-  errorText: { color: '#611a15' },
 });

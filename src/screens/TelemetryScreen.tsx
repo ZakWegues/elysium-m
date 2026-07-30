@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/telemetry';
+import { useTheme } from '../theme';
+import { Card, ScreenHeader, Text } from '../components/ui';
 
 const LABELS: Record<string, string> = {
   cpu: 'CPU',
@@ -35,7 +38,8 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-export default function TelemetryScreen({ pairing, onBack }: { pairing: Pairing; onBack: () => void }) {
+export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TelemetryFrame | null>(null);
 
@@ -45,47 +49,47 @@ export default function TelemetryScreen({ pairing, onBack }: { pairing: Pairing;
   }, [pairing.ip, pairing.port, pairing.token]);
 
   const entries = snapshot ? Object.entries(snapshot).filter(([key]) => key !== 'type') : [];
+  const statusColor = status === 'open' ? palette.success : palette.error;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack}>
-          <Text style={styles.back}>‹ Chat</Text>
-        </Pressable>
-        <Text style={styles.title}>Telemetria</Text>
-        <View style={styles.backSpacer} />
-      </View>
+    <View style={{ flex: 1, backgroundColor: palette.background }}>
+      <ScreenHeader
+        title="Telemetria"
+        right={
+          <View style={styles.statusRow}>
+            <View style={[styles.dot, { backgroundColor: statusColor }]} />
+            <Text variant="caption" color={statusColor}>
+              {STATUS_LABEL[status]}
+            </Text>
+          </View>
+        }
+      />
+      <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}>
+        {!snapshot && (
+          <Card style={styles.centerCard}>
+            <Feather name="activity" size={22} color={palette.textMuted} />
+            <Text variant="body" color={palette.textMuted} style={{ marginTop: tokens.spacing.sm }}>
+              Esperando primeiro broadcast do NeuroAxis...
+            </Text>
+          </Card>
+        )}
 
-      <Text style={[styles.status, status === 'open' && styles.statusOpen]}>{STATUS_LABEL[status]}</Text>
-
-      {!snapshot && <Text style={styles.waiting}>Esperando primeiro broadcast do NeuroAxis...</Text>}
-
-      {entries.map(([key, value]) => (
-        <View key={key} style={styles.row}>
-          <Text style={styles.label}>{LABELS[key] ?? key}</Text>
-          <Text style={styles.value}>{formatValue(value)}</Text>
-        </View>
-      ))}
-    </ScrollView>
+        {entries.map(([key, value]) => (
+          <Card key={key} style={styles.row}>
+            <Text variant="label">{LABELS[key] ?? key}</Text>
+            <Text variant="body" color={palette.textMuted}>
+              {formatValue(value)}
+            </Text>
+          </Card>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 24, paddingTop: 56, gap: 4 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  back: { color: '#4da3ff', fontSize: 16 },
-  backSpacer: { width: 44 },
-  title: { fontSize: 18, fontWeight: '600' },
-  status: { color: '#c0392b', marginBottom: 16 },
-  statusOpen: { color: '#2e8b47' },
-  waiting: { color: '#888' },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc',
-  },
-  label: { fontSize: 16, fontWeight: '600' },
-  value: { fontSize: 16, color: '#333' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  centerCard: { alignItems: 'center', paddingVertical: 32 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });

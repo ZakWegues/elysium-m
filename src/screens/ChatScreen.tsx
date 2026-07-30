@@ -1,26 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { errMessage } from '../lib/errors';
+import { useTheme } from '../theme';
+import { ScreenHeader, Text } from '../components/ui';
 
 type Message = { id: string; from: 'me' | 'reply' | 'error'; text: string };
 type MicStatus = 'checking' | 'ready' | 'denied';
 
-export default function ChatScreen({
-  pairing,
-  onUnpair,
-  onOpenTelemetry,
-  onOpenPresets,
-}: {
-  pairing: Pairing;
-  onUnpair: () => void;
-  onOpenTelemetry: () => void;
-  onOpenPresets: () => void;
-}) {
+export default function ChatScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+  const { palette, tokens } = useTheme();
   const [messages, setMessages] = useState<Message[]>([
     { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}` },
   ]);
@@ -186,70 +180,92 @@ export default function ChatScreen({
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1, backgroundColor: palette.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
     >
-      <View style={styles.header}>
-        <Text style={styles.headerText}>NeuroAxis Portal</Text>
-        <View style={styles.headerActions}>
-          <Pressable onPress={onOpenPresets}>
-            <Text style={styles.telemetryLink}>Presets</Text>
-          </Pressable>
-          <Pressable onPress={onOpenTelemetry}>
-            <Text style={styles.telemetryLink}>Telemetria</Text>
-          </Pressable>
-          <Pressable onPress={onUnpair}>
-            <Text style={styles.unpair}>Desparear</Text>
-          </Pressable>
-        </View>
-      </View>
+      <ScreenHeader title="NeuroAxis Portal" />
 
       <FlatList
         ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.bubble,
-              item.from === 'me' && styles.bubbleMe,
-              item.from === 'reply' && styles.bubbleReply,
-              item.from === 'error' && styles.bubbleError,
-            ]}
-          >
-            <Text style={item.from === 'me' ? styles.bubbleTextMe : styles.bubbleText}>{item.text}</Text>
-          </View>
-        )}
+        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
+        renderItem={({ item }) => {
+          const bg = item.from === 'me' ? palette.primary : item.from === 'error' ? palette.errorSoft : palette.surfaceRaised;
+          const color = item.from === 'me' ? palette.onPrimary : item.from === 'error' ? palette.error : palette.text;
+          return (
+            <View
+              style={[
+                styles.bubble,
+                {
+                  borderRadius: tokens.radii.lg,
+                  padding: tokens.spacing.md,
+                  backgroundColor: bg,
+                  alignSelf: item.from === 'me' ? 'flex-end' : 'flex-start',
+                  borderWidth: item.from === 'reply' ? StyleSheet.hairlineWidth : 0,
+                  borderColor: palette.border,
+                },
+              ]}
+            >
+              <Text variant="body" color={color}>
+                {item.text}
+              </Text>
+            </View>
+          );
+        }}
       />
 
       {sending && (
-        <View style={styles.sendingRow}>
-          <ActivityIndicator size="small" />
-          <Text style={styles.sendingText}>Pensando...</Text>
+        <View style={[styles.sendingRow, { paddingHorizontal: tokens.spacing.lg }]}>
+          <ActivityIndicator size="small" color={palette.primary} />
+          <Text variant="caption">Pensando...</Text>
         </View>
       )}
 
-      <View style={styles.inputRow}>
+      <View
+        style={[
+          styles.inputRow,
+          { padding: tokens.spacing.md, borderTopColor: palette.border, backgroundColor: palette.surface },
+        ]}
+      >
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              borderColor: palette.border,
+              borderRadius: tokens.radii.full,
+              paddingHorizontal: tokens.spacing.lg,
+              color: palette.text,
+            },
+          ]}
           value={draft}
           onChangeText={setDraft}
           placeholder="Escreve um comando..."
+          placeholderTextColor={palette.textMuted}
           onSubmitEditing={handleSend}
           returnKeyType="send"
           editable={!sending}
         />
         <Pressable
-          style={[styles.micButton, recording && styles.micButtonActive, micStatus !== 'ready' && styles.micButtonDisabled]}
+          style={[
+            styles.roundButton,
+            {
+              backgroundColor: recording ? palette.error : micStatus !== 'ready' ? palette.border : palette.primarySoft,
+            },
+          ]}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
           disabled={sending || micStatus !== 'ready'}
         >
-          <Text style={styles.sendButtonText}>{recording ? '●' : '🎤'}</Text>
+          <Feather name="mic" size={20} color={recording ? '#fff' : micStatus !== 'ready' ? palette.textMuted : palette.primary} />
         </Pressable>
-        <Pressable style={styles.sendButton} onPress={handleSend} disabled={sending}>
-          <Text style={styles.sendButtonText}>Enviar</Text>
+        <Pressable
+          style={[styles.roundButton, { backgroundColor: palette.primary, opacity: sending ? 0.5 : 1 }]}
+          onPress={handleSend}
+          disabled={sending}
+        >
+          <Feather name="arrow-up" size={20} color={palette.onPrimary} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -257,58 +273,24 @@ export default function ChatScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ccc',
-  },
-  headerText: { fontSize: 18, fontWeight: '600' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  telemetryLink: { color: '#4da3ff', fontSize: 14 },
-  unpair: { color: '#c0392b', fontSize: 14 },
-  list: { padding: 16, gap: 8 },
-  bubble: { borderRadius: 12, padding: 12, maxWidth: '80%', backgroundColor: '#eee', alignSelf: 'flex-start' },
-  bubbleMe: { backgroundColor: '#4da3ff', alignSelf: 'flex-end' },
-  bubbleReply: { backgroundColor: '#eee' },
-  bubbleError: { backgroundColor: '#f8d7da' },
-  bubbleText: { color: '#000' },
-  bubbleTextMe: { color: '#fff' },
-  sendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  sendingText: { color: '#666' },
+  bubble: { maxWidth: '80%' },
+  sendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
   inputRow: {
     flexDirection: 'row',
-    padding: 12,
+    alignItems: 'center',
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ccc',
   },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
-  micButton: {
-    backgroundColor: '#888',
-    borderRadius: 8,
-    paddingHorizontal: 14,
+  roundButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  micButtonActive: { backgroundColor: '#c0392b' },
-  micButtonDisabled: { backgroundColor: '#ccc' },
-  sendButton: {
-    backgroundColor: '#4da3ff',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  sendButtonText: { color: '#fff', fontWeight: '600' },
 });

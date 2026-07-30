@@ -1,0 +1,62 @@
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Feather from '@expo/vector-icons/Feather';
+import { useTheme } from '../theme';
+import { Text } from './ui';
+
+export type Screen = 'chat' | 'mailbox' | 'telemetry' | 'presets' | 'settings' | 'conversations';
+
+const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { screen: 'chat', label: 'Chat', icon: 'message-circle' },
+  { screen: 'mailbox', label: 'Caixa', icon: 'inbox' },
+  { screen: 'telemetry', label: 'Telemetria', icon: 'activity' },
+  { screen: 'presets', label: 'Presets', icon: 'sliders' },
+  { screen: 'settings', label: 'Ajustes', icon: 'settings' },
+];
+
+export function TabBar({ active, onNavigate }: { active: Screen; onNavigate: (screen: Screen) => void }) {
+  const { palette, tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[
+        styles.row,
+        {
+          paddingBottom: Math.max(insets.bottom, tokens.spacing.sm),
+          backgroundColor: palette.surface,
+          borderTopColor: palette.border,
+        },
+      ]}
+    >
+      {TABS.map((tab) => {
+        const isActive = tab.screen === active;
+        const color = isActive ? palette.primary : palette.textMuted;
+        return (
+          <Pressable key={tab.screen} style={styles.tab} onPress={() => onNavigate(tab.screen)}>
+            <Feather name={tab.icon} size={22} color={color} />
+            <Text variant="caption" color={color} style={styles.label}>
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  label: {
+    fontSize: 11,
+  },
+});
