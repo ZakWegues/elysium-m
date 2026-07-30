@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { parsePairingQr, savePairing } from '../lib/pairing';
 import { checkHealth } from '../lib/api';
@@ -44,6 +44,18 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
   }
 
   if (!permission.granted) {
+    if (!permission.canAskAgain) {
+      return (
+        <View style={styles.center}>
+          <Text style={styles.text}>
+            Câmera bloqueada pro app. Precisa liberar manualmente nas configurações do celular.
+          </Text>
+          <Text style={styles.link} onPress={() => Linking.openSettings()}>
+            Abrir configurações
+          </Text>
+        </View>
+      );
+    }
     return (
       <View style={styles.center}>
         <Text style={styles.text}>Precisamos da câmera pra escanear o QR de pareamento.</Text>
