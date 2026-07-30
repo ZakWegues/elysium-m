@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import { File } from 'expo-file-system';
@@ -282,12 +283,15 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
         }}
       />
 
-      <View
-        style={[
-          styles.composer,
-          { borderTopColor: palette.border, backgroundColor: palette.surface, padding: tokens.spacing.md },
-        ]}
-      >
+      <View style={{ overflow: 'hidden' }}>
+        <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurfaceStrong }]} />
+        <View
+          style={[
+            styles.composer,
+            { borderTopColor: palette.glassBorder, padding: tokens.spacing.md },
+          ]}
+        >
         {attachment && (
           <View style={[styles.attachmentChip, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
             <Feather name="paperclip" size={14} color={palette.primary} />
@@ -325,6 +329,7 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
               <Feather name="arrow-up" size={20} color={palette.onPrimary} />
             )}
           </Pressable>
+        </View>
         </View>
       </View>
     </View>

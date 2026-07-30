@@ -66,7 +66,7 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
         )}
 
         {known.length > 0 && (
-          <Card style={{ gap: tokens.spacing.lg }}>
+          <Card glass style={{ gap: tokens.spacing.lg }}>
             {known.map(([key, value]) => {
               const metric = findMetric(key)!;
               const percent = value as number;
@@ -77,6 +77,12 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
               return <MetricBar key={key} icon={metric.icon} label={metric.label} percent={percent} detail={detail} />;
             })}
           </Card>
+        )}
+
+        {typeof snapshot?.timestamp === 'number' && (
+          <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center' }}>
+            Atualizado às {new Date(snapshot.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </Text>
         )}
 
         {unknown.map(([key, value]) => {

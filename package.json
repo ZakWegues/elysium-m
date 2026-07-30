@@ -8,6 +8,7 @@
     "base64-js": "^1.5.1",
     "expo": "~57.0.7",
     "expo-audio": "~57.0.2",
+    "expo-blur": "~57.0.2",
     "expo-camera": "~57.0.3",
     "expo-clipboard": "~57.0.1",
     "expo-document-picker": "~57.0.1",

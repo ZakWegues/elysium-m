@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import { BlurView } from 'expo-blur';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
@@ -291,12 +292,15 @@ export default function ChatScreen({
         </View>
       )}
 
-      <View
-        style={[
-          styles.inputRow,
-          { padding: tokens.spacing.md, borderTopColor: palette.border, backgroundColor: palette.surface },
-        ]}
-      >
+      <View style={{ overflow: 'hidden' }}>
+        <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurfaceStrong }]} />
+        <View
+          style={[
+            styles.inputRow,
+            { padding: tokens.spacing.md, borderTopColor: palette.glassBorder },
+          ]}
+        >
         <TextInput
           style={[
             styles.input,
@@ -335,6 +339,7 @@ export default function ChatScreen({
         >
           <Feather name="arrow-up" size={20} color={palette.onPrimary} />
         </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );

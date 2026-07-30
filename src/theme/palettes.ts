@@ -16,6 +16,11 @@ export type Palette = {
   error: string;
   errorSoft: string;
   success: string;
+  // Vidro (estilo iOS "liquid glass") — translúcidos usados sobre BlurView.
+  glassSurface: string;
+  glassSurfaceStrong: string;
+  glassBorder: string;
+  glassBackdrop: string;
 };
 
 // Aproximação dos 4 temas do NeuroAxis desktop (default/ocean/ember/forest) —
@@ -32,6 +37,10 @@ const shared = {
   error: '#C0392B',
   errorSoft: '#F8D7DA',
   success: '#2E8B47',
+  glassSurface: 'rgba(255,255,255,0.55)',
+  glassSurfaceStrong: 'rgba(255,255,255,0.78)',
+  glassBorder: 'rgba(255,255,255,0.65)',
+  glassBackdrop: 'rgba(20,22,26,0.35)',
 };
 
 export const palettes: Record<ThemeName, Palette> = {

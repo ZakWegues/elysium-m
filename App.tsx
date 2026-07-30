@@ -14,6 +14,7 @@ import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
+import { GlassModal } from './src/components/ui';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -36,6 +37,8 @@ function AppInner() {
   const [screen, setScreen] = useState<Screen>('chat');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [mailboxUnread, setMailboxUnread] = useState(0);
+  const [presetsModalVisible, setPresetsModalVisible] = useState(false);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
 
   useEffect(() => {
     loadPairing().then((p) => {
@@ -74,6 +77,8 @@ function AppInner() {
     clearPairing().then(() => {
       setPairing(null);
       setScreen('chat');
+      setPresetsModalVisible(false);
+      setSettingsModalVisible(false);
     });
   }, []);
 
@@ -99,9 +104,7 @@ function AppInner() {
     <View style={{ flex: 1, backgroundColor: palette.background }}>
       <View style={{ flex: 1 }}>
         {screen === 'telemetry' && <TelemetryScreen pairing={pairing} />}
-        {screen === 'presets' && <PresetsScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
-        {screen === 'settings' && <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen
             onSelect={(id) => {
@@ -125,8 +128,21 @@ function AppInner() {
           />
         )}
       </View>
-      <TabBar active={screen} onNavigate={setScreen} badges={{ mailbox: mailboxUnread }} />
+      <TabBar
+        active={screen}
+        onNavigate={setScreen}
+        onOpenModal={(target) => (target === 'presets' ? setPresetsModalVisible(true) : setSettingsModalVisible(true))}
+        badges={{ mailbox: mailboxUnread }}
+      />
       <StatusBar style="auto" />
+
+      <GlassModal title="Presets" visible={presetsModalVisible} onClose={() => setPresetsModalVisible(false)}>
+        <PresetsScreen pairing={pairing} onUnpair={handleUnpair} />
+      </GlassModal>
+
+      <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
+        <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />
+      </GlassModal>
     </View>
   );
 }

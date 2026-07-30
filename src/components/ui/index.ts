@@ -3,3 +3,4 @@ export { Button } from './Button';
 export { Card } from './Card';
 export { ScreenHeader } from './ScreenHeader';
 export { MetricBar } from './MetricBar';
+export { GlassModal } from './GlassModal';

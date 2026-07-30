@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
@@ -6,59 +7,68 @@ import { Text } from './ui';
 
 export type Screen = 'chat' | 'mailbox' | 'telemetry' | 'presets' | 'settings' | 'conversations';
 
-const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap; modal?: boolean }[] = [
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
   { screen: 'mailbox', label: 'Caixa', icon: 'inbox' },
   { screen: 'telemetry', label: 'Telemetria', icon: 'activity' },
-  { screen: 'presets', label: 'Presets', icon: 'sliders' },
-  { screen: 'settings', label: 'Ajustes', icon: 'settings' },
+  { screen: 'presets', label: 'Presets', icon: 'sliders', modal: true },
+  { screen: 'settings', label: 'Ajustes', icon: 'settings', modal: true },
 ];
 
 export function TabBar({
   active,
   onNavigate,
+  onOpenModal,
   badges,
 }: {
   active: Screen;
   onNavigate: (screen: Screen) => void;
+  onOpenModal: (screen: 'presets' | 'settings') => void;
   badges?: Partial<Record<Screen, number>>;
 }) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
-    <View
-      style={[
-        styles.row,
-        {
-          paddingBottom: Math.max(insets.bottom, tokens.spacing.sm),
-          backgroundColor: palette.surface,
-          borderTopColor: palette.border,
-        },
-      ]}
-    >
-      {TABS.map((tab) => {
-        const isActive = tab.screen === active;
-        const color = isActive ? palette.primary : palette.textMuted;
-        const badgeCount = badges?.[tab.screen] ?? 0;
-        return (
-          <Pressable key={tab.screen} style={styles.tab} onPress={() => onNavigate(tab.screen)}>
-            <View>
-              <Feather name={tab.icon} size={22} color={color} />
-              {badgeCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: palette.error }]}>
-                  <Text variant="caption" color="#fff" style={styles.badgeText}>
-                    {badgeCount > 9 ? '9+' : badgeCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text variant="caption" color={color} style={styles.label}>
-              {tab.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <View style={{ overflow: 'hidden' }}>
+      <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassSurface }]} />
+      <View
+        style={[
+          styles.row,
+          {
+            paddingBottom: Math.max(insets.bottom, tokens.spacing.sm),
+            borderTopColor: palette.glassBorder,
+          },
+        ]}
+      >
+        {TABS.map((tab) => {
+          const isActive = !tab.modal && tab.screen === active;
+          const color = isActive ? palette.primary : palette.textMuted;
+          const badgeCount = badges?.[tab.screen] ?? 0;
+          return (
+            <Pressable
+              key={tab.screen}
+              style={styles.tab}
+              onPress={() => (tab.modal ? onOpenModal(tab.screen as 'presets' | 'settings') : onNavigate(tab.screen))}
+            >
+              <View>
+                <Feather name={tab.icon} size={22} color={color} />
+                {badgeCount > 0 && (
+                  <View style={[styles.badge, { backgroundColor: palette.error }]}>
+                    <Text variant="caption" color="#fff" style={styles.badgeText}>
+                      {badgeCount > 9 ? '9+' : badgeCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text variant="caption" color={color} style={styles.label}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
