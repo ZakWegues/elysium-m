@@ -45,11 +45,13 @@ export function openTelemetryStream(
     };
 
     socket.onerror = () => {
-      console.error('[telemetry-ws] erro na conexão', url);
+      // Erro de conexão transitório (PC desligado/fora da rede) - reconexão automática
+      // abaixo já trata isso, não é um erro acionável pelo usuário.
+      console.warn('[telemetry-ws] erro na conexão', url);
     };
 
     socket.onclose = () => {
-      console.error('[telemetry-ws] conexão fechada', url);
+      console.warn('[telemetry-ws] conexão fechada', url);
       onStatusChange?.('closed');
       if (stopped) return;
       attempt += 1;
