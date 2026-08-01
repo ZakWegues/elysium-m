@@ -13,10 +13,13 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+# Backup de credenciais do EAS: contém a chave privada que assina o APK.
+credentials.json
 
 # Metro
 .metro-health-check*
