@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
+import { useBlurTarget } from './BlurTarget';
 
 /**
  * Preenchimento de vidro: blur real + tinta translúcida + brilho reflexivo na borda.
@@ -10,7 +11,9 @@ import { useTheme } from '../../theme';
  * borderRadius desejado.
  *
  * `blurMethod` é obrigatório no Android: o default do expo-blur é 'none', que
- * renderiza só uma view semi-transparente sem desfoque nenhum.
+ * renderiza só uma view semi-transparente sem desfoque nenhum. E desde o expo-blur 57
+ * o método do Android também exige `blurTarget` — sem ele a lib avisa e volta pro
+ * 'none' sozinha. O ref vem do `BlurTargetProvider`, montado na raiz do app.
  */
 export function GlassFill({
   intensity = 40,
@@ -22,13 +25,17 @@ export function GlassFill({
   edge?: boolean;
 }) {
   const { palette } = useTheme();
+  const blurTarget = useBlurTarget();
 
   return (
     <>
       <BlurView
         intensity={intensity}
         tint="light"
-        blurMethod="dimezisBlurViewSdk31Plus"
+        // Sem alvo, o método do Android avisa no console e cai pro 'none' sozinho.
+        // Pedir 'none' direto dá o mesmo resultado visual, sem o aviso.
+        blurMethod={blurTarget ? 'dimezisBlurViewSdk31Plus' : 'none'}
+        blurTarget={blurTarget}
         style={StyleSheet.absoluteFill}
       />
       <View

@@ -48,14 +48,13 @@ export function GlassModal({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      {/* Este Modal é uma janela nativa própria no Android, então nenhuma BlurView
+          aqui dentro consegue amostrar o app que está atrás — é limitação de
+          plataforma, não de configuração. Pedimos 'none' explicitamente e ficamos com
+          a tinta escura, que é o que realmente produz o escurecimento do fundo. */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-          <BlurView
-            intensity={30}
-            tint="dark"
-            blurMethod="dimezisBlurViewSdk31Plus"
-            style={StyleSheet.absoluteFill}
-          />
+          <BlurView intensity={30} tint="dark" blurMethod="none" style={StyleSheet.absoluteFill} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassBackdrop }]} />
         </Pressable>
       </Animated.View>

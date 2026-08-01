@@ -14,7 +14,7 @@ import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
-import { AppBackground, GlassModal } from './src/components/ui';
+import { AppBackground, BlurTargetProvider, GlassModal } from './src/components/ui';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
@@ -147,7 +147,11 @@ function AppInner() {
     // desde o SDK 54) o sistema não redimensiona mais a janela, e a caixa de texto
     // simplesmente ficava debaixo do teclado.
     <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}>
-      <AppBackground />
+      {/* Só o fundo entra no alvo de desfoque. Incluir as telas faria cada card de
+          vidro tentar desfocar uma árvore que o contém. */}
+      <BlurTargetProvider>
+        <AppBackground />
+      </BlurTargetProvider>
       <View style={{ flex: 1 }}>
         {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}

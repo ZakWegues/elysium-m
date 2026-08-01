@@ -7,3 +7,4 @@ export { GlassModal } from './GlassModal';
 export { Drawer } from './Drawer';
 export { GlassFill } from './GlassSurface';
 export { AppBackground } from './AppBackground';
+export { BlurTargetProvider, useBlurTarget } from './BlurTarget';
