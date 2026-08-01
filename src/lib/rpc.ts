@@ -48,7 +48,26 @@ export type RpcMethod =
   | 'push.setPrefs'
   | 'vision.ask'
   | 'vision.screen'
-  | 'web.search';
+  | 'web.search'
+  | 'spotify.status'
+  | 'spotify.login'
+  | 'spotify.logout'
+  | 'spotify.nowPlaying'
+  | 'spotify.command'
+  | 'spotify.volume'
+  | 'spotify.seek'
+  | 'spotify.playSearch';
+
+export type NowPlaying = {
+  isPlaying: boolean;
+  track: string;
+  artist: string;
+  album: string;
+  albumArt: string | null;
+  progressMs: number;
+  durationMs: number;
+  device: string | null;
+};
 
 export type MemoryFact = { id: string; text: string; createdAt: number };
 
@@ -148,6 +167,14 @@ export type RpcResults = {
   'vision.ask': { answer: string };
   'vision.screen': { answer: string };
   'web.search': { answer: string };
+  'spotify.status': { connected: boolean };
+  'spotify.login': { ok: true; message: string };
+  'spotify.logout': { ok: true };
+  'spotify.nowPlaying': { nowPlaying: NowPlaying | null };
+  'spotify.command': { ok: true };
+  'spotify.volume': { ok: true };
+  'spotify.seek': { ok: true };
+  'spotify.playSearch': { playing: { track: string; artist: string } };
 };
 
 /** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */
