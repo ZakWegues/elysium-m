@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-nat
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
-import { registerForPush } from '../lib/pushNotifications';
+import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, ThemeName } from '../theme';
 import { Button, Card, Text } from '../components/ui';
@@ -99,6 +99,7 @@ function PushSection({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [prefs, setPrefs] = useState<PushPrefs | null>(null);
   const [busy, setBusy] = useState(false);
+  const availability = pushAvailability();
 
   const load = useCallback(async () => {
     try {
@@ -161,7 +162,16 @@ function PushSection({ pairing }: { pairing: Pairing }) {
           {busy && <ActivityIndicator size="small" color={palette.primary} />}
         </View>
 
-        <Button title="Registrar este aparelho" variant="secondary" onPress={enable} loading={busy} />
+        {availability.available ? (
+          <Button title="Registrar este aparelho" variant="secondary" onPress={enable} loading={busy} />
+        ) : (
+          <View style={{ flexDirection: 'row', gap: tokens.spacing.sm, alignItems: 'flex-start' }}>
+            <Feather name="info" size={16} color={palette.textMuted} style={{ marginTop: 2 }} />
+            <Text variant="caption" color={palette.textMuted} style={{ flex: 1 }}>
+              {availability.reason}
+            </Text>
+          </View>
+        )}
 
         {prefs && (Object.keys(CATEGORY_LABEL) as PushCategory[]).map(category => {
           const on = !prefs.muted.includes(category);
