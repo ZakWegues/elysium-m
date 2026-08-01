@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ControlScreen from './src/screens/ControlScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import SpotifyPlayer from './src/screens/SpotifyPlayer';
 import PresetsScreen from './src/screens/PresetsScreen';
 import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -20,6 +22,7 @@ import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
+import { useShareIntent } from './src/lib/shareIntent';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -39,7 +42,8 @@ function AppInner() {
   const { palette } = useTheme();
   const [loading, setLoading] = useState(true);
   const [pairing, setPairing] = useState<Pairing | null>(null);
-  const [screen, setScreen] = useState<Screen>('chat');
+  const [screen, setScreen] = useState<Screen>('home');
+  const [playerOpen, setPlayerOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [mailboxUnread, setMailboxUnread] = useState(0);
   const [presetsModalVisible, setPresetsModalVisible] = useState(false);
@@ -118,6 +122,17 @@ function AppInner() {
     if (screen !== 'mailbox') refreshMailboxBadge();
   }, [screen, refreshMailboxBadge]);
 
+  // Conteúdo compartilhado de outro app do Android cai direto na Caixa do PC.
+  const handleShared = useCallback((text: string, ok: boolean) => {
+    Alert.alert(
+      ok ? 'Enviado pro PC' : 'Não consegui enviar',
+      ok ? text.slice(0, 120) : 'O PC está fora de alcance. Tente de novo quando ele voltar.'
+    );
+    if (ok) refreshMailboxBadge();
+  }, [refreshMailboxBadge]);
+
+  useShareIntent(pairing, handleShared);
+
   const handlePaired = useCallback(() => {
     loadPairing().then(setPairing);
   }, []);
@@ -161,6 +176,14 @@ function AppInner() {
         <AppBackground />
       </BlurTargetProvider>
       <View style={{ flex: 1 }}>
+        {screen === 'home' && (
+          <HomeScreen
+            pairing={pairing}
+            onNavigate={setScreen}
+            onOpenPlayer={() => setPlayerOpen(true)}
+            onUnpair={handleUnpair}
+          />
+        )}
         {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
@@ -208,6 +231,8 @@ function AppInner() {
         />
       )}
       <StatusBar style="auto" />
+
+      <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
 
       <GlassModal title="Presets" visible={presetsModalVisible} onClose={() => setPresetsModalVisible(false)}>
         <PresetsScreen pairing={pairing} onUnpair={handleUnpair} />

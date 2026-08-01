@@ -1,18 +1,24 @@
 {
   "expo": {
-    "name": "neuroaxis-portal",
+    "name": "NEUROAXIS Portal",
     "slug": "neuroaxis-portal",
+    "scheme": "neuroaxis",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.zak.neuroaxis.portal",
       "infoPlist": {
-        "NSCameraUsageDescription": "Precisamos da câmera pra escanear o QR code de pareamento com o NeuroAxis."
+        "NSCameraUsageDescription": "Precisamos da câmera pra escanear o QR code de pareamento e pra fotografar e perguntar ao NEUROAXIS.",
+        "NSMicrophoneUsageDescription": "Precisamos do microfone pra você falar com o NEUROAXIS.",
+        "NSFaceIDUsageDescription": "Confirmamos sua identidade antes de ações que mexem no PC, como desligar ou encerrar programas."
       }
     },
     "android": {
+      "package": "com.zak.neuroaxis.portal",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,7 +26,23 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [{ "scheme": "neuroaxis" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -30,10 +52,12 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Precisamos da câmera pra escanear o QR code de pareamento com o NeuroAxis."
+          "cameraPermission": "Precisamos da câmera pra escanear o QR code de pareamento e pra fotografar e perguntar ao NEUROAXIS."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-notifications",
+      "expo-local-authentication"
     ]
   }
 }

@@ -31,7 +31,9 @@ export function GlassFill({
     <>
       <BlurView
         intensity={intensity}
-        tint="light"
+        // Tinta clara sobre fundo escuro deixaria o vidro leitoso e clarearia a tela
+        // inteira; a paleta diz qual usar.
+        tint={palette.blurTint}
         // Sem alvo, o método do Android avisa no console e cai pro 'none' sozinho.
         // Pedir 'none' direto dá o mesmo resultado visual, sem o aviso.
         blurMethod={blurTarget ? 'dimezisBlurViewSdk31Plus' : 'none'}

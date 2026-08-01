@@ -4,9 +4,13 @@ import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
-export type Screen = 'chat' | 'mailbox' | 'control' | 'presets' | 'settings' | 'conversations';
+export type Screen = 'home' | 'chat' | 'mailbox' | 'control' | 'presets' | 'settings' | 'conversations';
 
 const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap; modal?: boolean }[] = [
+  // O app abria direto no chat, o que fazia sentido quando conversar era quase tudo
+  // que ele fazia. Com controle remoto, lembretes e player, chat virou uma aba entre
+  // outras — e nada mostrava de imediato se o PC estava de pé.
+  { screen: 'home', label: 'Início', icon: 'home' },
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
   { screen: 'mailbox', label: 'Caixa', icon: 'inbox' },
   // Guia única de controle do PC: espelho da tela aparente ao entrar, e todo o resto

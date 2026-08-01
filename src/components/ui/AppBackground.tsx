@@ -9,17 +9,23 @@ import { useTheme } from '../../theme';
  * desfocar. Sobre um fundo chapado, qualquer blur devolve exatamente a mesma cor chapada.
  */
 export function AppBackground() {
-  const { palette } = useTheme();
+  const { palette, resolvedScheme } = useTheme();
+  const dark = resolvedScheme === 'dark';
+
+  // O meio do gradiente clareia no modo claro e escurece no modo escuro. Um valor fixo
+  // deixaria uma faixa clara atravessando a tela no escuro.
+  const middle = dark ? '#12151D' : '#EEF0F6';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient
-        colors={[palette.background, '#EEF0F6', palette.background]}
+        colors={[palette.background, middle, palette.background]}
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
-      <View style={[styles.blob, styles.blobTop, { backgroundColor: palette.primary, opacity: 0.16 }]} />
-      <View style={[styles.blob, styles.blobBottom, { backgroundColor: palette.accent, opacity: 0.14 }]} />
+      {/* Manchas mais fortes no escuro: sobre fundo quase preto, 16% some. */}
+      <View style={[styles.blob, styles.blobTop, { backgroundColor: palette.primary, opacity: dark ? 0.26 : 0.16 }]} />
+      <View style={[styles.blob, styles.blobBottom, { backgroundColor: palette.accent, opacity: dark ? 0.20 : 0.14 }]} />
     </View>
   );
 }

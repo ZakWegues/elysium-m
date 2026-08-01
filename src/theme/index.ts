@@ -1,4 +1,4 @@
 export { ThemeProvider, useTheme } from './ThemeContext';
-export { palettes } from './palettes';
-export type { ThemeName, Palette } from './palettes';
+export { palettes, darkPalettes, getPalette } from './palettes';
+export type { ThemeName, Palette, ColorScheme, ResolvedScheme } from './palettes';
 export { spacing, radii, fontSize, fontWeight, shadow } from './tokens';

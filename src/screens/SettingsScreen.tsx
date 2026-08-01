@@ -5,11 +5,17 @@ import { Pairing } from '../lib/pairing';
 import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
-import { useTheme, palettes, ThemeName } from '../theme';
+import { useTheme, palettes, ColorScheme, ThemeName } from '../theme';
 import { Button, Card, Text } from '../components/ui';
 
+const SCHEME_OPTIONS: { value: ColorScheme; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { value: 'light', label: 'Claro', icon: 'sun' },
+  { value: 'dark', label: 'Escuro', icon: 'moon' },
+  { value: 'system', label: 'Sistema', icon: 'smartphone' },
+];
+
 export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
-  const { name, palette, tokens, setTheme } = useTheme();
+  const { name, palette, tokens, scheme, setTheme, setScheme } = useTheme();
 
   return (
     <View style={{ gap: tokens.spacing.lg }}>
@@ -35,6 +41,38 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
           )}
         </View>
       </Card>
+
+      <View style={{ gap: tokens.spacing.sm }}>
+        <Text variant="subheading">Aparência</Text>
+        <View style={styles.schemeRow}>
+          {SCHEME_OPTIONS.map((opt) => {
+            const selected = opt.value === scheme;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => setScheme(opt.value)}
+                style={[
+                  styles.schemeBtn,
+                  {
+                    borderRadius: tokens.radii.md,
+                    backgroundColor: selected ? palette.primary : palette.surface,
+                    borderColor: selected ? palette.primary : palette.border,
+                  },
+                ]}
+              >
+                <Feather
+                  name={opt.icon}
+                  size={16}
+                  color={selected ? palette.onPrimary : palette.textMuted}
+                />
+                <Text variant="caption" color={selected ? palette.onPrimary : palette.text}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
 
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Tema</Text>
@@ -198,6 +236,11 @@ function PushSection({ pairing }: { pairing: Pairing }) {
 }
 
 const styles = StyleSheet.create({
+  schemeRow: { flexDirection: 'row', gap: 8 },
+  schemeBtn: {
+    flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   pairedIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   swatchRow: {
     flexDirection: 'row',
