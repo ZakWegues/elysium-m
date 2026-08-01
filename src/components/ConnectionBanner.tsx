@@ -13,6 +13,7 @@ export function ConnectionBanner({
   queued,
   scanning,
   scanProgress,
+  hasTunnel,
   onRetry,
   onScan,
 }: {
@@ -20,6 +21,8 @@ export function ConnectionBanner({
   queued: number;
   scanning: boolean;
   scanProgress: number;
+  /** null = nunca conseguimos perguntar ao PC. */
+  hasTunnel: boolean | null;
   onRetry: () => void;
   onScan: () => void;
 }) {
@@ -33,7 +36,15 @@ export function ConnectionBanner({
 
   let label: string;
   if (scanning) label = `Procurando o PC na rede… ${scanProgress}%`;
-  else if (offline) label = queued > 0 ? `PC fora do ar · ${queued} na fila` : 'PC fora do ar';
+  else if (offline) {
+    // Sem túnel no PC, "fora do ar" é enganoso: o PC pode estar ligado e funcionando,
+    // e simplesmente não haver caminho até ele fora de casa. Dizer o motivo real evita
+    // a caça ao problema errado.
+    const base = hasTunnel === false
+      ? 'Sem acesso remoto — só funciona na rede de casa'
+      : 'PC fora do ar';
+    label = queued > 0 ? `${base} · ${queued} na fila` : base;
+  }
   else if (status === 'checking') label = 'Procurando o PC…';
   else label = `Reenviando ${queued} comando${queued > 1 ? 's' : ''}…`;
 

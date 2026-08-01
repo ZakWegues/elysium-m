@@ -65,7 +65,8 @@ function AppInner() {
     savePairing(updated).catch((err) => console.warn('[pairing] falha ao persistir', err));
   }, []);
 
-  const { status, recheck, scanning, scanProgress, runScan } = useConnection(pairing, handlePairingUpdate);
+  const { status, recheck, scanning, scanProgress, runScan, hasTunnel } =
+    useConnection(pairing, handlePairingUpdate);
   const keyboard = useKeyboard();
 
   const refreshQueueCount = useCallback(async () => {
@@ -217,6 +218,7 @@ function AppInner() {
         queued={queued}
         scanning={scanning}
         scanProgress={scanProgress}
+        hasTunnel={hasTunnel}
         onRetry={recheck}
         onScan={runScan}
       />

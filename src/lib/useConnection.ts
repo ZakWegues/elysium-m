@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { Pairing, resolveActiveEndpoint, scanSubnet } from './pairing';
+import { callRpc } from './rpc';
 import { backoffDelay } from './http';
 
 export type ConnectionStatus = 'checking' | 'online' | 'offline';
@@ -22,6 +23,8 @@ export function useConnection(
   const [status, setStatus] = useState<ConnectionStatus>('checking');
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
+  /** null enquanto nunca conseguimos perguntar ao PC. */
+  const [hasTunnel, setHasTunnel] = useState<boolean | null>(null);
 
   const attemptRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,7 +41,10 @@ export function useConnection(
     const resolved = await resolveActiveEndpoint(current);
 
     if (resolved) {
-      if (resolved.activeIp !== current.activeIp) onPairingUpdate(resolved);
+      const refreshed = await refreshEndpoints(resolved);
+      if (refreshed !== resolved || resolved.activeIp !== current.activeIp) {
+        onPairingUpdate(refreshed);
+      }
       setStatus('online');
       attemptRef.current = 0;
       return true;
@@ -47,6 +53,32 @@ export function useConnection(
     setStatus('offline');
     return false;
   }, [onPairingUpdate]);
+
+  /**
+   * Reaprende os endereços do PC enquanto há conexão.
+   *
+   * Sem isso, o app só conhecia os endereços do momento do pareamento: instalar o
+   * túnel depois não adiantava nada, porque o endereço novo nunca chegava até aqui e
+   * o app continuava só funcionando em casa. Como isto roda sempre que a conexão está
+   * de pé, basta abrir o app uma vez em casa depois de instalar o túnel.
+   */
+  const refreshEndpoints = useCallback(async (p: Pairing): Promise<Pairing> => {
+    try {
+      const info = await callRpc(p, 'pairing.endpoints');
+      setHasTunnel(info.hasTunnel);
+
+      const known = new Set(p.endpoints);
+      const novos = info.endpoints.filter(ip => !known.has(ip));
+      if (novos.length === 0) return p;
+
+      // Os novos entram no fim: o que já está funcionando continua sendo tentado
+      // primeiro, e o candidato novo é só mais uma alternativa.
+      return { ...p, endpoints: [...p.endpoints, ...novos] };
+    } catch {
+      // Desktop antigo, sem este método. Não é motivo pra considerar offline.
+      return p;
+    }
+  }, []);
 
   useEffect(() => {
     if (!pairing) return;
@@ -105,5 +137,5 @@ export function useConnection(
     }
   }, [scanning, onPairingUpdate]);
 
-  return { status, recheck: check, scanning, scanProgress, runScan };
+  return { status, recheck: check, scanning, scanProgress, runScan, hasTunnel };
 }

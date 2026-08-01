@@ -63,7 +63,8 @@ export type RpcMethod =
   | 'chat.get'
   | 'chat.save'
   | 'chat.favorite'
-  | 'chat.delete';
+  | 'chat.delete'
+  | 'pairing.endpoints';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -195,6 +196,13 @@ export type RpcResults = {
   'chat.save': { session: SyncedChatSession };
   'chat.favorite': { favorite: boolean | null };
   'chat.delete': { deleted: boolean };
+  'pairing.endpoints': {
+    endpoints: string[];
+    /** Existe caminho de fora da rede de casa (Tailscale/ZeroTier no PC). */
+    hasTunnel: boolean;
+    hostname: string;
+    port: number;
+  };
 };
 
 /** Mesmo formato do `ChatSession` local — ver `chatHistoryStore.ts`. */
