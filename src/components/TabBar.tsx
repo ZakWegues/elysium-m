@@ -4,15 +4,15 @@ import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
-export type Screen = 'chat' | 'mailbox' | 'system' | 'remote' | 'presets' | 'settings' | 'conversations';
+export type Screen = 'chat' | 'mailbox' | 'control' | 'presets' | 'settings' | 'conversations';
 
 const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap; modal?: boolean }[] = [
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
   { screen: 'mailbox', label: 'Caixa', icon: 'inbox' },
-  // Era só "Telemetria"; virou Sistema porque agora agrega monitor, processos, apps e
-  // controle (energia/clipboard/mídia) — a telemetria é uma seção dentro dela.
-  { screen: 'system', label: 'Sistema', icon: 'activity' },
-  { screen: 'remote', label: 'Remoto', icon: 'monitor' },
+  // Guia única de controle do PC: espelho da tela aparente ao entrar, e todo o resto
+  // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
+  // gavetas. Antes eram duas abas separadas, Sistema e Remoto.
+  { screen: 'control', label: 'PC', icon: 'monitor' },
   { screen: 'presets', label: 'Presets', icon: 'sliders', modal: true },
   { screen: 'settings', label: 'Ajustes', icon: 'settings', modal: true },
 ];

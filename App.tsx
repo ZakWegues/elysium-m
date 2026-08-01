@@ -4,8 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatScreen from './src/screens/ChatScreen';
-import SystemScreen from './src/screens/SystemScreen';
-import RemoteScreen from './src/screens/RemoteScreen';
+import ControlScreen from './src/screens/ControlScreen';
 import PresetsScreen from './src/screens/PresetsScreen';
 import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -18,6 +17,7 @@ import { TabBar, Screen } from './src/components/TabBar';
 import { AppBackground, GlassModal } from './src/components/ui';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 import { useConnection } from './src/lib/useConnection';
+import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -61,6 +61,7 @@ function AppInner() {
   }, []);
 
   const { status, recheck, scanning, scanProgress, runScan } = useConnection(pairing, handlePairingUpdate);
+  const keyboard = useKeyboard();
 
   const refreshQueueCount = useCallback(async () => {
     setQueued((await listQueue()).length);
@@ -141,11 +142,14 @@ function AppInner() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.background }}>
+    // O padding do teclado fica aqui, num lugar só, em vez de espalhado por cada tela.
+    // `KeyboardAvoidingView` não serve: no edge-to-edge do Android (padrão do Expo
+    // desde o SDK 54) o sistema não redimensiona mais a janela, e a caixa de texto
+    // simplesmente ficava debaixo do teclado.
+    <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}>
       <AppBackground />
       <View style={{ flex: 1 }}>
-        {screen === 'system' && <SystemScreen pairing={pairing} onUnpair={handleUnpair} />}
-        {screen === 'remote' && <RemoteScreen pairing={pairing} onUnpair={handleUnpair} />}
+        {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen
@@ -180,12 +184,16 @@ function AppInner() {
         onRetry={recheck}
         onScan={runScan}
       />
-      <TabBar
-        active={screen}
-        onNavigate={setScreen}
-        onOpenModal={(target) => (target === 'presets' ? setPresetsModalVisible(true) : setSettingsModalVisible(true))}
-        badges={{ mailbox: mailboxUnread }}
-      />
+      {/* Sai de cena enquanto o usuário digita: com o teclado aberto sobra pouca
+          altura, e a barra empurraria a caixa de texto pra fora da vista. */}
+      {!keyboard.visible && (
+        <TabBar
+          active={screen}
+          onNavigate={setScreen}
+          onOpenModal={(target) => (target === 'presets' ? setPresetsModalVisible(true) : setSettingsModalVisible(true))}
+          badges={{ mailbox: mailboxUnread }}
+        />
+      )}
       <StatusBar style="auto" />
 
       <GlassModal title="Presets" visible={presetsModalVisible} onClose={() => setPresetsModalVisible(false)}>

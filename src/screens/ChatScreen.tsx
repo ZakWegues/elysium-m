@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
@@ -255,11 +255,10 @@ export default function ChatScreen({
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    // O espaço do teclado é reservado uma vez só, na raiz do app (App.tsx). Aqui havia
+    // um KeyboardAvoidingView que, somado àquele padding, deslocava a conversa duas
+    // vezes — e que de todo modo não funciona no edge-to-edge do Android.
+    <View style={{ flex: 1 }}>
       <ScreenHeader
         title="NeuroAxis Portal"
         right={
@@ -354,7 +353,7 @@ export default function ChatScreen({
         </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
