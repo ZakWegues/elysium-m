@@ -21,7 +21,13 @@ export type RpcMethod =
   | 'apps.open'
   | 'apps.close'
   | 'clipboard.get'
-  | 'clipboard.set';
+  | 'clipboard.set'
+  | 'power.control'
+  | 'media.control'
+  | 'volume.set';
+
+export type PowerOperation = 'shutdown' | 'restart' | 'sleep' | 'lock' | 'cancel';
+export type MediaOperation = 'play' | 'pause' | 'skip' | 'previous' | 'volume_up' | 'volume_down';
 
 export type ProcessEntry = {
   name: string;
@@ -50,7 +56,17 @@ export type RpcResults = {
   'apps.close': { ok: true; message: string };
   'clipboard.get': { text: string };
   'clipboard.set': { ok: true; length: number };
+  'power.control': { ok: true; message: string };
+  'media.control': { ok: true; message: string };
+  'volume.set': { ok: true; message: string };
 };
+
+/** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */
+export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
+  'system.killProcess',
+  'apps.close',
+  'power.control',
+]);
 
 export type RpcOptions = {
   /**

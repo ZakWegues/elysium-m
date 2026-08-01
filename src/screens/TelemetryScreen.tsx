@@ -20,7 +20,14 @@ function formatRawValue(value: unknown): string {
   return String(value);
 }
 
-export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
+export default function TelemetryScreen({
+  pairing,
+  embedded = false,
+}: {
+  pairing: Pairing;
+  /** Dentro da tela de Sistema, o cabeçalho vem de lá — não repetir aqui. */
+  embedded?: boolean;
+}) {
   const { palette, tokens } = useTheme();
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TelemetryFrame | null>(null);
@@ -44,17 +51,19 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader
-        title="Telemetria"
-        right={
-          <View style={styles.statusRow}>
-            <View style={[styles.dot, { backgroundColor: statusColor }]} />
-            <Text variant="caption" color={statusColor}>
-              {STATUS_LABEL[status]}
-            </Text>
-          </View>
-        }
-      />
+      {!embedded && (
+        <ScreenHeader
+          title="Telemetria"
+          right={
+            <View style={styles.statusRow}>
+              <View style={[styles.dot, { backgroundColor: statusColor }]} />
+              <Text variant="caption" color={statusColor}>
+                {STATUS_LABEL[status]}
+              </Text>
+            </View>
+          }
+        />
+      )}
       <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
         {!snapshot && (
           <Card style={styles.centerCard}>

@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatScreen from './src/screens/ChatScreen';
-import TelemetryScreen from './src/screens/TelemetryScreen';
+import SystemScreen from './src/screens/SystemScreen';
 import PresetsScreen from './src/screens/PresetsScreen';
 import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -143,7 +143,7 @@ function AppInner() {
     <View style={{ flex: 1, backgroundColor: palette.background }}>
       <AppBackground />
       <View style={{ flex: 1 }}>
-        {screen === 'telemetry' && <TelemetryScreen pairing={pairing} />}
+        {screen === 'system' && <SystemScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen
