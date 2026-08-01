@@ -35,7 +35,38 @@ export type RpcMethod =
   | 'input.buttonUp'
   | 'input.scroll'
   | 'input.type'
-  | 'input.key';
+  | 'input.key'
+  | 'memory.list'
+  | 'memory.add'
+  | 'memory.remove'
+  | 'reminders.list'
+  | 'reminders.create'
+  | 'reminders.cancel'
+  | 'push.register'
+  | 'push.unregister'
+  | 'push.getPrefs'
+  | 'push.setPrefs';
+
+export type MemoryFact = { id: string; text: string; createdAt: number };
+
+export type Reminder = {
+  id: string;
+  text: string;
+  dueAt: number;
+  kind: 'once' | 'weekly';
+  weekday?: number;
+  createdAt: number;
+  firedAt?: number;
+};
+
+export type PushCategory = 'reminder' | 'anomaly' | 'mailbox';
+
+export type PushPrefs = {
+  muted: PushCategory[];
+  quietFrom: number;
+  quietTo: number;
+  deviceCount: number;
+};
 
 export type MouseButton = 'left' | 'right' | 'middle';
 
@@ -101,6 +132,16 @@ export type RpcResults = {
   'input.scroll': { ok: true };
   'input.type': { ok: true };
   'input.key': { ok: true };
+  'memory.list': { facts: MemoryFact[] };
+  'memory.add': { fact: MemoryFact; created: boolean };
+  'memory.remove': { removed: boolean };
+  'reminders.list': { reminders: Reminder[] };
+  'reminders.create': { reminder: Reminder };
+  'reminders.cancel': { cancelled: boolean };
+  'push.register': { added: boolean };
+  'push.unregister': { removed: boolean };
+  'push.getPrefs': PushPrefs;
+  'push.setPrefs': PushPrefs;
 };
 
 /** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */

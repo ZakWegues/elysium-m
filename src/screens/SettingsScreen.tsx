@@ -1,6 +1,10 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
+import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
+import { registerForPush } from '../lib/pushNotifications';
+import { errMessage } from '../lib/errors';
 import { useTheme, palettes, ThemeName } from '../theme';
 import { Button, Card, Text } from '../components/ui';
 
@@ -67,6 +71,8 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
         </View>
       </View>
 
+      <PushSection pairing={pairing} />
+
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Sobre</Text>
         <Card style={{ gap: tokens.spacing.xs }}>
@@ -79,6 +85,104 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
       </View>
 
       <Button title="Desparear" variant="destructive" onPress={onUnpair} />
+    </View>
+  );
+}
+
+const CATEGORY_LABEL: Record<PushCategory, string> = {
+  reminder: 'Lembretes',
+  anomaly: 'Alertas do PC',
+  mailbox: 'Caixa de recados',
+};
+
+function PushSection({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const [prefs, setPrefs] = useState<PushPrefs | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setPrefs(await callRpc(pairing, 'push.getPrefs'));
+    } catch {
+      // PC fora do ar não deve impedir o resto dos Ajustes de aparecer.
+      setPrefs(null);
+    }
+  }, [pairing]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function enable() {
+    setBusy(true);
+    try {
+      const result = await registerForPush(pairing);
+      if (result.status === 'denied') {
+        Alert.alert(
+          'Permissão negada',
+          'Libere as notificações do NEUROAXIS nas configurações do Android para receber lembretes.'
+        );
+      } else if (result.status === 'unsupported') {
+        Alert.alert('Não disponível', result.reason);
+      } else {
+        Alert.alert('Pronto', 'Este aparelho vai receber notificações do PC.');
+        await load();
+      }
+    } catch (err) {
+      Alert.alert('Falha ao registrar', errMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleCategory(category: PushCategory) {
+    if (!prefs) return;
+    const muted = prefs.muted.includes(category)
+      ? prefs.muted.filter(c => c !== category)
+      : [...prefs.muted, category];
+    try {
+      setPrefs(await callRpc(pairing, 'push.setPrefs', { muted }));
+    } catch (err) {
+      Alert.alert('Falha ao salvar', errMessage(err));
+    }
+  }
+
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="subheading">Notificações</Text>
+      <Text variant="caption" color={palette.textMuted}>
+        Chegam pela nuvem da Expo, então funcionam mesmo fora da sua rede.
+      </Text>
+
+      <Card glass style={{ gap: tokens.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
+          <Feather name="bell" size={18} color={palette.primary} />
+          <Text variant="body" style={{ flex: 1 }}>
+            {prefs ? `${prefs.deviceCount} aparelho(s) registrado(s)` : 'PC indisponível'}
+          </Text>
+          {busy && <ActivityIndicator size="small" color={palette.primary} />}
+        </View>
+
+        <Button title="Registrar este aparelho" variant="secondary" onPress={enable} loading={busy} />
+
+        {prefs && (Object.keys(CATEGORY_LABEL) as PushCategory[]).map(category => {
+          const on = !prefs.muted.includes(category);
+          return (
+            <Pressable
+              key={category}
+              onPress={() => toggleCategory(category)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}
+            >
+              <Feather
+                name={on ? 'check-square' : 'square'}
+                size={18}
+                color={on ? palette.primary : palette.textMuted}
+              />
+              <Text variant="body" color={on ? palette.text : palette.textMuted}>
+                {CATEGORY_LABEL[category]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </Card>
     </View>
   );
 }

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, View,
+  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
 import {
-  callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, PowerOperation,
-  ProcessEntry, ScreenInfo,
+  callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, MemoryFact, PowerOperation,
+  ProcessEntry, Reminder, ScreenInfo,
 } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
@@ -76,6 +76,8 @@ export default function ControlScreen({
           </Card>
         </Pressable>
 
+        <RemindersDrawer pairing={pairing} onError={handleError} />
+        <MemoryDrawer pairing={pairing} onError={handleError} />
         <MonitorDrawer pairing={pairing} />
         <ProcessesDrawer pairing={pairing} onError={handleError} />
         <AppsDrawer pairing={pairing} onError={handleError} />
@@ -203,6 +205,166 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
 
       {error && <Text variant="caption" color={palette.error}>{error}</Text>}
     </View>
+  );
+}
+
+// ── Lembretes ─────────────────────────────────────────────────────────────────
+
+function formatDue(dueAt: number): string {
+  const d = new Date(dueAt);
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const hoje = new Date().toDateString() === d.toDateString();
+  return hoje ? `hoje às ${hora}` : `${d.toLocaleDateString('pt-BR')} às ${hora}`;
+}
+
+function RemindersDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await callRpc(pairing, 'reminders.list');
+      setReminders(res.reminders.filter(r => !r.firedAt));
+    } catch (err) {
+      onError(err, 'Falha ao listar lembretes');
+    } finally {
+      setLoading(false);
+    }
+  }, [pairing, onError]);
+
+  async function cancel(reminder: Reminder) {
+    try {
+      await callRpc(pairing, 'reminders.cancel', { id: reminder.id });
+      setReminders(prev => prev.filter(r => r.id !== reminder.id));
+    } catch (err) {
+      onError(err, 'Falha ao cancelar');
+    }
+  }
+
+  return (
+    <Drawer
+      title="Lembretes"
+      icon="bell"
+      subtitle="Criar por voz é mais rápido: “me lembra daqui a 10 minutos de…”"
+      onOpen={load}
+      right={
+        <Pressable onPress={load} hitSlop={8}>
+          <Feather name="refresh-cw" size={16} color={palette.textMuted} />
+        </Pressable>
+      }
+    >
+      {loading && <ActivityIndicator color={palette.primary} />}
+      {!loading && reminders.length === 0 && (
+        <Text variant="caption" color={palette.textMuted}>Nenhum lembrete agendado.</Text>
+      )}
+      {reminders.map(r => (
+        <View key={r.id} style={styles.procRow}>
+          <View style={{ flex: 1 }}>
+            <Text variant="body">{r.text}</Text>
+            <Text variant="caption" color={palette.textMuted}>
+              {r.kind === 'weekly' ? 'toda semana ' : ''}{formatDue(r.dueAt)}
+            </Text>
+          </View>
+          <Pressable onPress={() => cancel(r)} hitSlop={10}>
+            <Feather name="x-circle" size={20} color={palette.error} />
+          </Pressable>
+        </View>
+      ))}
+      <Text variant="caption" color={palette.textMuted} style={{ marginTop: tokens.spacing.xs }}>
+        Quando disparar, o PC fala e manda uma notificação para o celular — mesmo fora de casa.
+      </Text>
+    </Drawer>
+  );
+}
+
+// ── Memória ───────────────────────────────────────────────────────────────────
+
+function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
+  const [facts, setFacts] = useState<MemoryFact[]>([]);
+  const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await callRpc(pairing, 'memory.list');
+      setFacts(res.facts);
+    } catch (err) {
+      onError(err, 'Falha ao ler a memória');
+    } finally {
+      setLoading(false);
+    }
+  }, [pairing, onError]);
+
+  async function add() {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    try {
+      const res = await callRpc(pairing, 'memory.add', { text });
+      if (res.created) setFacts(prev => [...prev, res.fact]);
+    } catch (err) {
+      onError(err, 'Falha ao guardar');
+    }
+  }
+
+  async function remove(fact: MemoryFact) {
+    try {
+      await callRpc(pairing, 'memory.remove', { id: fact.id });
+      setFacts(prev => prev.filter(f => f.id !== fact.id));
+    } catch (err) {
+      onError(err, 'Falha ao esquecer');
+    }
+  }
+
+  return (
+    <Drawer
+      title="Memória"
+      icon="bookmark"
+      subtitle="O que o NEUROAXIS lembra sobre você"
+      onOpen={load}
+    >
+      {loading && <ActivityIndicator color={palette.primary} />}
+      {!loading && facts.length === 0 && (
+        <Text variant="caption" color={palette.textMuted}>Nada guardado ainda.</Text>
+      )}
+      {facts.map(f => (
+        <View key={f.id} style={styles.procRow}>
+          <Text variant="body" style={{ flex: 1 }}>{f.text}</Text>
+          <Pressable onPress={() => remove(f)} hitSlop={10}>
+            <Feather name="x-circle" size={20} color={palette.error} />
+          </Pressable>
+        </View>
+      ))}
+
+      <View style={{ flexDirection: 'row', gap: tokens.spacing.sm }}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Guardar um fato…"
+          placeholderTextColor={palette.textMuted}
+          onSubmitEditing={add}
+          style={[
+            styles.input,
+            {
+              borderRadius: tokens.radii.md,
+              borderColor: palette.border,
+              color: palette.text,
+              backgroundColor: palette.surface,
+            },
+          ]}
+        />
+        <Pressable
+          onPress={add}
+          style={[styles.sendBtn, { borderRadius: tokens.radii.md, backgroundColor: palette.primary }]}
+        >
+          <Feather name="plus" size={18} color={palette.onPrimary} />
+        </Pressable>
+      </View>
+    </Drawer>
   );
 }
 
@@ -572,4 +734,6 @@ const styles = StyleSheet.create({
   powerTile: { flexGrow: 1, minWidth: '45%', alignItems: 'center', gap: 4, paddingVertical: 14 },
   mediaTile: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   volTile: { flexGrow: 1, minWidth: 56, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  input: { flex: 1, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
+  sendBtn: { width: 46, alignItems: 'center', justifyContent: 'center' },
 });
