@@ -1,12 +1,19 @@
 import { baseUrl, Pairing } from './pairing';
+import {
+  AuthError, fetchWithTimeout, COMMAND_TIMEOUT_MS, PROBE_TIMEOUT_MS,
+} from './http';
 
-export class AuthError extends Error {}
+// Reexportado porque várias telas já importam AuthError daqui; a definição vive
+// em http.ts para não criar ciclo com pairing.ts.
+export { AuthError } from './http';
 
 export async function checkHealth(pairing: Pairing): Promise<boolean> {
   try {
-    const res = await fetch(`${baseUrl(pairing)}/api/health`, {
-      headers: { Authorization: `Bearer ${pairing.token}` },
-    });
+    const res = await fetchWithTimeout(
+      `${baseUrl(pairing)}/api/health`,
+      { headers: { Authorization: `Bearer ${pairing.token}` } },
+      PROBE_TIMEOUT_MS
+    );
     return res.ok;
   } catch {
     return false;
@@ -14,14 +21,18 @@ export async function checkHealth(pairing: Pairing): Promise<boolean> {
 }
 
 export async function sendCommand(pairing: Pairing, text: string): Promise<string> {
-  const res = await fetch(`${baseUrl(pairing)}/api/command`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${pairing.token}`,
+  const res = await fetchWithTimeout(
+    `${baseUrl(pairing)}/api/command`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${pairing.token}`,
+      },
+      body: JSON.stringify({ text }),
     },
-    body: JSON.stringify({ text }),
-  });
+    COMMAND_TIMEOUT_MS
+  );
   if (res.status === 401 || res.status === 403) {
     throw new AuthError('token inválido ou expirado');
   }

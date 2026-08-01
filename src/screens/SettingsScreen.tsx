@@ -21,8 +21,14 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
         <View style={{ flex: 1 }}>
           <Text variant="subheading">Pareado</Text>
           <Text variant="body" color={palette.textMuted}>
-            {pairing.ip}:{pairing.port}
+            {pairing.activeIp}:{pairing.port}
           </Text>
+          {pairing.endpoints.length > 1 && (
+            <Text variant="caption" color={palette.textMuted}>
+              {pairing.endpoints.length} endereços conhecidos
+              {pairing.hostname ? ` · ${pairing.hostname}` : ''}
+            </Text>
+          )}
         </View>
       </Card>
 

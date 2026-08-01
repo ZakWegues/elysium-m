@@ -1,5 +1,5 @@
-import { AuthError } from './api';
 import { baseUrl, Pairing } from './pairing';
+import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
 
 export type MailboxAttachmentMeta = { name: string; mimeType: string; sizeBytes: number };
 export type MailboxKind = 'link' | 'note' | 'file';
@@ -15,15 +15,20 @@ export type MailboxMessage = {
   readAt: number | null;
 };
 
-async function request<T>(pairing: Pairing, path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${baseUrl(pairing)}${path}`, {
+async function request<T>(
+  pairing: Pairing,
+  path: string,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<T> {
+  const res = await fetchWithTimeout(`${baseUrl(pairing)}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${pairing.token}`,
       ...(init?.headers ?? {}),
     },
-  });
+  }, timeoutMs);
 
   if (res.status === 401 || res.status === 403) {
     throw new AuthError('token inválido ou expirado');
@@ -61,10 +66,12 @@ export async function sendMessage(
     attachment?: { name: string; mimeType: string; base64: string };
   }
 ): Promise<{ id: string; createdAt: number }> {
+  // Anexo de 5 MB vira ~6,7 MB em base64; num Wi-Fi ruim isso não cabe no timeout padrão.
+  const timeoutMs = message.attachment ? UPLOAD_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
   return request(pairing, '/api/mailbox/messages', {
     method: 'POST',
     body: JSON.stringify(message),
-  });
+  }, timeoutMs);
 }
 
 export async function ackMessage(pairing: Pairing, id: string): Promise<void> {
@@ -75,7 +82,10 @@ export async function fetchMessageContent(
   pairing: Pairing,
   id: string
 ): Promise<{ id: string; kind: MailboxKind; text: string | null; attachment: (MailboxAttachmentMeta & { base64: string }) | null }> {
-  return request(pairing, `/api/mailbox/messages/${id}/content`);
+  return request(pairing, `/api/mailbox/messages/${id}/content`, undefined, UPLOAD_TIMEOUT_MS);
 }
 
 export const MAILBOX_MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+/** Transferência de anexo, nas duas direções. */
+const UPLOAD_TIMEOUT_MS = 60000;

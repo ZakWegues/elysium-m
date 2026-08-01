@@ -9,12 +9,15 @@ import PresetsScreen from './src/screens/PresetsScreen';
 import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
-import { clearPairing, loadPairing, Pairing } from './src/lib/pairing';
+import { clearPairing, loadPairing, savePairing, Pairing } from './src/lib/pairing';
 import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
 import { AppBackground, GlassModal } from './src/components/ui';
+import { ConnectionBanner } from './src/components/ConnectionBanner';
+import { useConnection } from './src/lib/useConnection';
+import { flushQueue, listQueue } from './src/lib/commandQueue';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -40,12 +43,48 @@ function AppInner() {
   const [presetsModalVisible, setPresetsModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
 
+  const [queued, setQueued] = useState(0);
+
   useEffect(() => {
     loadPairing().then((p) => {
       setPairing(p);
       setLoading(false);
     });
   }, []);
+
+  // O hook troca de endereço sozinho quando o IP do PC muda; persistimos a escolha
+  // para a próxima abertura já começar pelo endereço certo.
+  const handlePairingUpdate = useCallback((updated: Pairing) => {
+    setPairing(updated);
+    savePairing(updated).catch((err) => console.warn('[pairing] falha ao persistir', err));
+  }, []);
+
+  const { status, recheck, scanning, scanProgress, runScan } = useConnection(pairing, handlePairingUpdate);
+
+  const refreshQueueCount = useCallback(async () => {
+    setQueued((await listQueue()).length);
+  }, []);
+
+  useEffect(() => {
+    refreshQueueCount();
+  }, [refreshQueueCount, screen]);
+
+  // PC voltou: esvazia a fila de comandos que ficaram presos offline.
+  useEffect(() => {
+    if (status !== 'online' || !pairing) return;
+    let cancelled = false;
+    (async () => {
+      const pending = await listQueue();
+      if (cancelled || pending.length === 0) return;
+      setQueued(pending.length);
+      await flushQueue(pairing, (item, reply, error) => {
+        if (error) console.warn('[fila] falhou ao reenviar', item.text, error);
+        else console.log('[fila] reenviado', item.text, '→', reply);
+      });
+      if (!cancelled) refreshQueueCount();
+    })();
+    return () => { cancelled = true; };
+  }, [status, pairing, refreshQueueCount]);
 
   const refreshMailboxBadge = useCallback(async () => {
     if (!pairing) return;
@@ -129,6 +168,16 @@ function AppInner() {
           />
         )}
       </View>
+      {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area
+          que cada ScreenHeader já aplica. */}
+      <ConnectionBanner
+        status={status}
+        queued={queued}
+        scanning={scanning}
+        scanProgress={scanProgress}
+        onRetry={recheck}
+        onScan={runScan}
+      />
       <TabBar
         active={screen}
         onNavigate={setScreen}

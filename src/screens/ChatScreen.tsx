@@ -5,6 +5,8 @@ import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, s
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
+import { TimeoutError } from '../lib/http';
+import { enqueueCommand } from '../lib/commandQueue';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { errMessage } from '../lib/errors';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
@@ -28,7 +30,7 @@ export default function ChatScreen({
 }) {
   const { palette, tokens } = useTheme();
   const [messages, setMessages] = useState<StoredMessage[]>([
-    { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}`, ts: Date.now() },
+    { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() },
   ]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -67,9 +69,9 @@ export default function ChatScreen({
       sessionIdRef.current = null;
       favoriteRef.current = false;
       createdAtRef.current = Date.now();
-      setMessages([{ id: 'welcome', from: 'reply', text: `Pareado com ${pairing.ip}:${pairing.port}`, ts: Date.now() }]);
+      setMessages([{ id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() }]);
     })();
-  }, [sessionId, pairing.ip, pairing.port]);
+  }, [sessionId, pairing.activeIp, pairing.port]);
 
   useEffect(() => {
     const hasRealContent = messages.some((m) => m.id !== 'welcome');
@@ -174,6 +176,19 @@ export default function ChatScreen({
         onUnpair();
         return;
       }
+
+      // PC fora do ar: em vez de perder o comando, guarda pra reenviar quando voltar.
+      // Erro de resposta do servidor (comando chegou e falhou lá) não entra na fila —
+      // repetir não conserta.
+      if (err instanceof TimeoutError || err instanceof TypeError) {
+        await enqueueCommand(text);
+        setMessages((prev) => [
+          ...prev,
+          { id: `queued-${Date.now()}`, from: 'reply', text: '⏳ PC fora do ar. Guardei esse comando e mando assim que ele voltar.', ts: Date.now() },
+        ]);
+        return;
+      }
+
       pushError(`Falha: ${errMessage(err)}`);
     } finally {
       setSending(false);

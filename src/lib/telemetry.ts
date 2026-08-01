@@ -1,10 +1,9 @@
 import { Pairing } from './pairing';
 import { openAuthedWebSocket, streamUrl } from './ws';
+import { backoffDelay } from './http';
 
 export type TelemetryFrame = Record<string, unknown> & { type: 'telemetry' };
 export type TelemetryStatus = 'connecting' | 'open' | 'closed';
-
-const MAX_RETRY_DELAY_MS = 15000;
 
 export function openTelemetryStream(
   pairing: Pairing,
@@ -55,7 +54,7 @@ export function openTelemetryStream(
       onStatusChange?.('closed');
       if (stopped) return;
       attempt += 1;
-      const delay = Math.min(1000 * 2 ** (attempt - 1), MAX_RETRY_DELAY_MS);
+      const delay = backoffDelay(attempt);
       console.log(`[telemetry-ws] tentando reconectar em ${delay}ms (tentativa ${attempt})`);
       retryTimer = setTimeout(connect, delay);
     };

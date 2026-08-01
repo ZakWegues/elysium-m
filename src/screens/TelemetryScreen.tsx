@@ -29,7 +29,7 @@ export default function TelemetryScreen({ pairing }: { pairing: Pairing }) {
   useEffect(() => {
     const close = openTelemetryStream(pairing, setSnapshot, setStatus);
     return close;
-  }, [pairing.ip, pairing.port, pairing.token]);
+  }, [pairing.activeIp, pairing.port, pairing.token]);
 
   const entries = snapshot
     ? Object.entries(snapshot).filter(([key, value]) => {
