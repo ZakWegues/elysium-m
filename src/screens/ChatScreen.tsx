@@ -41,7 +41,11 @@ export default function ChatScreen({
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
   const listRef = useRef<FlatList<StoredMessage>>(null);
-  const sessionIdRef = useRef<string | null>(sessionId ?? null);
+  // Começa SEMPRE em null, mesmo recebendo um sessionId. Inicializar com a prop fazia a
+  // guarda do efeito de carregamento bater já na montagem: abrir uma conversa antiga
+  // pulava a leitura do storage, a tela aparecia só com a saudação, e a primeira
+  // mensagem nova gravava por cima do histórico inteiro.
+  const sessionIdRef = useRef<string | null>(null);
   const favoriteRef = useRef(false);
   const createdAtRef = useRef(Date.now());
 

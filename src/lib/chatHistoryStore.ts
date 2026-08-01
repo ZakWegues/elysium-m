@@ -43,7 +43,10 @@ export async function saveSession(session: ChatSession): Promise<void> {
   const sessions = await readAll();
   const index = sessions.findIndex((s) => s.id === session.id);
   if (index >= 0) {
-    sessions[index] = session;
+    // O favorito guardado vence o que veio do chamador. A tela de chat carrega esse
+    // valor uma vez e o mantém numa ref; favoritar pela tela de Conversas depois disso
+    // deixava a ref velha, e a próxima mensagem desfazia o favorito sem ninguém pedir.
+    sessions[index] = { ...session, favorite: sessions[index].favorite };
   } else {
     sessions.push(session);
   }
