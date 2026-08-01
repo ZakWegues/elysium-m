@@ -24,7 +24,38 @@ export type RpcMethod =
   | 'clipboard.set'
   | 'power.control'
   | 'media.control'
-  | 'volume.set';
+  | 'volume.set'
+  | 'screen.list'
+  | 'screen.capture'
+  | 'input.ping'
+  | 'input.move'
+  | 'input.click'
+  | 'input.doubleClick'
+  | 'input.buttonDown'
+  | 'input.buttonUp'
+  | 'input.scroll'
+  | 'input.type'
+  | 'input.key';
+
+export type MouseButton = 'left' | 'right' | 'middle';
+
+export type ScreenInfo = {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  isPrimary: boolean;
+};
+
+export type CapturedFrame = {
+  /** JPEG em base64, sem o prefixo data:. */
+  base64: string;
+  width: number;
+  height: number;
+  capturedAt: number;
+  sourceId: string;
+  sourceName: string;
+};
 
 export type PowerOperation = 'shutdown' | 'restart' | 'sleep' | 'lock' | 'cancel';
 export type MediaOperation = 'play' | 'pause' | 'skip' | 'previous' | 'volume_up' | 'volume_down';
@@ -59,6 +90,17 @@ export type RpcResults = {
   'power.control': { ok: true; message: string };
   'media.control': { ok: true; message: string };
   'volume.set': { ok: true; message: string };
+  'screen.list': { screens: ScreenInfo[] };
+  'screen.capture': CapturedFrame;
+  'input.ping': { ok: true };
+  'input.move': { ok: true };
+  'input.click': { ok: true };
+  'input.doubleClick': { ok: true };
+  'input.buttonDown': { ok: true };
+  'input.buttonUp': { ok: true };
+  'input.scroll': { ok: true };
+  'input.type': { ok: true };
+  'input.key': { ok: true };
 };
 
 /** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */

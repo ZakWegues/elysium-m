@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import SystemScreen from './src/screens/SystemScreen';
+import RemoteScreen from './src/screens/RemoteScreen';
 import PresetsScreen from './src/screens/PresetsScreen';
 import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -144,6 +145,7 @@ function AppInner() {
       <AppBackground />
       <View style={{ flex: 1 }}>
         {screen === 'system' && <SystemScreen pairing={pairing} onUnpair={handleUnpair} />}
+        {screen === 'remote' && <RemoteScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen

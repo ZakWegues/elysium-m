@@ -4,7 +4,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
-export type Screen = 'chat' | 'mailbox' | 'system' | 'presets' | 'settings' | 'conversations';
+export type Screen = 'chat' | 'mailbox' | 'system' | 'remote' | 'presets' | 'settings' | 'conversations';
 
 const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap; modal?: boolean }[] = [
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
@@ -12,6 +12,7 @@ const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap
   // Era só "Telemetria"; virou Sistema porque agora agrega monitor, processos, apps e
   // controle (energia/clipboard/mídia) — a telemetria é uma seção dentro dela.
   { screen: 'system', label: 'Sistema', icon: 'activity' },
+  { screen: 'remote', label: 'Remoto', icon: 'monitor' },
   { screen: 'presets', label: 'Presets', icon: 'sliders', modal: true },
   { screen: 'settings', label: 'Ajustes', icon: 'settings', modal: true },
 ];
