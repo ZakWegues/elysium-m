@@ -45,7 +45,10 @@ export type RpcMethod =
   | 'push.register'
   | 'push.unregister'
   | 'push.getPrefs'
-  | 'push.setPrefs';
+  | 'push.setPrefs'
+  | 'vision.ask'
+  | 'vision.screen'
+  | 'web.search';
 
 export type MemoryFact = { id: string; text: string; createdAt: number };
 
@@ -142,6 +145,9 @@ export type RpcResults = {
   'push.unregister': { removed: boolean };
   'push.getPrefs': PushPrefs;
   'push.setPrefs': PushPrefs;
+  'vision.ask': { answer: string };
+  'vision.screen': { answer: string };
+  'web.search': { answer: string };
 };
 
 /** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */

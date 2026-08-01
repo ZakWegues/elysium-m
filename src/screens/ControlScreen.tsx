@@ -3,6 +3,7 @@ import {
   ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as Speech from 'expo-speech';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
@@ -105,6 +106,8 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
   const [sourceId, setSourceId] = useState<string | undefined>(undefined);
   const [live, setLive] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(null);
 
   // Evita empilhar requisições quando um quadro demora mais que o intervalo.
   const inFlight = useRef(false);
@@ -148,6 +151,25 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
     return () => clearInterval(timer);
   }, [live, grab]);
 
+  /**
+   * O PC captura a tela de novo e manda para o modelo de visão. Não reaproveitamos o
+   * quadro já baixado de propósito: o do espelho é comprimido para caber na rede, e
+   * texto pequeno — que costuma ser justo o que se quer ler — não sobrevive a isso.
+   */
+  async function askScreen() {
+    setAsking(true);
+    setAnswer(null);
+    try {
+      const res = await callRpc(pairing, 'vision.screen', {}, { timeoutMs: 90000 });
+      setAnswer(res.answer);
+      Speech.speak(res.answer, { language: 'pt-BR' });
+    } catch (err) {
+      onError(err, 'Falha ao interpretar a tela');
+    } finally {
+      setAsking(false);
+    }
+  }
+
   const aspect = frame ? frame.width / Math.max(1, frame.height) : 16 / 9;
 
   return (
@@ -184,6 +206,17 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
           <Text variant="caption" color={palette.primary}>Atualizar</Text>
         </Pressable>
 
+        <Pressable
+          onPress={askScreen}
+          disabled={asking}
+          style={[styles.pill, { borderRadius: tokens.radii.full, backgroundColor: palette.primary }]}
+        >
+          {asking
+            ? <ActivityIndicator size="small" color={palette.onPrimary} />
+            : <Feather name="help-circle" size={14} color={palette.onPrimary} />}
+          <Text variant="caption" color={palette.onPrimary}>Perguntar sobre a tela</Text>
+        </Pressable>
+
         {screens.length > 1 && screens.map(s => {
           const active = (sourceId ?? screens[0]?.id) === s.id;
           return (
@@ -202,6 +235,20 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
           );
         })}
       </View>
+
+      {answer && (
+        <Card glass style={{ gap: tokens.spacing.xs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.xs }}>
+            <Feather name="eye" size={14} color={palette.primary} />
+            <Text variant="label" color={palette.primary}>O que ele viu</Text>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={() => setAnswer(null)} hitSlop={10}>
+              <Feather name="x" size={16} color={palette.textMuted} />
+            </Pressable>
+          </View>
+          <Text variant="body">{answer}</Text>
+        </Card>
+      )}
 
       {error && <Text variant="caption" color={palette.error}>{error}</Text>}
     </View>

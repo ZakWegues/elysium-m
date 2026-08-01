@@ -9,6 +9,7 @@ import { TimeoutError } from '../lib/http';
 import { enqueueCommand } from '../lib/commandQueue';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { errMessage } from '../lib/errors';
+import CameraAsk from './CameraAsk';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { useTheme } from '../theme';
 import { GlassFill, ScreenHeader, Text } from '../components/ui';
@@ -35,6 +36,7 @@ export default function ChatScreen({
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [micStatus, setMicStatus] = useState<MicStatus>('checking');
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
@@ -313,6 +315,13 @@ export default function ChatScreen({
             { padding: tokens.spacing.md, borderTopColor: palette.glassBorder },
           ]}
         >
+        <Pressable
+          style={[styles.roundButton, { backgroundColor: palette.primarySoft }]}
+          onPress={() => setCameraOpen(true)}
+          disabled={sending}
+        >
+          <Feather name="camera" size={20} color={palette.primary} />
+        </Pressable>
         <TextInput
           style={[
             styles.input,
@@ -353,6 +362,23 @@ export default function ChatScreen({
         </Pressable>
         </View>
       </View>
+
+      <CameraAsk
+        pairing={pairing}
+        visible={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onAnswer={(question, answer) => {
+          // A pergunta e a resposta entram como bolhas normais: para o histórico, uma
+          // foto respondida é só mais um turno da conversa.
+          const ts = Date.now();
+          setMessages((prev) => [
+            ...prev,
+            { id: `me-${ts}`, from: 'me', text: `📷 ${question}`, ts },
+            { id: `reply-${ts + 1}`, from: 'reply', text: answer, ts: ts + 1 },
+          ]);
+          Speech.speak(answer, { language: 'pt-BR' });
+        }}
+      />
     </View>
   );
 }
