@@ -17,6 +17,7 @@ import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/tel
 import { findMetric } from '../lib/telemetryFormat';
 import { useTheme } from '../theme';
 import TrackpadFullscreen from './TrackpadFullscreen';
+import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
 import { Button, Card, Drawer, MetricBar, ScreenHeader, Text } from '../components/ui';
 
 /**
@@ -47,6 +48,7 @@ export default function ControlScreen({
 }) {
   const { palette, tokens } = useTheme();
   const [trackpadOpen, setTrackpadOpen] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
 
   const handleError = useCallback<ErrorHandler>((err, context) => {
     if (err instanceof AuthError) {
@@ -63,6 +65,9 @@ export default function ControlScreen({
 
       <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
         <MirrorPanel pairing={pairing} onError={handleError} />
+
+        {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}
+        <SpotifyBar pairing={pairing} onOpen={() => setPlayerOpen(true)} />
 
         <Pressable onPress={() => setTrackpadOpen(true)}>
           <Card glass style={styles.trackpadRow}>
@@ -84,6 +89,17 @@ export default function ControlScreen({
         <AppsDrawer pairing={pairing} onError={handleError} />
         <PowerDrawer pairing={pairing} onError={handleError} />
         <ClipboardDrawer pairing={pairing} onError={handleError} />
+        <Pressable onPress={() => setPlayerOpen(true)}>
+          <Card glass style={styles.trackpadRow}>
+            <Feather name="music" size={18} color="#1db954" />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">Spotify</Text>
+              <Text variant="caption" color={palette.textMuted}>Player completo</Text>
+            </View>
+            <Feather name="maximize-2" size={18} color={palette.textMuted} />
+          </Card>
+        </Pressable>
+
         <MediaDrawer pairing={pairing} onError={handleError} />
       </ScrollView>
 
@@ -92,6 +108,12 @@ export default function ControlScreen({
         visible={trackpadOpen}
         onClose={() => setTrackpadOpen(false)}
         onError={handleError}
+      />
+
+      <SpotifyPlayer
+        pairing={pairing}
+        visible={playerOpen}
+        onClose={() => setPlayerOpen(false)}
       />
     </View>
   );
@@ -717,47 +739,12 @@ const MEDIA_BUTTONS: { op: MediaOperation; icon: keyof typeof Feather.glyphMap }
   { op: 'skip', icon: 'skip-forward' },
 ];
 
+/**
+ * Só as teclas de mídia e o volume do Windows. O Spotify tem lugar próprio: a barra
+ * no topo desta tela, que abre o player em tela cheia.
+ */
 function MediaDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
-  const [connected, setConnected] = useState<boolean | null>(null);
-  const [now, setNow] = useState<NowPlaying | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const loadSpotify = useCallback(async () => {
-    try {
-      const status = await callRpc(pairing, 'spotify.status');
-      setConnected(status.connected);
-      if (!status.connected) return;
-      const res = await callRpc(pairing, 'spotify.nowPlaying');
-      setNow(res.nowPlaying);
-    } catch {
-      // Spotify indisponível não pode impedir os botões de mídia genéricos de aparecer.
-      setConnected(false);
-    }
-  }, [pairing]);
-
-  async function connect() {
-    setBusy(true);
-    try {
-      const res = await callRpc(pairing, 'spotify.login');
-      Alert.alert('Autorize no PC', res.message);
-    } catch (err) {
-      onError(err, 'Falha ao iniciar o login');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function spotifyCmd(operation: 'play' | 'pause' | 'next' | 'previous') {
-    try {
-      await callRpc(pairing, 'spotify.command', { operation });
-      // O Spotify demora um instante para refletir a troca de faixa; sem a pausa a
-      // consulta devolve a música anterior.
-      setTimeout(loadSpotify, 500);
-    } catch (err) {
-      onError(err, 'Falha no comando do Spotify');
-    }
-  }
 
   async function media(op: MediaOperation) {
     try {
@@ -776,59 +763,7 @@ function MediaDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
   }
 
   return (
-    <Drawer title="Mídia e volume" icon="music" onOpen={loadSpotify}>
-      {connected === false && (
-        <View style={{ gap: tokens.spacing.sm }}>
-          <Text variant="caption" color={palette.textMuted}>
-            Conecte o Spotify para ver o que está tocando e controlar a faixa. A autorização
-            acontece no navegador do PC.
-          </Text>
-          <Button title="Conectar Spotify" variant="secondary" onPress={connect} loading={busy} />
-        </View>
-      )}
-
-      {now && (
-        <View style={{ flexDirection: 'row', gap: tokens.spacing.md, alignItems: 'center' }}>
-          {now.albumArt && (
-            <Image
-              source={{ uri: now.albumArt }}
-              style={{ width: 64, height: 64, borderRadius: tokens.radii.sm }}
-            />
-          )}
-          <View style={{ flex: 1 }}>
-            <Text variant="body" numberOfLines={1}>{now.track}</Text>
-            <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{now.artist}</Text>
-            {now.device && (
-              <Text variant="caption" color={palette.textMuted} numberOfLines={1}>
-                {now.isPlaying ? '▶' : '❚❚'} {now.device}
-              </Text>
-            )}
-          </View>
-        </View>
-      )}
-
-      {connected && (
-        <View style={[styles.grid, { justifyContent: 'space-around' }]}>
-          {([
-            { op: 'previous', icon: 'skip-back' },
-            { op: now?.isPlaying ? 'pause' : 'play', icon: now?.isPlaying ? 'pause' : 'play' },
-            { op: 'next', icon: 'skip-forward' },
-          ] as const).map(b => (
-            <Pressable
-              key={b.op}
-              onPress={() => spotifyCmd(b.op as 'play' | 'pause' | 'next' | 'previous')}
-              style={[styles.mediaTile, { borderRadius: tokens.radii.full, backgroundColor: palette.primary }]}
-            >
-              <Feather name={b.icon as keyof typeof Feather.glyphMap} size={20} color={palette.onPrimary} />
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      <Text variant="caption" color={palette.textMuted}>
-        {connected ? 'Abaixo: teclas de mídia, funcionam com qualquer player.' : 'Teclas de mídia'}
-      </Text>
-
+    <Drawer title="Mídia e volume" icon="sliders" subtitle="Funciona com qualquer player">
       <View style={[styles.grid, { justifyContent: 'space-around' }]}>
         {MEDIA_BUTTONS.map(b => (
           <Pressable

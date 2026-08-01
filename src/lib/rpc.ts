@@ -56,7 +56,11 @@ export type RpcMethod =
   | 'spotify.command'
   | 'spotify.volume'
   | 'spotify.seek'
-  | 'spotify.playSearch';
+  | 'spotify.playSearch'
+  | 'spotify.shuffle'
+  | 'spotify.repeat';
+
+export type RepeatState = 'off' | 'track' | 'context';
 
 export type NowPlaying = {
   isPlaying: boolean;
@@ -67,6 +71,10 @@ export type NowPlaying = {
   progressMs: number;
   durationMs: number;
   device: string | null;
+  /** Volume do dispositivo, 0-100. Null quando o dispositivo não expõe controle. */
+  volumePercent: number | null;
+  shuffle: boolean;
+  repeat: RepeatState;
 };
 
 export type MemoryFact = { id: string; text: string; createdAt: number };
@@ -175,6 +183,8 @@ export type RpcResults = {
   'spotify.volume': { ok: true };
   'spotify.seek': { ok: true };
   'spotify.playSearch': { playing: { track: string; artist: string } };
+  'spotify.shuffle': { ok: true };
+  'spotify.repeat': { ok: true };
 };
 
 /** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */
