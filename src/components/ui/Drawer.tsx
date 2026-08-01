@@ -1,19 +1,18 @@
-import { ReactNode, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, StyleSheet, UIManager, View } from 'react-native';
+import { ReactNode, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../../theme';
 import { Card } from './Card';
 import { Text } from './Text';
 
-// LayoutAnimation precisa deste opt-in explícito no Android da arquitetura antiga;
-// é no-op quando já está habilitado ou na nova.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 /**
  * Seção recolhível. O conteúdo só é montado quando aberta — várias destas na mesma
  * tela consultariam o PC em paralelo se montassem todas de uma vez.
+ *
+ * A transição usa `Animated` do core em vez de `LayoutAnimation`: na Nova Arquitetura
+ * (padrão desde o SDK 54) o opt-in `setLayoutAnimationEnabledExperimental` virou no-op
+ * e só rendia aviso no console. Opacidade e rotação rodam na thread nativa, então não
+ * dependem do trabalho de layout.
  */
 export function Drawer({
   title,
@@ -35,13 +34,24 @@ export function Drawer({
 }) {
   const { palette, tokens } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
+  const anim = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current;
 
   function toggle() {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const next = !open;
-    setOpen(next);
-    if (next) onOpen?.();
+    if (open) {
+      // Desmonta só no fim, senão o conteúdo some antes de terminar de desaparecer.
+      Animated.timing(anim, { toValue: 0, duration: 120, useNativeDriver: true })
+        .start(({ finished }) => { if (finished) setOpen(false); });
+    } else {
+      setOpen(true);
+      onOpen?.();
+      Animated.timing(anim, { toValue: 1, duration: 160, useNativeDriver: true }).start();
+    }
   }
+
+  const chevronRotation = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
 
   return (
     <Card glass style={{ gap: open ? tokens.spacing.md : 0 }}>
@@ -54,14 +64,16 @@ export function Drawer({
           ) : null}
         </View>
         {right}
-        <Feather
-          name={open ? 'chevron-up' : 'chevron-down'}
-          size={18}
-          color={palette.textMuted}
-        />
+        <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
+          <Feather name="chevron-down" size={18} color={palette.textMuted} />
+        </Animated.View>
       </Pressable>
 
-      {open && <View style={{ gap: tokens.spacing.md }}>{children}</View>}
+      {open && (
+        <Animated.View style={{ opacity: anim, gap: tokens.spacing.md }}>
+          {children}
+        </Animated.View>
+      )}
     </Card>
   );
 }
