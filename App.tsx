@@ -19,6 +19,7 @@ import { ConnectionBanner } from './src/components/ConnectionBanner';
 import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
+import { syncChats } from './src/lib/chatSync';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -87,6 +88,13 @@ function AppInner() {
     })();
     return () => { cancelled = true; };
   }, [status, pairing, refreshQueueCount]);
+
+  // Concilia as conversas quando o PC volta a ficar acessível. Sem isso, o que foi
+  // escrito no celular offline só apareceria no PC quando alguém abrisse a lista.
+  useEffect(() => {
+    if (status !== 'online' || !pairing) return;
+    syncChats(pairing);
+  }, [status, pairing]);
 
   const refreshMailboxBadge = useCallback(async () => {
     if (!pairing) return;
@@ -157,6 +165,7 @@ function AppInner() {
         {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen
+            pairing={pairing}
             onSelect={(id) => {
               setActiveSessionId(id);
               setScreen('chat');

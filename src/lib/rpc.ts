@@ -58,7 +58,12 @@ export type RpcMethod =
   | 'spotify.seek'
   | 'spotify.playSearch'
   | 'spotify.shuffle'
-  | 'spotify.repeat';
+  | 'spotify.repeat'
+  | 'chat.list'
+  | 'chat.get'
+  | 'chat.save'
+  | 'chat.favorite'
+  | 'chat.delete';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -185,6 +190,21 @@ export type RpcResults = {
   'spotify.playSearch': { playing: { track: string; artist: string } };
   'spotify.shuffle': { ok: true };
   'spotify.repeat': { ok: true };
+  'chat.list': { sessions: SyncedChatSession[] };
+  'chat.get': { session: SyncedChatSession | null };
+  'chat.save': { session: SyncedChatSession };
+  'chat.favorite': { favorite: boolean | null };
+  'chat.delete': { deleted: boolean };
+};
+
+/** Mesmo formato do `ChatSession` local — ver `chatHistoryStore.ts`. */
+export type SyncedChatSession = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  favorite: boolean;
+  messages: { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number }[];
 };
 
 /** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */

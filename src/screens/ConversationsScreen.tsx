@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { ChatSession, deleteSession, listSessions, toggleFavorite } from '../lib/chatHistoryStore';
+import { syncChats } from '../lib/chatSync';
+import { Pairing } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Card, ScreenHeader, Text } from '../components/ui';
 
@@ -17,10 +19,12 @@ function relativeTime(ts: number): string {
 }
 
 export default function ConversationsScreen({
+  pairing,
   onSelect,
   onNew,
   onBack,
 }: {
+  pairing: Pairing;
   onSelect: (id: string) => void;
   onNew: () => void;
   onBack: () => void;
@@ -28,6 +32,8 @@ export default function ConversationsScreen({
   const { palette, tokens } = useTheme();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   async function refresh() {
     const list = await listSessions();
@@ -35,18 +41,31 @@ export default function ConversationsScreen({
     setLoading(false);
   }
 
+  /** Mostra o que existe aqui primeiro, depois concilia com o PC. */
+  const sync = useCallback(async () => {
+    setSyncing(true);
+    const result = await syncChats(pairing);
+    setOffline(result.status === 'offline');
+    await refresh();
+    setSyncing(false);
+  }, [pairing]);
+
   useEffect(() => {
-    refresh();
-  }, []);
+    refresh().then(sync);
+  }, [sync]);
 
   async function handleToggleFavorite(id: string) {
     await toggleFavorite(id);
-    refresh();
+    await refresh();
+    // Favoritar muda o que sobrevive à poda, então vale propagar na hora em vez de
+    // esperar a próxima abertura da tela.
+    sync();
   }
 
   async function handleDelete(id: string) {
     await deleteSession(id);
-    refresh();
+    await refresh();
+    sync();
   }
 
   return (
@@ -54,13 +73,26 @@ export default function ConversationsScreen({
       <ScreenHeader
         title="Conversas"
         right={
-          <Pressable onPress={onBack} hitSlop={8}>
-            <Feather name="x" size={22} color={palette.textMuted} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {syncing
+              ? <ActivityIndicator size="small" color={palette.primary} />
+              : <Pressable onPress={sync} hitSlop={8}>
+                  <Feather name="refresh-cw" size={18} color={palette.textMuted} />
+                </Pressable>}
+            <Pressable onPress={onBack} hitSlop={8}>
+              <Feather name="x" size={22} color={palette.textMuted} />
+            </Pressable>
+          </View>
         }
       />
       <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}>
         <Button title="+ Nova conversa" onPress={onNew} />
+
+        <Text variant="caption" color={offline ? palette.error : palette.textMuted}>
+          {offline
+            ? 'PC fora de alcance — mostrando a cópia local. Sincroniza sozinho quando voltar.'
+            : 'Sincronizado com o PC. As 5 mais recentes ficam guardadas; favoritar tira dessa contagem.'}
+        </Text>
 
         {!loading && sessions.length === 0 && (
           <Card style={styles.center}>

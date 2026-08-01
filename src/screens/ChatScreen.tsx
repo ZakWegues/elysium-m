@@ -84,7 +84,10 @@ export default function ChatScreen({
     if (!hasRealContent) return;
 
     if (!sessionIdRef.current) {
-      sessionIdRef.current = `session-${Date.now()}`;
+      // Sufixo aleatório porque as conversas agora sincronizam: só o carimbo de tempo
+      // colidiria se PC e celular criassem uma conversa no mesmo milissegundo, e o
+      // merge trataria as duas como a mesma.
+      sessionIdRef.current = `session-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
       createdAtRef.current = Date.now();
       onSessionChange(sessionIdRef.current);
     }
