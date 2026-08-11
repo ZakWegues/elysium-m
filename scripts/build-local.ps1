@@ -44,13 +44,39 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:PATH"
 Write-Host "JDK:  $env:JAVA_HOME"
 Write-Host "SDK:  $env:ANDROID_HOME"
 
+# O daemon do Gradle sobrevive ao fim da build e continua com os arquivos de saída
+# abertos. O Windows não deixa apagar arquivo aberto, então o --clean do passo
+# seguinte falha com EBUSY na segunda build em diante. Derrubar antes evita isso.
+if (Test-Path "$root\android\gradlew.bat") {
+    Write-Host "`n== encerrando daemon do Gradle =="
+    Push-Location "$root\android"
+    try { & .\gradlew.bat --stop 2>&1 | Out-Null } catch { } finally { Pop-Location }
+
+    # O daemon leva um instante para soltar os handles depois de responder ao --stop.
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Get-Process java -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+    }
+    Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
 # O prebuild regenera /android inteiro a partir do app.json. É por isso que a
 # assinatura mora num plugin (plugins/withReleaseSigning.js) e não numa edição manual
 # do build.gradle: edição manual sumiria aqui, silenciosamente, e o APK sairia
 # assinado com a chave de debug.
+#
+# Apagar /android não joga fora o cache de dependências: ele fica em ~\.gradle e
+# sobrevive. O que se perde é só o resultado incremental da compilação.
 Write-Host "`n== gerando projeto nativo =="
 npx expo prebuild --platform android --clean
-if ($LASTEXITCODE -ne 0) { throw "prebuild falhou" }
+if ($LASTEXITCODE -ne 0) {
+    # Antivírus e indexador do Windows também seguram arquivo recém-escrito. Uma
+    # segunda tentativa depois de alguns segundos resolve na prática.
+    Write-Host "prebuild falhou; tentando de novo em 5s..."
+    Start-Sleep -Seconds 5
+    npx expo prebuild --platform android --clean
+    if ($LASTEXITCODE -ne 0) { throw "prebuild falhou" }
+}
 
 Write-Host "`n== compilando =="
 Push-Location "$root\android"
