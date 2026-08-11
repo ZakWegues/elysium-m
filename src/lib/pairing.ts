@@ -128,15 +128,25 @@ async function probe(ip: string, port: number, token: string): Promise<string> {
  * deixaria a abertura do app lenta sem motivo.
  */
 export async function resolveActiveEndpoint(pairing: Pairing): Promise<Pairing | null> {
-  const ordered = [
-    pairing.activeIp,
-    ...pairing.endpoints.filter(ip => ip !== pairing.activeIp),
-  ];
+  const others = pairing.endpoints.filter(ip => ip !== pairing.activeIp);
 
-  const winner = await firstSuccess(ordered.map(ip => probe(ip, pairing.port, pairing.token)));
+  // O endereço atual é SEMPRE preferido quando responde, mesmo que outro responda
+  // antes. Sem essa preferência, em casa — onde tanto a rede local quanto o túnel
+  // funcionam — o vencedor mudava a cada verificação, e cada troca derrubava e
+  // reabria o WebSocket de telemetria num laço sem fim.
+  const currentOk = probe(pairing.activeIp, pairing.port, pairing.token)
+    .then(() => true, () => false);
+
+  // Os outros correm em paralelo, não depois: fora de casa o endereço local vai dar
+  // timeout, e esperar por ele antes de tentar o túnel deixaria a abertura do app
+  // lenta à toa.
+  const fallback = firstSuccess(others.map(ip => probe(ip, pairing.port, pairing.token)));
+
+  if (await currentOk) return pairing;
+
+  const winner = await fallback;
   if (!winner) return null;
 
-  if (winner === pairing.activeIp) return pairing;
   const updated = { ...pairing, activeIp: winner };
   await savePairing(updated);
   return updated;
