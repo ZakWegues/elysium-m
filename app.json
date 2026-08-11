@@ -74,7 +74,9 @@
       ],
       "expo-audio",
       "expo-notifications",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "./plugins/withReleaseSigning",
+      "./plugins/withGradleMemory"
     ],
     "extra": {
       "eas": {
