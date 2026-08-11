@@ -5,6 +5,12 @@
     "scheme": "neuroaxis",
     "version": "1.0.0",
     "orientation": "portrait",
+    "updates": {
+      "url": "https://u.expo.dev/a9c62871-2d6d-4e05-b458-1e58655449b5"
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {

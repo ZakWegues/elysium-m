@@ -21,6 +21,7 @@
     "expo-secure-store": "~57.0.1",
     "expo-speech": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.13",
     "react": "19.2.3",
     "react-native": "0.86.0",
     "react-native-safe-area-context": "~5.7.0"
@@ -37,7 +38,8 @@
     "typecheck": "tsc --noEmit",
     "build:dev": "npx eas-cli build --platform android --profile development",
     "build:apk": "npx eas-cli build --platform android --profile preview",
-    "build:aab": "npx eas-cli build --platform android --profile production"
+    "build:aab": "npx eas-cli build --platform android --profile production",
+    "update": "npx eas-cli update --channel preview --message"
   },
   "private": true
 }
