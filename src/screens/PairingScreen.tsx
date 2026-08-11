@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Feather from '@expo/vector-icons/Feather';
-import { parsePairingQr, savePairing } from '../lib/pairing';
-import { checkHealth } from '../lib/api';
+import { parsePairingQr, resolveActiveEndpoint, savePairing } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Text } from '../components/ui';
 
@@ -26,15 +25,26 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
       return;
     }
 
-    const ok = await checkHealth(pairing);
-    if (!ok) {
-      Alert.alert('Falha ao conectar', 'Não deu pra falar com o NeuroAxis nesse IP/porta. Confere se o PC tá na mesma rede.');
+    // Corre TODOS os endereços do QR, igual à reconexão faz. Testar só o primeiro
+    // era o bug: o QR traz o IP da rede local e o do túnel, e a lista começa pelo
+    // local — com o celular fora de casa, ou com o caminho local indisponível por
+    // qualquer motivo, o pareamento falhava mesmo com o túnel funcionando.
+    const resolved = await resolveActiveEndpoint(pairing);
+    if (!resolved) {
+      Alert.alert(
+        'Falha ao conectar',
+        'Não consegui falar com o NEUROAXIS em nenhum dos endereços do QR.\n\n' +
+        'Confira se o app está aberto no PC. Se você não está na rede de casa, ' +
+        'o Tailscale precisa estar ligado nos dois aparelhos.'
+      );
       setBusy(false);
       setScanned(false);
       return;
     }
 
-    await savePairing(pairing);
+    // `resolveActiveEndpoint` já grava, mas só quando troca de endereço — no caminho
+    // em que o primeiro responde, nada foi salvo ainda.
+    await savePairing(resolved);
     setBusy(false);
     onPaired();
   }
