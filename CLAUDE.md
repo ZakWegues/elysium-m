@@ -1,7 +1,7 @@
 # ELYSIUM-M
 
 > **Leia o `ULTRA_HANDOFF.md`** — está na raiz da pasta-mãe `ELYSIUM` e no repositório do
-> desktop (`neuroaxis/ULTRA_HANDOFF.md`). É a fonte de verdade dos dois lados do projeto.
+> desktop (`elysium/ULTRA_HANDOFF.md`). É a fonte de verdade dos dois lados do projeto.
 
 Este arquivo continha o plano de arquitetura escrito **antes de o app existir**, e ficou
 perigosamente desatualizado: afirmava, entre outras coisas, que "sem relay em nuvem, o celular

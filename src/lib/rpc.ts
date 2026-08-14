@@ -1,5 +1,5 @@
 /**
- * Cliente da superfície RPC do desktop (ver neuroaxis/src/services/rpc.ts).
+ * Cliente da superfície RPC do desktop (ver elysium/src/services/rpc.ts).
  *
  * Diferença pro /api/command: aqui nada passa pelo LLM. "Matar o processo 4821" é
  * uma chamada com um inteiro, não uma frase que o modelo precisa interpretar certo.
@@ -215,7 +215,7 @@ export type SyncedChatSession = {
   messages: { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number }[];
 };
 
-/** Espelha a marcação `destructive` do desktop — ver neuroaxis/src/services/rpc.ts. */
+/** Espelha a marcação `destructive` do desktop — ver elysium/src/services/rpc.ts. */
 export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
   'system.killProcess',
   'apps.close',

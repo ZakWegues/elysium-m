@@ -1,6 +1,6 @@
 # ELYSIUM-M
 
-App companion do [ELYSIUM](https://github.com/ZakWegues/neuroaxis) para Android. Controla o PC, conversa com o assistente, espelha a tela, e funciona fora de casa pelo túnel Tailscale.
+App companion do [ELYSIUM](https://github.com/ZakWegues/elysium) para Android. Controla o PC, conversa com o assistente, espelha a tela, e funciona fora de casa pelo túnel Tailscale.
 
 ## Rodar em desenvolvimento
 
