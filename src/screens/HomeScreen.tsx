@@ -66,7 +66,7 @@ export default function HomeScreen({
     setBusy(true);
     try {
       const res = await callRpc(pairing, 'power.control', { operation: op }, { confirmed: true });
-      Alert.alert('NEUROAXIS', res.message);
+      Alert.alert('ELYSIUM-M', res.message);
     } catch (err) {
       handleError(err, `Falha ao ${label.toLowerCase()}`);
     } finally {
@@ -83,7 +83,7 @@ export default function HomeScreen({
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
-        title="NEUROAXIS"
+        title="ELYSIUM-M"
         right={
           <View style={styles.statusRow}>
             <View style={[styles.dot, { backgroundColor: online ? palette.success : palette.error }]} />

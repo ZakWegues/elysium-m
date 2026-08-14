@@ -99,7 +99,7 @@ export default function PresetsScreen({ pairing, onUnpair }: { pairing: Pairing;
         <Text variant="subheading">O que são presets?</Text>
         <Text variant="body" color={palette.textMuted}>
           Um preset agrupa várias ações num comando só — "gaming" pode abrir Steam, Discord e
-          ajustar o volume de uma vez. Peça pro NeuroAxis criar, listar, rodar ou apagar abaixo.
+          ajustar o volume de uma vez. Peça pro ELYSIUM criar, listar, rodar ou apagar abaixo.
         </Text>
       </Card>
 
@@ -142,7 +142,7 @@ export default function PresetsScreen({ pairing, onUnpair }: { pairing: Pairing;
       {busy && (
         <View style={styles.busyRow}>
           <ActivityIndicator size="small" color={palette.primary} />
-          <Text variant="caption">Falando com o NeuroAxis...</Text>
+          <Text variant="caption">Falando com o ELYSIUM...</Text>
         </View>
       )}
 

@@ -393,7 +393,7 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
     <Drawer
       title="Memória"
       icon="bookmark"
-      subtitle="O que o NEUROAXIS lembra sobre você"
+      subtitle="O que o ELYSIUM lembra sobre você"
       onOpen={load}
     >
       {loading && <ActivityIndicator color={palette.primary} />}
@@ -642,7 +642,7 @@ function PowerDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
     if (confirmed !== 'confirmed') return;
     try {
       const res = await callRpc(pairing, 'power.control', { operation: op }, { confirmed: true });
-      Alert.alert('NEUROAXIS', res.message);
+      Alert.alert('ELYSIUM-M', res.message);
     } catch (err) {
       onError(err, `Falha ao ${label.toLowerCase()}`);
     }

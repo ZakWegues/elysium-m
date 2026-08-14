@@ -241,7 +241,7 @@ export async function callRpc<M extends RpcMethod>(
     'Content-Type': 'application/json',
     Authorization: `Bearer ${pairing.token}`,
   };
-  if (options.confirmed) headers['X-Neuroaxis-Confirm'] = '1';
+  if (options.confirmed) headers['X-Elysium-Confirm'] = '1';
 
   const res = await fetchWithTimeout(
     `${baseUrl(pairing)}/api/rpc`,

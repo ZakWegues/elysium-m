@@ -77,7 +77,7 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Tema</Text>
         <Text variant="caption" color={palette.textMuted}>
-          Espelha os temas do NeuroAxis desktop.
+          Espelha os temas do ELYSIUM desktop.
         </Text>
         <View style={styles.swatchRow}>
           {(Object.keys(palettes) as ThemeName[]).map((key) => {
@@ -115,7 +115,7 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
         <Text variant="subheading">Sobre</Text>
         <Card style={{ gap: tokens.spacing.xs }}>
           <Text variant="body" color={palette.textMuted}>
-            NeuroAxis Portal é o companheiro mobile do assistente de voz NeuroAxis. Chat, voz,
+            ELYSIUM-M é o companheiro mobile do assistente de voz ELYSIUM. Chat, voz,
             telemetria, presets e a caixa de recados falam com o servidor local do seu PC pela
             mesma rede Wi-Fi.
           </Text>
@@ -157,7 +157,7 @@ function PushSection({ pairing }: { pairing: Pairing }) {
       if (result.status === 'denied') {
         Alert.alert(
           'Permissão negada',
-          'Libere as notificações do NEUROAXIS nas configurações do Android para receber lembretes.'
+          'Libere as notificações do ELYSIUM-M nas configurações do Android para receber lembretes.'
         );
       } else if (result.status === 'unsupported') {
         Alert.alert('Não disponível', result.reason);

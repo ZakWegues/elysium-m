@@ -69,7 +69,7 @@ export default function TelemetryScreen({
           <Card style={styles.centerCard}>
             <Feather name="activity" size={22} color={palette.textMuted} />
             <Text variant="body" color={palette.textMuted} style={{ marginTop: tokens.spacing.sm }}>
-              Esperando primeiro broadcast do NeuroAxis...
+              Esperando primeiro broadcast do ELYSIUM...
             </Text>
           </Card>
         )}

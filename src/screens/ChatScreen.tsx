@@ -269,7 +269,7 @@ export default function ChatScreen({
     // vezes — e que de todo modo não funciona no edge-to-edge do Android.
     <View style={{ flex: 1 }}>
       <ScreenHeader
-        title="NeuroAxis Portal"
+        title="ELYSIUM-M"
         right={
           <Pressable onPress={onOpenConversations} hitSlop={8}>
             <Feather name="clock" size={22} color={palette.textMuted} />

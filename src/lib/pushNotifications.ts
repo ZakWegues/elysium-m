@@ -83,7 +83,7 @@ export async function registerForPush(pairing: Pairing): Promise<PushRegistratio
   // prioridade e o usuário acha que não chegou.
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'NEUROAXIS',
+      name: 'ELYSIUM-M',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
     });

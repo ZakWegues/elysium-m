@@ -19,7 +19,7 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
 
     const pairing = parsePairingQr(data);
     if (!pairing) {
-      Alert.alert('QR inválido', 'Esse QR code não é do NeuroAxis.');
+      Alert.alert('QR inválido', 'Esse QR code não é do ELYSIUM.');
       setBusy(false);
       setScanned(false);
       return;
@@ -33,7 +33,7 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
     if (!resolved) {
       Alert.alert(
         'Falha ao conectar',
-        'Não consegui falar com o NEUROAXIS em nenhum dos endereços do QR.\n\n' +
+        'Não consegui falar com o ELYSIUM em nenhum dos endereços do QR.\n\n' +
         'Confira se o app está aberto no PC. Se você não está na rede de casa, ' +
         'o Tailscale precisa estar ligado nos dois aparelhos.'
       );
@@ -79,7 +79,7 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
           Precisamos da câmera
         </Text>
         <Text variant="body" color={palette.textMuted} style={{ textAlign: 'center' }}>
-          Pra escanear o QR de pareamento do NeuroAxis.
+          Pra escanear o QR de pareamento do ELYSIUM.
         </Text>
         <Button title="Permitir câmera" onPress={requestPermission} />
       </View>
@@ -101,7 +101,7 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
         ]}
       >
         <Text variant="body" color="#fff" style={{ textAlign: 'center' }}>
-          {busy ? 'Conectando...' : 'Aponte pro QR code de pareamento do NeuroAxis'}
+          {busy ? 'Conectando...' : 'Aponte pro QR code de pareamento do ELYSIUM'}
         </Text>
         {busy && <ActivityIndicator color="#fff" style={{ marginTop: 12 }} />}
       </View>
