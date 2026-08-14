@@ -6,7 +6,7 @@ import { sendMessage } from './mailbox';
 /**
  * Receber conteúdo compartilhado de outros apps do Android.
  *
- * O caminho é o esquema próprio (`neuroaxis://`): o Android entrega a URL, a gente
+ * O caminho é o esquema próprio (`elysium://`): o Android entrega a URL, a gente
  * extrai o texto e manda pra Caixa do PC. Compartilhar um link do navegador, do
  * YouTube ou do WhatsApp passa a ser um caminho de dois toques até o computador.
  *
@@ -19,7 +19,7 @@ import { sendMessage } from './mailbox';
 export function parseSharedUrl(url: string): string | null {
   try {
     const parsed = Linking.parse(url);
-    // `neuroaxis://share?text=...` — o formato que o app.json declara.
+    // `elysium://share?text=...` — o formato que o app.json declara.
     if (parsed.hostname !== 'share' && parsed.path !== 'share') return null;
 
     const raw = parsed.queryParams?.text ?? parsed.queryParams?.url;

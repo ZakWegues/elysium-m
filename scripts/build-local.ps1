@@ -7,7 +7,8 @@
 # Pré-requisitos, instalados uma vez (veja o README):
 #   - JDK 17
 #   - Android SDK em ~\Android\Sdk
-#   - chave de assinatura em ~\Android\neuroaxis-signing.properties
+#   - chave de assinatura em ~\Android\elysium-signing.properties
+#     (o nome antigo, neuroaxis-signing.properties, continua sendo aceito)
 
 $ErrorActionPreference = 'Stop'
 
@@ -91,7 +92,7 @@ $apk = Get-ChildItem "$root\android\app\build\outputs\apk\release\*.apk" | Selec
 if (-not $apk) { throw "build terminou mas nao achei o APK" }
 
 New-Item -ItemType Directory -Force "$root\dist-apk" | Out-Null
-$out = "$root\dist-apk\neuroaxis-portal.apk"
+$out = "$root\dist-apk\elysium-m.apk"
 Copy-Item $apk.FullName $out -Force
 
 Write-Host "`nAPK pronto: $out"

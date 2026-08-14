@@ -20,7 +20,18 @@ export type Pairing = {
   hostname?: string;
 };
 
-const KEY = 'neuroaxis_pairing';
+/**
+ * 🔴 Esta chave e as irmãs dela (`elysium_chat_sessions`, `elysium_chat_deleted`,
+ * `elysium_command_queue`, `elysium_mailbox_*`, `elysium_theme`, `elysium_color_scheme`)
+ * só puderam ser renomeadas de `neuroaxis_*` porque a troca viajou no MESMO APK que mudou
+ * o `android.package`. Pacote novo é um app novo para o Android: o armazenamento nasce
+ * vazio, então não havia nada a perder.
+ *
+ * **Nunca renomeie uma destas por `npm run update`.** Um OTA chega num app já instalado,
+ * com dados dentro — e o app acordaria despareado, sem histórico e sem tema, sem nenhum
+ * erro que explicasse o motivo.
+ */
+const KEY = 'elysium_pairing';
 
 /** Formato antigo, ainda presente em quem já tinha pareado. */
 type LegacyPairing = { ip: string; port: number; token: string };

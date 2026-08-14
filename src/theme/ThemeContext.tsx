@@ -6,8 +6,8 @@ import {
 } from './palettes';
 import { spacing, radii, fontSize, fontWeight, shadow } from './tokens';
 
-const STORAGE_KEY = 'neuroaxis_theme';
-const SCHEME_KEY = 'neuroaxis_color_scheme';
+const STORAGE_KEY = 'elysium_theme';
+const SCHEME_KEY = 'elysium_color_scheme';
 
 type ThemeContextValue = {
   name: ThemeName;

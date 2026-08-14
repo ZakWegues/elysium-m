@@ -1,6 +1,6 @@
-# NEUROAXIS Portal
+# ELYSIUM-M
 
-App companion do [NEUROAXIS](https://github.com/ZakWegues/neuroaxis) para Android. Controla o PC, conversa com o assistente, espelha a tela, e funciona fora de casa pelo túnel Tailscale.
+App companion do [ELYSIUM](https://github.com/ZakWegues/neuroaxis) para Android. Controla o PC, conversa com o assistente, espelha a tela, e funciona fora de casa pelo túnel Tailscale.
 
 ## Rodar em desenvolvimento
 
@@ -21,7 +21,7 @@ Sem fila, sem servidor. A build em si leva uns três minutos; a primeira leva un
 npm run build:local
 ```
 
-O APK sai em `dist-apk/neuroaxis-portal.apk`.
+O APK sai em `dist-apk/elysium-m.apk`.
 
 ### Preparar a máquina (uma vez só)
 
@@ -58,20 +58,27 @@ São uns 3 GB no total, quase tudo NDK.
 O modelo do Expo assina a build de release com a chave de *debug*, que é gerada por máquina. Um APK assinado com chave diferente da que está no aparelho não instala por cima — o Android recusa e a única saída é desinstalar, perdendo pareamento e histórico. Por isso a chave é criada uma vez e guardada **fora do repositório**:
 
 ```powershell
-$ks = "$env:USERPROFILE\Android\neuroaxis-release.keystore"
+$ks = "$env:USERPROFILE\Android\elysium-release.keystore"
 $pw = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
 
-& "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -v -keystore $ks -alias neuroaxis `
+& "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -v -keystore $ks -alias elysium `
   -keyalg RSA -keysize 2048 -validity 10950 -storepass $pw -keypass $pw `
-  -dname "CN=NeuroAxis Portal, OU=Pessoal, O=NeuroAxis, L=-, ST=-, C=BR"
+  -dname "CN=ELYSIUM-M, OU=Pessoal, O=ELYSIUM, L=-, ST=-, C=BR"
 
 @"
-NEUROAXIS_STORE_FILE=$ks
-NEUROAXIS_STORE_PASSWORD=$pw
-NEUROAXIS_KEY_ALIAS=neuroaxis
-NEUROAXIS_KEY_PASSWORD=$pw
-"@ | Set-Content "$env:USERPROFILE\Android\neuroaxis-signing.properties" -Encoding ascii
+ELYSIUM_STORE_FILE=$ks
+ELYSIUM_STORE_PASSWORD=$pw
+ELYSIUM_KEY_ALIAS=elysium
+ELYSIUM_KEY_PASSWORD=$pw
+"@ | Set-Content "$env:USERPROFILE\Android\elysium-signing.properties" -Encoding ascii
 ```
+
+> ⚠️ **Isto é a receita para uma máquina nova.** Numa máquina que já tem chave, **não rode
+> isso** — gerar uma chave nova por cima quebra o caminho de atualização de vez. A chave que
+> já existe continua válida com o nome antigo: o plugin aceita tanto
+> `elysium-signing.properties` quanto `neuroaxis-signing.properties`, e tanto o prefixo
+> `ELYSIUM_` quanto `NEUROAXIS_` nas chaves de dentro. Renomear os arquivos é opcional;
+> **regenerar a chave, nunca.**
 
 **Faça backup dessa pasta.** Perder a chave significa que nenhuma build futura instala por cima da atual.
 
@@ -82,7 +89,7 @@ NEUROAXIS_KEY_PASSWORD=$pw
 Por cabo, com depuração USB ligada:
 
 ```
-adb install -r dist-apk\neuroaxis-portal.apk
+adb install -r dist-apk\elysium-m.apk
 ```
 
 Ou copie o `.apk` para o celular e abra pelo gerenciador de arquivos.

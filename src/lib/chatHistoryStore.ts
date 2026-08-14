@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = 'neuroaxis_chat_sessions';
+const STORAGE_KEY = 'elysium_chat_sessions';
 /** Ids apagados aqui que ainda não foram propagados ao PC. */
-const TOMBSTONE_KEY = 'neuroaxis_chat_deleted';
+const TOMBSTONE_KEY = 'elysium_chat_deleted';
 const MAX_NON_FAVORITE_SESSIONS = 5;
 
 export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number };

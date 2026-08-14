@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MailboxMessage } from './mailbox';
 
-const FAVORITES_KEY = 'neuroaxis_mailbox_favorites';
-const CACHE_KEY = 'neuroaxis_mailbox_cache';
+const FAVORITES_KEY = 'elysium_mailbox_favorites';
+const CACHE_KEY = 'elysium_mailbox_cache';
 
 type Cache = { messages: MailboxMessage[] };
 

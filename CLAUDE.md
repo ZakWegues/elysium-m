@@ -1,4 +1,4 @@
-# NEUROAXIS Portal
+# ELYSIUM-M
 
 > **Leia o `ULTRA_HANDOFF.md`** — está na raiz da pasta-mãe `ELYSIUM` e no repositório do
 > desktop (`neuroaxis/ULTRA_HANDOFF.md`). É a fonte de verdade dos dois lados do projeto.
@@ -12,7 +12,7 @@ cada conversa. O conteúdo histórico está no git.
 
 ## O essencial, em cinco linhas
 
-- App companion do NEUROAXIS desktop. Expo SDK 57 + React Native 0.86 + TypeScript, Android.
+- App companion do ELYSIUM desktop. Expo SDK 57 + React Native 0.86 + TypeScript, Android.
 - Parea por QR code e fala com o PC na porta 4200, por HTTP e WebSocket.
 - **Os dois repositórios são editados na mesma sessão** — mudança de servidor exige mudar o
   cliente no mesmo trabalho.

@@ -15,30 +15,46 @@ const { withAppBuildGradle } = require('expo/config-plugins');
  * EAS: lá a assinatura é da conta, e mexer nisso quebraria a build da nuvem.
  */
 
-const DEFAULT_PROPS = path.join(os.homedir(), 'Android', 'neuroaxis-signing.properties');
+/**
+ * O arquivo de credenciais mora FORA do repositório e não tem backup (pendência conhecida).
+ * Por isso o rename NEUROAXIS → ELYSIUM não exige tocar nele: os dois nomes de arquivo e os
+ * dois prefixos de chave são aceitos. Renomear o `.properties` e o `.keystore` no disco é
+ * seguro e opcional — o que **nunca** pode acontecer é gerar uma chave nova, porque o
+ * Android recusa instalar um APK por cima de outro com assinatura diferente.
+ */
+const CANDIDATOS_PROPS = [
+  path.join(os.homedir(), 'Android', 'elysium-signing.properties'),
+  path.join(os.homedir(), 'Android', 'neuroaxis-signing.properties'),
+];
+
+const CHAVES = ['STORE_FILE', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD'];
 
 function readProps() {
   if (process.env.EAS_BUILD) return null;
 
-  const file = process.env.NEUROAXIS_SIGNING_PROPERTIES || DEFAULT_PROPS;
-  if (!fs.existsSync(file)) return null;
+  const explicito = process.env.ELYSIUM_SIGNING_PROPERTIES || process.env.NEUROAXIS_SIGNING_PROPERTIES;
+  const file = explicito || CANDIDATOS_PROPS.find(f => fs.existsSync(f));
+  if (!file || !fs.existsSync(file)) return null;
 
-  const props = {};
+  const brutos = {};
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
     const eq = line.indexOf('=');
     if (eq === -1 || line.trim().startsWith('#')) continue;
-    props[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    brutos[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
   }
 
-  const required = [
-    'NEUROAXIS_STORE_FILE',
-    'NEUROAXIS_STORE_PASSWORD',
-    'NEUROAXIS_KEY_ALIAS',
-    'NEUROAXIS_KEY_PASSWORD',
-  ];
-  const missing = required.filter(k => !props[k]);
-  if (missing.length > 0) {
-    throw new Error(`withReleaseSigning: faltam chaves em ${file}: ${missing.join(', ')}`);
+  // Normaliza os dois prefixos para um nome só, para o resto do plugin não se importar
+  // com qual versão do arquivo está no disco.
+  const props = {};
+  const faltando = [];
+  for (const chave of CHAVES) {
+    const valor = brutos[`ELYSIUM_${chave}`] || brutos[`NEUROAXIS_${chave}`];
+    if (valor) props[chave] = valor;
+    else faltando.push(`ELYSIUM_${chave}`);
+  }
+
+  if (faltando.length > 0) {
+    throw new Error(`withReleaseSigning: faltam chaves em ${file}: ${faltando.join(', ')}`);
   }
 
   return props;
@@ -55,14 +71,14 @@ module.exports = function withReleaseSigning(config) {
 
     let gradle = cfg.modResults.contents;
 
-    if (gradle.includes('neuroaxisRelease')) return cfg;
+    if (gradle.includes('elysiumRelease')) return cfg;
 
     const block = [
-      '        neuroaxisRelease {',
-      `            storeFile file(${groovyString(props.NEUROAXIS_STORE_FILE)})`,
-      `            storePassword ${groovyString(props.NEUROAXIS_STORE_PASSWORD)}`,
-      `            keyAlias ${groovyString(props.NEUROAXIS_KEY_ALIAS)}`,
-      `            keyPassword ${groovyString(props.NEUROAXIS_KEY_PASSWORD)}`,
+      '        elysiumRelease {',
+      `            storeFile file(${groovyString(props.STORE_FILE)})`,
+      `            storePassword ${groovyString(props.STORE_PASSWORD)}`,
+      `            keyAlias ${groovyString(props.KEY_ALIAS)}`,
+      `            keyPassword ${groovyString(props.KEY_PASSWORD)}`,
       '        }',
       '',
     ].join('\n');
@@ -81,7 +97,7 @@ module.exports = function withReleaseSigning(config) {
     if (last === -1 || last === first) {
       throw new Error('withReleaseSigning: não achei a assinatura de release para trocar');
     }
-    gradle = gradle.slice(0, last) + 'signingConfig signingConfigs.neuroaxisRelease' + gradle.slice(last + needle.length);
+    gradle = gradle.slice(0, last) + 'signingConfig signingConfigs.elysiumRelease' + gradle.slice(last + needle.length);
 
     cfg.modResults.contents = gradle;
     return cfg;

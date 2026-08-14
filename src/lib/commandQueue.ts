@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pairing } from './pairing';
 import { sendCommand } from './api';
 
-const KEY = 'neuroaxis_command_queue';
+const KEY = 'elysium_command_queue';
 /** Comando velho demais provavelmente não faz mais sentido executar. */
 const MAX_AGE_MS = 30 * 60 * 1000;
 const MAX_ITEMS = 20;
