@@ -76,7 +76,15 @@
       "expo-notifications",
       "expo-local-authentication",
       "./plugins/withReleaseSigning",
-      "./plugins/withGradleMemory"
+      "./plugins/withGradleMemory",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
