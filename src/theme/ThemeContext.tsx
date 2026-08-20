@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  getPalette, palettes, ColorScheme, Palette, ResolvedScheme, ThemeName,
+  getPalette, resolverNomeDeTema, ColorScheme, Palette, ResolvedScheme, ThemeName,
 } from './palettes';
 import { spacing, radii, fontSize, fontWeight, shadow } from './tokens';
 
@@ -24,14 +24,22 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [name, setName] = useState<ThemeName>('default');
+  const [name, setName] = useState<ThemeName>('elisio');
   const [scheme, setSchemeState] = useState<ColorScheme>('system');
   const systemScheme = useColorScheme();
 
   useEffect(() => {
     AsyncStorage.multiGet([STORAGE_KEY, SCHEME_KEY])
       .then(([[, storedTheme], [, storedScheme]]) => {
-        if (storedTheme && storedTheme in palettes) setName(storedTheme as ThemeName);
+        // Traduz tema aposentado em vez de ignorar: quem escolheu "ocean" um dia tem o
+        // equivalente novo, e o disco para de carregar um id que não existe mais.
+        const resolvido = resolverNomeDeTema(storedTheme);
+        if (resolvido) {
+          setName(resolvido);
+          if (resolvido !== storedTheme) {
+            AsyncStorage.setItem(STORAGE_KEY, resolvido).catch(() => { /* best-effort */ });
+          }
+        }
         if (storedScheme === 'light' || storedScheme === 'dark' || storedScheme === 'system') {
           setSchemeState(storedScheme);
         }

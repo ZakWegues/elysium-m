@@ -5,7 +5,7 @@ import { Pairing } from '../lib/pairing';
 import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
-import { useTheme, palettes, ColorScheme, ThemeName } from '../theme';
+import { useTheme, palettes, getPalette, ColorScheme, ThemeName } from '../theme';
 import { Button, Card, Text } from '../components/ui';
 
 const SCHEME_OPTIONS: { value: ColorScheme; label: string; icon: keyof typeof Feather.glyphMap }[] = [
@@ -15,7 +15,7 @@ const SCHEME_OPTIONS: { value: ColorScheme; label: string; icon: keyof typeof Fe
 ];
 
 export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
-  const { name, palette, tokens, scheme, setTheme, setScheme } = useTheme();
+  const { name, palette, tokens, scheme, resolvedScheme, setTheme, setScheme } = useTheme();
 
   return (
     <View style={{ gap: tokens.spacing.lg }}>
@@ -77,11 +77,15 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Tema</Text>
         <Text variant="caption" color={palette.textMuted}>
-          Espelha os temas do ELYSIUM desktop.
+          Os mesmos três do ELYSIUM desktop. Cada um tem uma cara clara, de vidro, e uma
+          escura, de noite — quem escolhe entre as duas é o modo acima.
         </Text>
         <View style={styles.swatchRow}>
           {(Object.keys(palettes) as ThemeName[]).map((key) => {
-            const p = palettes[key];
+            // Do modo ATUAL, não das paletas claras: as duas caras de um tema são bem
+            // diferentes, e mostrar a clara no escuro faria a amostra mentir sobre o que
+            // vai acontecer ao tocar nela.
+            const p = getPalette(key, resolvedScheme);
             const selected = key === name;
             return (
               <Pressable

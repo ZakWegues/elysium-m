@@ -1,4 +1,22 @@
-export type ThemeName = 'default' | 'ocean' | 'ember' | 'forest';
+/**
+ * Temas do ELYSIUM-M — os MESMOS do desktop, e de propósito.
+ *
+ * São três cores, cada uma com uma cara clara (vidro) e uma escura (noite). O desktop
+ * chama as seis combinações por nomes próprios (`lg`, `lg-tide`, `lg-amber`, `ely`,
+ * `ely-dusk`, `ely-ether`); aqui elas aparecem como três temas mais o seletor de modo que
+ * o app já tinha, para "seguir o sistema" continuar fazendo sentido — um aparelho no modo
+ * noturno precisa poder escolher a versão escura sozinho.
+ *
+ * | tema       | claro (vidro)     | escuro (noite)          |
+ * |------------|-------------------|-------------------------|
+ * | Elísio     | Vidro — Âmbar     | Campos Elísios (ouro)   |
+ * | Maré       | Vidro — Maré      | Éter (prata-ciano)      |
+ * | Crepúsculo | Vidro Líquido     | Crepúsculo (âmbar/rosa) |
+ *
+ * Nenhuma cor foi inventada: são exatamente as do `THEMES` do `dashboard.html`.
+ */
+
+export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
 
 /** Escolha do usuário. `system` acompanha o aparelho. */
 export type ColorScheme = 'light' | 'dark' | 'system';
@@ -40,12 +58,9 @@ export type Palette = {
   blurTint: 'light' | 'dark';
 };
 
-/** Neutros do modo claro. */
-const lightNeutrals = {
+/** Neutros do modo claro, comuns às três cores. */
+const neutrosClaro = {
   scheme: 'light' as const,
-  background: '#F7F8FA',
-  surface: '#FFFFFF',
-  surfaceRaised: '#FFFFFF',
   border: '#E4E7EC',
   text: '#14161A',
   textMuted: '#6B7280',
@@ -65,15 +80,12 @@ const lightNeutrals = {
 /**
  * Neutros do modo escuro.
  *
- * Não é o claro invertido: o fundo é um azulado bem escuro em vez de preto puro, para
- * o vidro ter o que desfocar, e as bordas são brancos translúcidos em vez de cinza
- * sólido, senão viram linhas duras sobre superfície escura.
+ * Não é o claro invertido: o fundo é um azulado bem escuro em vez de preto puro, para o
+ * vidro ter o que desfocar, e as bordas são brancos translúcidos em vez de cinza sólido,
+ * senão viram linhas duras sobre superfície escura.
  */
-const darkNeutrals = {
+const neutrosEscuro = {
   scheme: 'dark' as const,
-  background: '#0B0D12',
-  surface: '#151922',
-  surfaceRaised: '#1C2130',
   border: 'rgba(255,255,255,0.10)',
   text: '#EEF1F6',
   textMuted: '#9AA3B2',
@@ -81,8 +93,8 @@ const darkNeutrals = {
   error: '#FF6B6B',
   errorSoft: 'rgba(255,107,107,0.16)',
   success: '#4ADE80',
-  // Mais encorpado que antes: quem dava volume aos cards no escuro era o véu branco que
-  // saiu daqui. Sem isto, cartão de vidro sobre #0B0D12 fica invisível.
+  // Mais encorpado que a primeira versão: quem dava volume aos cards no escuro era o véu
+  // branco que saiu do GlassSurface. Sem isto, vidro sobre a noite fica invisível.
   glassSurface: 'rgba(255,255,255,0.10)',
   glassSurfaceStrong: 'rgba(255,255,255,0.16)',
   glassBorder: 'rgba(255,255,255,0.20)',
@@ -93,37 +105,82 @@ const darkNeutrals = {
   blurTint: 'dark' as const,
 };
 
-/**
- * Cores de marca por tema. `primarySoft` muda entre os modos: no claro é um pastel
- * sólido, no escuro precisa ser translúcido para não virar um bloco leitoso.
- */
-const brands: Record<ThemeName, {
-  label: string;
+type Face = {
   primary: string;
   accent: string;
-  softLight: string;
-  softDark: string;
-}> = {
-  default: { label: 'Padrão',   primary: '#7C5CFF', accent: '#22D3EE', softLight: '#EDE9FE', softDark: 'rgba(124,92,255,0.20)' },
-  ocean:   { label: 'Oceano',   primary: '#2E86DE', accent: '#48DBFB', softLight: '#E3F0FD', softDark: 'rgba(46,134,222,0.20)' },
-  ember:   { label: 'Brasa',    primary: '#FF6B35', accent: '#E63946', softLight: '#FFE7DC', softDark: 'rgba(255,107,53,0.20)' },
-  forest:  { label: 'Floresta', primary: '#2D9D63', accent: '#8BC34A', softLight: '#E1F5EA', softDark: 'rgba(45,157,99,0.20)' },
+  /** Fundo e superfícies mudam por tema: cada noite tem a sua, cada vidro tem o seu. */
+  background: string;
+  surface: string;
+  surfaceRaised: string;
+  /** Pastel sólido no claro; translúcido no escuro, senão vira um bloco leitoso. */
+  primarySoft: string;
 };
 
-function build(name: ThemeName, scheme: ResolvedScheme): Palette {
-  const brand = brands[name];
-  const neutrals = scheme === 'dark' ? darkNeutrals : lightNeutrals;
-  return {
-    name,
-    label: brand.label,
-    primary: brand.primary,
-    accent: brand.accent,
-    primarySoft: scheme === 'dark' ? brand.softDark : brand.softLight,
-    ...neutrals,
-  };
+const temas: Record<ThemeName, { label: string; light: Face; dark: Face }> = {
+  elisio: {
+    label: 'Elísio',
+    light: {
+      primary: '#c2602c', accent: '#c9971f', primarySoft: '#F7E7D6',
+      background: '#f8f3ec', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
+    },
+    dark: {
+      primary: '#d9b168', accent: '#9fd8cf', primarySoft: 'rgba(217,177,104,0.20)',
+      background: '#0a0c14', surface: '#131726', surfaceRaised: '#0e1220',
+    },
+  },
+  mare: {
+    label: 'Maré',
+    light: {
+      primary: '#1e7fd4', accent: '#17b8a6', primarySoft: '#DCEBF9',
+      background: '#eef4f9', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
+    },
+    dark: {
+      primary: '#a8c4d8', accent: '#7fd4c8', primarySoft: 'rgba(168,196,216,0.20)',
+      background: '#080b12', surface: '#111624', surfaceRaised: '#0c101c',
+    },
+  },
+  crepusculo: {
+    label: 'Crepúsculo',
+    light: {
+      primary: '#6d4aff', accent: '#22b8cf', primarySoft: '#E6E0FF',
+      background: '#f2f1f7', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
+    },
+    dark: {
+      primary: '#f0a850', accent: '#e07a9b', primarySoft: 'rgba(240,168,80,0.20)',
+      background: '#0b0818', surface: '#171232', surfaceRaised: '#110d26',
+    },
+  },
+};
+
+/**
+ * 🔴 Temas antigos, ainda gravados no `AsyncStorage` de quem já escolheu um.
+ *
+ * Sem esta tabela, um `elysium_theme` valendo `ocean` faria `palettes[name]` devolver
+ * `undefined` e o app abrir sem paleta — tela quebrada, sem erro que explique. É a mesma
+ * falha silenciosa que o desktop tratou ao aposentar os quatro temas dele.
+ */
+export const TEMAS_APOSENTADOS: Record<string, ThemeName> = {
+  default: 'crepusculo',
+  ocean: 'mare',
+  ember: 'elisio',
+  forest: 'mare',
+};
+
+/** Traduz o que veio do disco. Devolve `null` quando o valor não serve para nada. */
+export function resolverNomeDeTema(bruto: string | null | undefined): ThemeName | null {
+  if (!bruto) return null;
+  if (bruto in temas) return bruto as ThemeName;
+  return TEMAS_APOSENTADOS[bruto] ?? null;
 }
 
-const names: ThemeName[] = ['default', 'ocean', 'ember', 'forest'];
+function build(name: ThemeName, scheme: ResolvedScheme): Palette {
+  const tema = temas[name];
+  const face = scheme === 'dark' ? tema.dark : tema.light;
+  const neutros = scheme === 'dark' ? neutrosEscuro : neutrosClaro;
+  return { name, label: tema.label, ...neutros, ...face };
+}
+
+const names: ThemeName[] = ['elisio', 'mare', 'crepusculo'];
 
 export const palettes: Record<ThemeName, Palette> = Object.fromEntries(
   names.map(n => [n, build(n, 'light')]),
