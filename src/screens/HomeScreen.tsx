@@ -89,6 +89,8 @@ export default function HomeScreen({
   const [ocupado, setOcupado] = useState(false);
   const [ordem, setOrdem] = useState<string[]>(CARDS_PADRAO);
   const [ocultos, setOcultos] = useState<string[]>([]);
+  /** Fixos ficam no topo e não saem do lugar quando os outros são arrastados. */
+  const [fixos, setFixos] = useState<string[]>(['clima']);
   const [editando, setEditando] = useState(false);
 
   useEffect(() => openTelemetryStream(pairing, setTelemetria, setStatus),
@@ -100,7 +102,7 @@ export default function HomeScreen({
       try {
         const bruto = await AsyncStorage.getItem(CHAVE_CARDS);
         if (!bruto) return;
-        const salvo = JSON.parse(bruto) as { ordem?: string[]; ocultos?: string[] };
+        const salvo = JSON.parse(bruto) as { ordem?: string[]; ocultos?: string[]; fixos?: string[] };
         const conhecidos = (salvo.ordem ?? []).filter(id => id in CARDS);
         // Card novo numa versão futura precisa aparecer para quem já tinha configuração
         // gravada — senão nasce invisível e ninguém descobre que existe.
@@ -110,19 +112,24 @@ export default function HomeScreen({
           ...(salvo.ocultos ?? []).filter(id => id in CARDS),
           ...faltando.filter(id => !CARDS_PADRAO.includes(id)),
         ]);
+        // Configuração gravada antes desta versão não tem `fixos` — nasce sem nenhum, em
+        // vez de reimpor o padrão de fábrica por cima de uma escolha já feita.
+        setFixos((salvo.fixos ?? []).filter(id => id in CARDS));
       } catch { /* fica com o padrão */ }
     })();
   }, []);
 
-  const gravar = useCallback(async (o: string[], oc: string[]) => {
-    try { await AsyncStorage.setItem(CHAVE_CARDS, JSON.stringify({ ordem: o, ocultos: oc })); }
+  const gravar = useCallback(async (o: string[], oc: string[], fx: string[] = fixos) => {
+    try { await AsyncStorage.setItem(CHAVE_CARDS, JSON.stringify({ ordem: o, ocultos: oc, fixos: fx })); }
     catch { /* segue com o que está na tela */ }
-  }, []);
+  }, [fixos]);
 
-  const visiveis = useMemo(
-    () => ordem.filter(id => id in CARDS && !ocultos.includes(id)),
-    [ordem, ocultos],
-  );
+  const visiveis = useMemo(() => {
+    const vis = ordem.filter(id => id in CARDS && !ocultos.includes(id));
+    // Fixos primeiro, na ordem em que foram fixados; o resto mantém a ordem arrastada.
+    const fx = fixos.filter(id => vis.includes(id));
+    return [...fx, ...vis.filter(id => !fx.includes(id))];
+  }, [ordem, ocultos, fixos]);
 
   // ── busca: só o que os cards visíveis pedem
   const carregar = useCallback(async () => {
@@ -274,6 +281,17 @@ export default function HomeScreen({
                   >
                     <Feather name={def.icone} size={13} color={ligado ? palette.primary : palette.textMuted} />
                     <Text variant="caption" color={ligado ? palette.primary : palette.textMuted}>{def.titulo}</Text>
+                    <Pressable
+                      onPress={() => {
+                        const novos = fixos.includes(id) ? fixos.filter(x => x !== id) : [...fixos, id];
+                        animarProximoLayout();
+                        setFixos(novos);
+                        gravar(ordem, ocultos, novos);
+                      }}
+                      hitSlop={6}
+                    >
+                      <Feather name="bookmark" size={12} color={fixos.includes(id) ? palette.accent : palette.textMuted} />
+                    </Pressable>
                   </Pressable>
                 );
               })}
@@ -288,7 +306,7 @@ export default function HomeScreen({
           <CardArrastavel
             key={id}
             indice={i}
-            ativo={editando}
+            ativo={editando && !fixos.includes(id)}
             onMover={mover}
           >
             <Card glass style={{ gap: tokens.spacing.sm }}>

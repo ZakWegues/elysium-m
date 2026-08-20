@@ -73,7 +73,8 @@ export type RpcMethod =
   | 'presets.save'
   | 'presets.delete'
   | 'suggestions.list'
-  | 'weather.now';
+  | 'weather.now'
+  | 'chat.starters';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -244,6 +245,8 @@ export type RpcResults = {
   'presets.save': { saved: string };
   'presets.delete': { deleted: string };
   'suggestions.list': { suggestions: Sugestao[] };
+  /** Perguntas de partida do chat, sorteadas no desktop — ver `perguntas.ts`. */
+  'chat.starters': { starters: string[] };
   /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
   'weather.now': Clima | null;
   'pairing.endpoints': {

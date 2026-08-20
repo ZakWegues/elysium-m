@@ -11,6 +11,7 @@ import { AuthError, sendCommand } from '../lib/api';
 import { TimeoutError } from '../lib/http';
 import { enqueueCommand } from '../lib/commandQueue';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
+import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
@@ -37,6 +38,12 @@ export default function ChatScreen({
   semCabecalho?: boolean;
 }) {
   const { palette, tokens } = useTheme();
+  /**
+   * Perguntas de partida. Sorteadas no desktop (`perguntas.ts`) — as que você repete vêm
+   * primeiro, curadas preenchem o resto. Sortear aqui também daria duas heurísticas para
+   * manter em par, e só o PC vê o que você pergunta.
+   */
+  const [starters, setStarters] = useState<string[]>([]);
   const [messages, setMessages] = useState<StoredMessage[]>([
     { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() },
   ]);
@@ -171,14 +178,24 @@ export default function ChatScreen({
     listRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
+  // Recarrega ao montar a tela: entrar no Chat re-sorteia, como no desktop.
+  useEffect(() => {
+    let vivo = true;
+    callRpc(pairing, "chat.starters")
+      .then(r => { if (vivo) setStarters(r.starters ?? []); })
+      .catch(() => { /* sem PC, sem bolhas — a tela funciona igual */ });
+    return () => { vivo = false; };
+  }, [pairing]);
+
   function speakReply(reply: string) {
     Speech.speak(reply, { language: 'pt-BR' });
   }
 
-  async function handleSend() {
-    const text = draft.trim();
+  async function handleSend(texto?: string) {
+    const text = (texto ?? draft).trim();
     if (!text || sending) return;
     setDraft('');
+    setStarters([]);   // a fileira só faz sentido enquanto a tela está em branco
     setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
 
@@ -323,6 +340,44 @@ export default function ChatScreen({
         </View>
       )}
 
+      {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
+      {starters.length > 0 && messages.length <= 1 && !sending && (
+        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          {starters.map((t) => (
+            <Pressable
+              key={t}
+              onPress={() => handleSend(t)}
+              style={[styles.starter, {
+                borderRadius: tokens.radii.full,
+                borderColor: palette.glassBorder,
+                backgroundColor: palette.primarySoft,
+              }]}
+            >
+              <Text variant="caption" numberOfLines={1}>{t}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
+      {starters.length > 0 && messages.length <= 1 && !sending && (
+        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          {starters.map((t) => (
+            <Pressable
+              key={t}
+              onPress={() => handleSend(t)}
+              style={[styles.starter, {
+                borderRadius: tokens.radii.full,
+                borderColor: palette.glassBorder,
+                backgroundColor: palette.primarySoft,
+              }]}
+            >
+              <Text variant="caption" numberOfLines={1}>{t}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       <View style={{ overflow: 'hidden' }}>
         <GlassFill intensity={65} strong edge={false} />
         <View
@@ -352,7 +407,7 @@ export default function ChatScreen({
           onChangeText={setDraft}
           placeholder="Escreve um comando..."
           placeholderTextColor={palette.textMuted}
-          onSubmitEditing={handleSend}
+          onSubmitEditing={() => handleSend()}
           returnKeyType="send"
           editable={!sending}
         />
@@ -371,7 +426,7 @@ export default function ChatScreen({
         </Pressable>
         <Pressable
           style={[styles.roundButton, { backgroundColor: palette.primary, opacity: sending ? 0.5 : 1 }]}
-          onPress={handleSend}
+          onPress={() => handleSend()}
           disabled={sending}
         >
           <Feather name="arrow-up" size={20} color={palette.onPrimary} />
@@ -419,6 +474,8 @@ function BolhaEntrando({ style, children }: { style: StyleProp<ViewStyle>; child
 const styles = StyleSheet.create({
   bubble: { maxWidth: '80%' },
   sendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
+  starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, paddingBottom: 10 },
+  starter: { paddingVertical: 8, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, maxWidth: '100%' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
