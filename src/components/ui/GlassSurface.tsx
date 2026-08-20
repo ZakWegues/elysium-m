@@ -47,15 +47,27 @@ export function GlassFill({
         ]}
       />
       {edge && (
+        // 🔴 Isto já foi um gradiente branco fixo em `absoluteFill` — ou seja, cobrindo a
+        // superfície INTEIRA de todo card e botão de vidro, apesar do nome "borda". No modo
+        // claro passava despercebido; no escuro deixava o app inteiro leitoso, e era a
+        // causa principal do modo escuro feio.
+        //
+        // Vidro real tem o brilho na ARESTA DE CIMA, onde a luz bate — é assim que o
+        // GlassModal sempre desenhou. A intensidade agora vem da paleta, então o escuro
+        // recebe um quinto do branco do claro.
         <LinearGradient
-          colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.22)']}
-          locations={[0, 0.45, 1]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
+          colors={palette.glassSheen}
+          locations={[0, 1]}
           pointerEvents="none"
-          style={StyleSheet.absoluteFill}
+          style={styles.sheen}
         />
       )}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  // Altura fixa e não proporcional: o brilho é um reflexo na aresta, e reflexo não cresce
+  // junto com o card. Num card alto, uma fração da altura viraria de novo um véu.
+  sheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 44 },
+});

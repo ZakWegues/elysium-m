@@ -28,6 +28,14 @@ export type Palette = {
   glassSurfaceStrong: string;
   glassBorder: string;
   glassBackdrop: string;
+  /**
+   * Brilho da aresta de cima do vidro, em duas paradas (opaca → transparente).
+   *
+   * Existe como token porque era literal: um branco fixo de 55% desenhado sobre a
+   * superfície INTEIRA de todo card e botão de vidro. No claro passava despercebido; no
+   * escuro cobria o app de uma névoa leitosa. Agora a intensidade vem do modo.
+   */
+  glassSheen: readonly [string, string];
   /** Tinta da BlurView: precisa acompanhar o modo, senão o vidro clareia o escuro. */
   blurTint: 'light' | 'dark';
 };
@@ -50,6 +58,7 @@ const lightNeutrals = {
   glassSurfaceStrong: 'rgba(255,255,255,0.34)',
   glassBorder: 'rgba(255,255,255,0.55)',
   glassBackdrop: 'rgba(18,20,24,0.28)',
+  glassSheen: ['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)'] as const,
   blurTint: 'light' as const,
 };
 
@@ -72,10 +81,15 @@ const darkNeutrals = {
   error: '#FF6B6B',
   errorSoft: 'rgba(255,107,107,0.16)',
   success: '#4ADE80',
-  glassSurface: 'rgba(255,255,255,0.06)',
-  glassSurfaceStrong: 'rgba(255,255,255,0.11)',
-  glassBorder: 'rgba(255,255,255,0.14)',
+  // Mais encorpado que antes: quem dava volume aos cards no escuro era o véu branco que
+  // saiu daqui. Sem isto, cartão de vidro sobre #0B0D12 fica invisível.
+  glassSurface: 'rgba(255,255,255,0.10)',
+  glassSurfaceStrong: 'rgba(255,255,255,0.16)',
+  glassBorder: 'rgba(255,255,255,0.20)',
   glassBackdrop: 'rgba(0,0,0,0.55)',
+  // Um quinto do brilho do modo claro. Branco forte sobre superfície escura não lê como
+  // reflexo, lê como sujeira.
+  glassSheen: ['rgba(255,255,255,0.11)', 'rgba(255,255,255,0)'] as const,
   blurTint: 'dark' as const,
 };
 

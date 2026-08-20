@@ -74,7 +74,8 @@ export function GlassModal({
         <GlassFill intensity={75} strong />
         {/* Brilho reflexivo na aresta de cima, como o topo curvo de uma placa de vidro */}
         <LinearGradient
-          colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0)']}
+          // Da paleta, não literal: 70% de branco é reflexo no vidro claro e mancha no escuro.
+          colors={palette.glassSheen}
           locations={[0, 1]}
           pointerEvents="none"
           style={styles.topSheen}
