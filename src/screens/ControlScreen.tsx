@@ -439,16 +439,39 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
 
 // ── Monitor ───────────────────────────────────────────────────────────────────
 
+/**
+ * Monitor do PC.
+ *
+ * O broadcast de telemetria só traz CPU, RAM e bateria — que num desktop é null. Na
+ * prática eram DUAS barras num card com 16px de padding e 16px de espaçamento: um card
+ * alto e quase vazio. Discos e processos vêm por RPC sob demanda e preenchem o mesmo
+ * lugar, em vez de morarem numa gaveta separada mais abaixo.
+ */
 function MonitorDrawer({ pairing }: { pairing: Pairing }) {
-  const { palette } = useTheme();
+  const { palette, tokens } = useTheme();
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TelemetryFrame | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [discos, setDiscos] = useState<DiskEntry[]>([]);
+  const [pesados, setPesados] = useState<ProcessEntry[]>([]);
 
   useEffect(() => {
     if (!mounted) return;
     return openTelemetryStream(pairing, setSnapshot, setStatus);
   }, [mounted, pairing.activeIp, pairing.port, pairing.token]);
+
+  // Discos e processos não vêm no broadcast; são lidos uma vez ao abrir a gaveta. Ficar
+  // consultando com a gaveta fechada gastaria uma chamada de PowerShell no PC por nada.
+  useEffect(() => {
+    if (!mounted) return;
+    (async () => {
+      try { setDiscos((await callRpc(pairing, 'system.disks')).disks); } catch { /* segue */ }
+      try {
+        const r = await callRpc(pairing, 'system.processes');
+        setPesados(r.processes.slice().sort((a, b) => (b.cpu ?? 0) - (a.cpu ?? 0)).slice(0, 5));
+      } catch { /* segue */ }
+    })();
+  }, [mounted, pairing]);
 
   const known = snapshot
     ? Object.entries(snapshot).filter(([k, v]) => findMetric(k) && typeof v === 'number')
@@ -476,6 +499,29 @@ function MonitorDrawer({ pairing }: { pairing: Pairing }) {
             <MetricBar key={key} icon={metric.icon} label={metric.label} percent={value as number} detail={detail} />
           );
         })
+      )}
+
+      {discos.map(d => (
+        <MetricBar
+          key={d.name}
+          icon="hard-drive"
+          label={`Disco ${d.name}`}
+          percent={d.usedPct}
+          detail={`${d.freeGB} GB livres de ${d.totalGB}`}
+        />
+      ))}
+
+      {pesados.length > 0 && (
+        <View style={{ gap: 6, marginTop: tokens.spacing.sm }}>
+          <Text variant="label" color={palette.textMuted}>Consumindo mais</Text>
+          {pesados.map(p => (
+            <View key={p.pid} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Feather name="cpu" size={13} color={palette.primary} />
+              <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>{p.name}</Text>
+              <Text variant="caption" color={palette.textMuted}>{Math.round(p.cpu ?? 0)}% · {p.ramMB}MB</Text>
+            </View>
+          ))}
+        </View>
       )}
     </Drawer>
   );

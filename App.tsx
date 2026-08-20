@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
-import ChatScreen from './src/screens/ChatScreen';
+import ChatHub from './src/screens/ChatHub';
 import ControlScreen from './src/screens/ControlScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import SpotifyPlayer from './src/screens/SpotifyPlayer';
-import PresetsScreen from './src/screens/PresetsScreen';
-import MailboxScreen from './src/screens/MailboxScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
 import { clearPairing, loadPairing, savePairing, Pairing } from './src/lib/pairing';
@@ -23,6 +21,7 @@ import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
 import { useShareIntent } from './src/lib/shareIntent';
+import { MOV, anima } from './src/lib/motion';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -46,8 +45,9 @@ function AppInner() {
   const [playerOpen, setPlayerOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [mailboxUnread, setMailboxUnread] = useState(0);
-  const [presetsModalVisible, setPresetsModalVisible] = useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  /** Em qual lado do switch o Chat abre — o compartilhamento do Android força o lado do PC. */
+  const [modoChat, setModoChat] = useState<'ia' | 'pc'>('ia');
 
   const [queued, setQueued] = useState(0);
 
@@ -118,9 +118,10 @@ function AppInner() {
     return () => clearInterval(interval);
   }, [pairing, refreshMailboxBadge]);
 
-  // Reconsulta ao sair da Caixa (usuário pode ter lido itens lá) em vez de esperar o poll.
+  // Reconsulta ao sair do Chat (o usuário pode ter lido recados no lado do PC) em vez de
+  // esperar o poll de 45 s.
   useEffect(() => {
-    if (screen !== 'mailbox') refreshMailboxBadge();
+    if (screen !== 'chat') refreshMailboxBadge();
   }, [screen, refreshMailboxBadge]);
 
   // Conteúdo compartilhado de outro app do Android cai direto na Caixa do PC.
@@ -129,7 +130,13 @@ function AppInner() {
       ok ? 'Enviado pro PC' : 'Não consegui enviar',
       ok ? text.slice(0, 120) : 'O PC está fora de alcance. Tente de novo quando ele voltar.'
     );
-    if (ok) refreshMailboxBadge();
+    if (!ok) return;
+    refreshMailboxBadge();
+    // A Caixa deixou de ser uma tela: abre o Chat já no lado do PC, que é onde o recado
+    // compartilhado aparece. Sem isto o compartilhamento do Android apontaria para um
+    // destino que não existe mais.
+    setModoChat('pc');
+    setScreen('chat');
   }, [refreshMailboxBadge]);
 
   useShareIntent(pairing, handleShared);
@@ -141,8 +148,7 @@ function AppInner() {
   const handleUnpair = useCallback(() => {
     clearPairing().then(() => {
       setPairing(null);
-      setScreen('chat');
-      setPresetsModalVisible(false);
+      setScreen('home');
       setSettingsModalVisible(false);
     });
   }, []);
@@ -176,7 +182,7 @@ function AppInner() {
       <BlurTargetProvider>
         <AppBackground />
       </BlurTargetProvider>
-      <View style={{ flex: 1 }}>
+      <TelaAnimada chave={screen}>
         {screen === 'home' && (
           <HomeScreen
             pairing={pairing}
@@ -186,7 +192,6 @@ function AppInner() {
           />
         )}
         {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
-        {screen === 'mailbox' && <MailboxScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen
             pairing={pairing}
@@ -201,16 +206,19 @@ function AppInner() {
             onBack={() => setScreen('chat')}
           />
         )}
+        {/* Chat e Caixa moram no mesmo destino, escolhidos por um switch. Ver ChatHub. */}
         {screen === 'chat' && (
-          <ChatScreen
+          <ChatHub
             pairing={pairing}
             onUnpair={handleUnpair}
             sessionId={activeSessionId}
             onSessionChange={setActiveSessionId}
             onOpenConversations={() => setScreen('conversations')}
+            naoLidos={mailboxUnread}
+            modoInicial={modoChat}
           />
         )}
-      </View>
+      </TelaAnimada>
       {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area
           que cada ScreenHeader já aplica. */}
       <ConnectionBanner
@@ -228,22 +236,46 @@ function AppInner() {
         <TabBar
           active={screen}
           onNavigate={setScreen}
-          onOpenModal={(target) => (target === 'presets' ? setPresetsModalVisible(true) : setSettingsModalVisible(true))}
-          badges={{ mailbox: mailboxUnread }}
+          onOpenModal={() => setSettingsModalVisible(true)}
+          badges={{ chat: mailboxUnread }}
         />
       )}
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
 
-      <GlassModal title="Presets" visible={presetsModalVisible} onClose={() => setPresetsModalVisible(false)}>
-        <PresetsScreen pairing={pairing} onUnpair={handleUnpair} />
-      </GlassModal>
-
       <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
         <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />
       </GlassModal>
     </View>
+  );
+}
+
+/**
+ * Troca de tela com fade e um deslocamento curto. A navegação daqui é um `if/else` puro —
+ * sem biblioteca de navegação, o app trocava de tela de um quadro para o outro, o que lê
+ * como travamento e não como transição.
+ *
+ * `useNativeDriver` em tudo: sem ele a animação roda na thread de JS e engasga junto com
+ * as chamadas RPC que a tela nova dispara ao montar, que é exatamente quando ela aparece.
+ */
+function TelaAnimada({ chave, children }: { chave: string; children: React.ReactNode }) {
+  const opacidade = useRef(new Animated.Value(1)).current;
+  const deslocamento = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    opacidade.setValue(0);
+    deslocamento.setValue(8);
+    Animated.parallel([
+      anima(opacidade, 1, MOV.base),
+      anima(deslocamento, 0, MOV.base),
+    ]).start();
+  }, [chave]);
+
+  return (
+    <Animated.View style={{ flex: 1, opacity: opacidade, transform: [{ translateY: deslocamento }] }}>
+      {children}
+    </Animated.View>
   );
 }
 

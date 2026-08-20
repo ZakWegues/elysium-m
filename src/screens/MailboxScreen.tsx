@@ -24,7 +24,16 @@ const POLL_INTERVAL_MS = 15000;
 
 type PendingAttachment = { name: string; mimeType: string; uri: string; sizeBytes: number };
 
-export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+export default function MailboxScreen({
+  pairing,
+  onUnpair,
+  semCabecalho,
+}: {
+  pairing: Pairing;
+  onUnpair: () => void;
+  /** Dentro do ChatHub o cabeçalho é do hub, com o switch IA ↔ PC. */
+  semCabecalho?: boolean;
+}) {
   const { palette, tokens } = useTheme();
   const [messages, setMessages] = useState<MailboxMessage[]>([]);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
@@ -187,7 +196,7 @@ export default function MailboxScreen({ pairing, onUnpair }: { pairing: Pairing;
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader title="Caixa de recados" />
+      {!semCabecalho && <ScreenHeader title="Caixa de recados" />}
 
       {loading && (
         <View style={styles.center}>

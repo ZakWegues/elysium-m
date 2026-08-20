@@ -4,20 +4,21 @@ import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
-export type Screen = 'home' | 'chat' | 'mailbox' | 'control' | 'presets' | 'settings' | 'conversations';
+export type Screen = 'home' | 'chat' | 'control' | 'settings' | 'conversations';
 
 const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap; modal?: boolean }[] = [
   // O app abria direto no chat, o que fazia sentido quando conversar era quase tudo
   // que ele fazia. Com controle remoto, lembretes e player, chat virou uma aba entre
   // outras — e nada mostrava de imediato se o PC estava de pé.
   { screen: 'home', label: 'Início', icon: 'home' },
+  // A Caixa deixou de ser destino: virou o lado direito do switch dentro do Chat, que é
+  // como o desktop sempre tratou os dois — um par de modos da mesma conversa, não duas
+  // telas. E os Presets viraram um popover ancorado no botão do topo.
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
-  { screen: 'mailbox', label: 'Caixa', icon: 'inbox' },
   // Guia única de controle do PC: espelho da tela aparente ao entrar, e todo o resto
   // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
   // gavetas. Antes eram duas abas separadas, Sistema e Remoto.
   { screen: 'control', label: 'PC', icon: 'monitor' },
-  { screen: 'presets', label: 'Presets', icon: 'sliders', modal: true },
   { screen: 'settings', label: 'Ajustes', icon: 'settings', modal: true },
 ];
 
@@ -29,7 +30,7 @@ export function TabBar({
 }: {
   active: Screen;
   onNavigate: (screen: Screen) => void;
-  onOpenModal: (screen: 'presets' | 'settings') => void;
+  onOpenModal: (screen: 'settings') => void;
   badges?: Partial<Record<Screen, number>>;
 }) {
   const { palette, tokens } = useTheme();
@@ -55,7 +56,7 @@ export function TabBar({
             <Pressable
               key={tab.screen}
               style={styles.tab}
-              onPress={() => (tab.modal ? onOpenModal(tab.screen as 'presets' | 'settings') : onNavigate(tab.screen))}
+              onPress={() => (tab.modal ? onOpenModal(tab.screen as 'settings') : onNavigate(tab.screen))}
             >
               <View>
                 <Feather name={tab.icon} size={22} color={color} />

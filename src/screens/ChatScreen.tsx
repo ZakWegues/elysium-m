@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator, Alert, Animated, FlatList, Pressable, StyleProp,
+  StyleSheet, TextInput, View, ViewStyle,
+} from 'react-native';
 import * as Speech from 'expo-speech';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
@@ -11,6 +14,7 @@ import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { errMessage } from '../lib/errors';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
+import { MOV, anima } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassFill, ScreenHeader, Text } from '../components/ui';
 
@@ -22,12 +26,15 @@ export default function ChatScreen({
   sessionId,
   onSessionChange,
   onOpenConversations,
+  semCabecalho,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
   sessionId: string | null;
   onSessionChange: (id: string) => void;
   onOpenConversations: () => void;
+  /** Dentro do ChatHub o cabeçalho é do hub, com o switch IA ↔ PC. */
+  semCabecalho?: boolean;
 }) {
   const { palette, tokens } = useTheme();
   const [messages, setMessages] = useState<StoredMessage[]>([
@@ -268,14 +275,16 @@ export default function ChatScreen({
     // um KeyboardAvoidingView que, somado àquele padding, deslocava a conversa duas
     // vezes — e que de todo modo não funciona no edge-to-edge do Android.
     <View style={{ flex: 1 }}>
-      <ScreenHeader
-        title="ELYSIUM-M"
-        right={
-          <Pressable onPress={onOpenConversations} hitSlop={8}>
-            <Feather name="clock" size={22} color={palette.textMuted} />
-          </Pressable>
-        }
-      />
+      {!semCabecalho && (
+        <ScreenHeader
+          title="ELYSIUM-M"
+          right={
+            <Pressable onPress={onOpenConversations} hitSlop={8}>
+              <Feather name="clock" size={22} color={palette.textMuted} />
+            </Pressable>
+          }
+        />
+      )}
 
       <FlatList
         ref={listRef}
@@ -286,7 +295,7 @@ export default function ChatScreen({
           const bg = item.from === 'me' ? palette.primary : item.from === 'error' ? palette.errorSoft : palette.surfaceRaised;
           const color = item.from === 'me' ? palette.onPrimary : item.from === 'error' ? palette.error : palette.text;
           return (
-            <View
+            <BolhaEntrando
               style={[
                 styles.bubble,
                 {
@@ -302,7 +311,7 @@ export default function ChatScreen({
               <Text variant="body" color={color}>
                 {item.text}
               </Text>
-            </View>
+            </BolhaEntrando>
           );
         }}
       />
@@ -387,6 +396,23 @@ export default function ChatScreen({
         }}
       />
     </View>
+  );
+}
+
+/**
+ * Bolha entrando: fade e 6px de subida. Mensagem aparecendo do nada, sobretudo a resposta
+ * depois da espera, lê como salto — a subida curta dá a direção de onde ela veio.
+ */
+function BolhaEntrando({ style, children }: { style: StyleProp<ViewStyle>; children: React.ReactNode }) {
+  const opacidade = useRef(new Animated.Value(0)).current;
+  const y = useRef(new Animated.Value(6)).current;
+  useEffect(() => {
+    Animated.parallel([anima(opacidade, 1, MOV.base), anima(y, 0, MOV.base)]).start();
+  }, []);
+  return (
+    <Animated.View style={[style, { opacity: opacidade, transform: [{ translateY: y }] }]}>
+      {children}
+    </Animated.View>
   );
 }
 

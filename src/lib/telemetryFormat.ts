@@ -12,7 +12,7 @@ export type MetricDef = {
 // Confirmado contra payload real do desktop (log [telemetry] no Metro):
 // {"type":"telemetry","timestamp":...,"cpu_pct":50,"ram_pct":62,"battery_pct":null,"battery_charging":false}
 // Sem campo de disco hoje. battery_pct vem null em desktops sem bateria - tratado à parte
-// em TelemetryScreen (não exibido como barra quando null). Mantidas variantes antigas
+// no card de métricas (não exibido como barra quando null). Mantidas variantes antigas
 // como fallback caso o payload mude.
 export const METRICS: MetricDef[] = [
   { keys: ['cpu_pct', 'cpu', 'cpuPercent', 'cpuUsage'], label: 'CPU', kind: 'percent', icon: 'cpu' },

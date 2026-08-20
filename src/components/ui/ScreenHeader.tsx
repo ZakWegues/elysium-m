@@ -6,10 +6,18 @@ import { Text } from './Text';
 
 export function ScreenHeader({
   title,
+  left,
+  center,
   right,
   style,
   ...rest
-}: ViewProps & { title: string; right?: React.ReactNode }) {
+}: ViewProps & {
+  title?: string;
+  /** Ocupa o lugar do título — usado pelo switch IA ↔ PC no Chat. */
+  center?: React.ReactNode;
+  left?: React.ReactNode;
+  right?: React.ReactNode;
+}) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -30,7 +38,8 @@ export function ScreenHeader({
         ]}
         {...rest}
       >
-        <Text variant="heading">{title}</Text>
+        {left}
+        {center ?? <Text variant="heading">{title}</Text>}
         {right}
       </View>
     </View>

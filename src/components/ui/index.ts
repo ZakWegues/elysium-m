@@ -8,3 +8,4 @@ export { Drawer } from './Drawer';
 export { GlassFill } from './GlassSurface';
 export { AppBackground } from './AppBackground';
 export { BlurTargetProvider, useBlurTarget } from './BlurTarget';
+export { default as Popover } from './Popover';

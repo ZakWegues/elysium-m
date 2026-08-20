@@ -64,7 +64,16 @@ export type RpcMethod =
   | 'chat.save'
   | 'chat.favorite'
   | 'chat.delete'
-  | 'pairing.endpoints';
+  | 'pairing.endpoints'
+  // Entraram na fase 3. Os quatro de preset existem porque o `presetsStore` do desktop
+  // nunca tinha sido exposto: até aqui a tela de presets montava "executa o preset X" e
+  // mandava para o LLM, que é lento e pode errar num comando já conhecido.
+  | 'presets.list'
+  | 'presets.run'
+  | 'presets.save'
+  | 'presets.delete'
+  | 'suggestions.list'
+  | 'weather.now';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -144,6 +153,40 @@ export type DiskEntry = {
 
 export type AppEntry = { key: string; command: string };
 
+export type PresetEntry = {
+  name: string;
+  description: string;
+  icon?: string;
+  /** Quantidade de ações, não as ações em si — a lista não precisa delas. */
+  actions: number;
+};
+
+/** Uma bolha da tela Início. O desktop sorteia; os dois lados recebem as mesmas. */
+export type Sugestao = {
+  texto: string;
+  /** Nome de ícone do Feather. */
+  icone: string;
+  detalhe?: string;
+  peso: number;
+  acao?: {
+    metodo?: string;
+    params?: Record<string, unknown>;
+    aviso?: string;
+    /** Em vez de executar, leva para uma tela. */
+    aba?: string;
+  };
+};
+
+export type Clima = {
+  cidade: string;
+  temperatura: number;
+  max: number;
+  min: number;
+  descricao: string;
+  icone: string;
+  chuvaHoje: boolean;
+};
+
 export type RpcResults = {
   'system.telemetry': Record<string, unknown>;
   'system.processes': { processes: ProcessEntry[] };
@@ -196,6 +239,13 @@ export type RpcResults = {
   'chat.save': { session: SyncedChatSession };
   'chat.favorite': { favorite: boolean | null };
   'chat.delete': { deleted: boolean };
+  'presets.list': { presets: PresetEntry[] };
+  'presets.run': { ran: string | null; reply: string };
+  'presets.save': { saved: string };
+  'presets.delete': { deleted: string };
+  'suggestions.list': { suggestions: Sugestao[] };
+  /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
+  'weather.now': Clima | null;
   'pairing.endpoints': {
     endpoints: string[];
     /** Existe caminho de fora da rede de casa (Tailscale/ZeroTier no PC). */

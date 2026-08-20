@@ -89,14 +89,28 @@ export function useSpotify(pairing: Pairing, active: boolean) {
 export function SpotifyBar({
   pairing,
   onOpen,
+  semCard,
 }: {
   pairing: Pairing;
   onOpen: () => void;
+  /**
+   * Dentro de um card da tela Início: o card já desenha a superfície, e um estado vazio
+   * silencioso deixaria um card em branco. Fora dele a barra some quando nada toca, que é
+   * o comportamento certo para um item flutuando na tela.
+   */
+  semCard?: boolean;
 }) {
   const { palette, tokens } = useTheme();
   const { connected, now, send, setNow } = useSpotify(pairing, true);
 
-  if (connected === false || !now) return null;
+  if (connected === false || !now) {
+    if (!semCard) return null;
+    return (
+      <Text variant="caption" color={palette.textMuted}>
+        {connected === false ? "Spotify não conectado no PC." : "Nada tocando."}
+      </Text>
+    );
+  }
 
   function togglePlay() {
     const wasPlaying = now!.isPlaying;
@@ -106,7 +120,12 @@ export function SpotifyBar({
   }
 
   return (
-    <Pressable onPress={onOpen} style={[styles.bar, { backgroundColor: palette.surfaceRaised, borderRadius: tokens.radii.md }]}>
+    <Pressable
+      onPress={onOpen}
+      style={[styles.bar, semCard
+        ? { paddingHorizontal: 0, paddingVertical: 0 }
+        : { backgroundColor: palette.surfaceRaised, borderRadius: tokens.radii.md }]}
+    >
       {now.albumArt
         ? <Image source={{ uri: now.albumArt }} style={{ width: 44, height: 44, borderRadius: tokens.radii.sm }} />
         : <View style={[styles.barArtFallback, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.sm }]}>
