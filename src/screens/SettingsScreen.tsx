@@ -5,17 +5,24 @@ import { Pairing } from '../lib/pairing';
 import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
-import { useTheme, palettes, getPalette, ColorScheme, ThemeName } from '../theme';
+import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text } from '../components/ui';
 
-const SCHEME_OPTIONS: { value: ColorScheme; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { value: 'light', label: 'Claro', icon: 'sun' },
-  { value: 'dark', label: 'Escuro', icon: 'moon' },
-  { value: 'system', label: 'Sistema', icon: 'smartphone' },
+/**
+ * As duas famílias, mais "seguir o aparelho".
+ *
+ * Eram "Claro / Escuro / Sistema", o que descrevia o brilho e escondia a escolha real:
+ * as duas famílias são desenhos diferentes, não o mesmo desenho com o brilho trocado.
+ * Agora a pergunta é a mesma que o desktop faz, com o mesmo vocabulário.
+ */
+const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeof Feather.glyphMap; nota: string }[] = [
+  { value: 'lg', label: ROTULO_FAMILIA.lg, icon: 'droplet', nota: 'Vidro translúcido, fundo claro' },
+  { value: 'ely', label: ROTULO_FAMILIA.ely, icon: 'moon', nota: 'Noite azul com luz dourada e feixes de luz' },
+  { value: 'auto', label: 'Seguir o aparelho', icon: 'smartphone', nota: 'Vidro no modo claro, ELYSIUM no escuro' },
 ];
 
 export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
-  const { name, palette, tokens, scheme, resolvedScheme, setTheme, setScheme } = useTheme();
+  const { name, palette, tokens, familia, familiaResolvida, setTheme, setFamilia } = useTheme();
 
   return (
     <View style={{ gap: tokens.spacing.lg }}>
@@ -43,49 +50,54 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
       </Card>
 
       <View style={{ gap: tokens.spacing.sm }}>
-        <Text variant="subheading">Aparência</Text>
-        <View style={styles.schemeRow}>
-          {SCHEME_OPTIONS.map((opt) => {
-            const selected = opt.value === scheme;
-            return (
-              <Pressable
-                key={opt.value}
-                onPress={() => setScheme(opt.value)}
-                style={[
-                  styles.schemeBtn,
-                  {
-                    borderRadius: tokens.radii.md,
-                    backgroundColor: selected ? palette.primary : palette.surface,
-                    borderColor: selected ? palette.primary : palette.border,
-                  },
-                ]}
-              >
-                <Feather
-                  name={opt.icon}
-                  size={16}
-                  color={selected ? palette.onPrimary : palette.textMuted}
-                />
-                <Text variant="caption" color={selected ? palette.onPrimary : palette.text}>
+        <Text variant="subheading">Estilo</Text>
+        <Text variant="caption" color={palette.textMuted}>
+          As duas famílias visuais do ELYSIUM desktop.
+        </Text>
+        {FAMILIA_OPTIONS.map((opt) => {
+          const selected = opt.value === familia;
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => setFamilia(opt.value)}
+              style={[
+                styles.familiaBtn,
+                {
+                  borderRadius: tokens.radii.md,
+                  backgroundColor: selected ? palette.primarySoft : 'transparent',
+                  borderColor: selected ? palette.primary : palette.border,
+                },
+              ]}
+            >
+              <Feather
+                name={opt.icon}
+                size={17}
+                color={selected ? palette.primary : palette.textMuted}
+              />
+              <View style={{ flex: 1 }}>
+                <Text variant="body" color={selected ? palette.primary : palette.text}>
                   {opt.label}
                 </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                <Text variant="caption" color={palette.textMuted}>{opt.nota}</Text>
+              </View>
+              {selected && <Feather name="check" size={16} color={palette.primary} />}
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={{ gap: tokens.spacing.sm }}>
-        <Text variant="subheading">Tema</Text>
+        <Text variant="subheading">Cor</Text>
         <Text variant="caption" color={palette.textMuted}>
-          Os mesmos três do ELYSIUM desktop. Cada um tem uma cara clara, de vidro, e uma
-          escura, de noite — quem escolhe entre as duas é o modo acima.
+          Três variações dentro da família {ROTULO_FAMILIA[familiaResolvida]}. São
+          exatamente as seis do desktop: cada cor tem um nome próprio em cada família.
         </Text>
         <View style={styles.swatchRow}>
           {(Object.keys(palettes) as ThemeName[]).map((key) => {
             // Do modo ATUAL, não das paletas claras: as duas caras de um tema são bem
             // diferentes, e mostrar a clara no escuro faria a amostra mentir sobre o que
             // vai acontecer ao tocar nela.
-            const p = getPalette(key, resolvedScheme);
+            const p = getPalette(key, familiaResolvida);
             const selected = key === name;
             return (
               <Pressable
@@ -105,7 +117,10 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
                   <View style={[styles.dot, { backgroundColor: p.primary }]} />
                   <View style={[styles.dot, { backgroundColor: p.accent }]} />
                 </View>
-                <Text variant="label">{p.label}</Text>
+                {/* O nome do desktop, não o interno: na família Vidro, "Elísio" chama-se
+                    "Vidro — Âmbar", e mostrar o nome interno faria as duas telas do mesmo
+                    ecossistema divergirem no vocabulário. */}
+                <Text variant="label">{p.rotulo}</Text>
                 {selected && <Feather name="check" size={16} color={p.primary} />}
               </Pressable>
             );
@@ -240,6 +255,11 @@ function PushSection({ pairing }: { pairing: Pairing }) {
 }
 
 const styles = StyleSheet.create({
+  familiaBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 11,
+    paddingVertical: 11, paddingHorizontal: 13,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   schemeRow: { flexDirection: 'row', gap: 8 },
   schemeBtn: {
     flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12,

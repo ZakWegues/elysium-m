@@ -18,16 +18,42 @@
 
 export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
 
-/** Escolha do usuário. `system` acompanha o aparelho. */
-export type ColorScheme = 'light' | 'dark' | 'system';
+/**
+ * As duas FAMÍLIAS visuais, iguais às do desktop.
+ *
+ * 🔴 POR QUE ISTO SUBSTITUIU "claro/escuro": as seis combinações sempre foram os seis
+ * temas do `dashboard.html`, mas o app as apresentava como "três cores + um interruptor
+ * de claro/escuro". O nome escondia o que a escolha realmente faz — `lg` e `ely` não são
+ * o mesmo desenho com o brilho trocado, são duas linguagens visuais diferentes: o Vidro
+ * Líquido é translúcido e claro, o ELYSIUM é noite azul com luz dourada e feixes de luz
+ * no fundo. É a mesma pergunta que o desktop faz, e agora com o mesmo vocabulário.
+ *
+ * A correspondência com os ids do desktop:
+ *
+ * | cor        | família `lg`      | família `ely`     |
+ * |------------|-------------------|-------------------|
+ * | crepusculo | `lg` Vidro Líquido | `ely-dusk` Crepúsculo |
+ * | mare       | `lg-tide` Maré     | `ely-ether` Éter      |
+ * | elisio     | `lg-amber` Âmbar   | `ely` Campos Elísios  |
+ */
+export type Familia = 'lg' | 'ely';
 
-/** O que fica valendo depois de resolver `system`. */
-export type ResolvedScheme = 'light' | 'dark';
+/** O que o usuário escolheu. `auto` acompanha o modo do aparelho. */
+export type FamiliaEscolha = 'auto' | 'lg' | 'ely';
+
+/** Nome de cada família na tela. */
+export const ROTULO_FAMILIA: Record<Familia, string> = {
+  lg: 'Vidro Líquido',
+  ely: 'ELYSIUM',
+};
 
 export type Palette = {
   name: ThemeName;
   label: string;
-  scheme: ResolvedScheme;
+  /** Qual das duas linguagens visuais está valendo. */
+  familia: Familia;
+  /** O nome que o desktop dá a esta combinação exata de cor e família. */
+  rotulo: string;
   primary: string;
   primarySoft: string;
   accent: string;
@@ -58,9 +84,9 @@ export type Palette = {
   blurTint: 'light' | 'dark';
 };
 
-/** Neutros do modo claro, comuns às três cores. */
+/** Neutros da família Vidro Líquido, comuns às três cores. */
 const neutrosClaro = {
-  scheme: 'light' as const,
+  familia: 'lg' as const,
   border: '#E4E7EC',
   text: '#14161A',
   textMuted: '#6B7280',
@@ -85,7 +111,7 @@ const neutrosClaro = {
  * senão viram linhas duras sobre superfície escura.
  */
 const neutrosEscuro = {
-  scheme: 'dark' as const,
+  familia: 'ely' as const,
   border: 'rgba(255,255,255,0.10)',
   text: '#EEF1F6',
   textMuted: '#9AA3B2',
@@ -173,23 +199,58 @@ export function resolverNomeDeTema(bruto: string | null | undefined): ThemeName 
   return TEMAS_APOSENTADOS[bruto] ?? null;
 }
 
-function build(name: ThemeName, scheme: ResolvedScheme): Palette {
+/**
+ * O nome que o desktop dá a cada combinação.
+ *
+ * Fica numa tabela e não junto da cor porque a mesma cor tem nome diferente em cada
+ * família — "Elísio" é "Vidro — Âmbar" no vidro e "Campos Elísios" na noite. Guardar o
+ * par junto da face duplicaria a cor em dois lugares para acrescentar só um texto.
+ */
+const ROTULOS: Record<ThemeName, Record<Familia, string>> = {
+  elisio:     { lg: 'Vidro — Âmbar', ely: 'Campos Elísios' },
+  mare:       { lg: 'Vidro — Maré',  ely: 'Éter' },
+  crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo' },
+};
+
+function build(name: ThemeName, familia: Familia): Palette {
   const tema = temas[name];
-  const face = scheme === 'dark' ? tema.dark : tema.light;
-  const neutros = scheme === 'dark' ? neutrosEscuro : neutrosClaro;
-  return { name, label: tema.label, ...neutros, ...face };
+  const face = familia === 'ely' ? tema.dark : tema.light;
+  const neutros = familia === 'ely' ? neutrosEscuro : neutrosClaro;
+  return { name, label: tema.label, rotulo: ROTULOS[name][familia], ...neutros, ...face };
 }
 
 const names: ThemeName[] = ['elisio', 'mare', 'crepusculo'];
 
+/** Família Vidro Líquido — os três `lg` do desktop. */
 export const palettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, build(n, 'light')]),
+  names.map(n => [n, build(n, 'lg')]),
 ) as Record<ThemeName, Palette>;
 
+/** Família ELYSIUM — os três `ely` do desktop. */
 export const darkPalettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, build(n, 'dark')]),
+  names.map(n => [n, build(n, 'ely')]),
 ) as Record<ThemeName, Palette>;
 
-export function getPalette(name: ThemeName, scheme: ResolvedScheme): Palette {
-  return scheme === 'dark' ? darkPalettes[name] : palettes[name];
+export function getPalette(name: ThemeName, familia: Familia): Palette {
+  return familia === 'ely' ? darkPalettes[name] : palettes[name];
+}
+
+/**
+ * Traduz a escolha de família guardada no disco.
+ *
+ * ⚠️ A chave gravada continua sendo `elysium_color_scheme`, com os valores antigos
+ * `light`/`dark`/`system`. Renomear a chave só traria o risco de despareamento silencioso
+ * que o handoff descreve, e não traria nada: o que mudou foi o vocabulário na tela, não o
+ * significado do valor. `light` sempre quis dizer vidro e `dark` sempre quis dizer noite.
+ */
+export function resolverFamiliaEscolhida(bruto: string | null | undefined): FamiliaEscolha | null {
+  switch (bruto) {
+    case 'lg':
+    case 'light':  return 'lg';
+    case 'ely':
+    case 'dark':   return 'ely';
+    case 'auto':
+    case 'system': return 'auto';
+    default:       return null;
+  }
 }

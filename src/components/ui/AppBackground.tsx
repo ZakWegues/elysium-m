@@ -61,13 +61,46 @@ function Mancha({ cor, opacidade, tamanho, style }: {
   );
 }
 
-export function AppBackground() {
-  const { palette, resolvedScheme } = useTheme();
-  const dark = resolvedScheme === 'dark';
+/**
+ * Feixes de luz — o elemento que só a família ELYSIUM tem.
+ *
+ * É a contrapartida do `#ely-shafts` do `dashboard.html`: duas faixas diagonais bem
+ * fracas, como luz entrando de cima. No desktop elas derivam devagar (44 s e 58 s); aqui
+ * ficam paradas de propósito, porque animar dois gradientes em tela cheia o tempo todo
+ * custa quadro no telefone e o ganho é quase invisível — o valor do elemento está na
+ * profundidade que ele dá ao fundo, não no movimento.
+ *
+ * Não existem na família Vidro Líquido: lá o fundo é claro, e uma faixa de luz sobre
+ * claro não lê como luz, lê como mancha de impressão.
+ */
+function Feixes({ cor }: { cor: string }) {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <LinearGradient
+        colors={['transparent', cor, 'transparent']}
+        locations={[0.15, 0.5, 0.85]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={[styles.feixe, { opacity: 0.06, transform: [{ rotate: '-18deg' }] }]}
+      />
+      <LinearGradient
+        colors={['transparent', cor, 'transparent']}
+        locations={[0.2, 0.5, 0.8]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={[styles.feixe, { opacity: 0.04, left: '35%', transform: [{ rotate: '-24deg' }] }]}
+      />
+    </View>
+  );
+}
 
-  // O meio do gradiente clareia no modo claro e escurece no modo escuro. Um valor fixo
-  // deixaria uma faixa clara atravessando a tela no escuro.
-  const middle = dark ? '#12151D' : '#EEF0F6';
+export function AppBackground() {
+  const { palette, familiaResolvida } = useTheme();
+  const noite = familiaResolvida === 'ely';
+
+  // O meio do gradiente clareia no vidro e escurece na noite. Um valor fixo deixaria uma
+  // faixa clara atravessando a tela na família escura.
+  const middle = noite ? '#12151D' : '#EEF0F6';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -76,10 +109,11 @@ export function AppBackground() {
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
-      {/* Mais forte no escuro: sobre fundo quase preto, pouca opacidade some. Agora que a
+      {/* Mais forte na noite: sobre fundo quase preto, pouca opacidade some. Agora que a
           mancha tem queda suave, dá para subir sem virar um disco visível. */}
-      <Mancha cor={palette.primary} opacidade={dark ? 0.42 : 0.26} tamanho={420} style={styles.top} />
-      <Mancha cor={palette.accent}  opacidade={dark ? 0.34 : 0.22} tamanho={440} style={styles.bottom} />
+      <Mancha cor={palette.primary} opacidade={noite ? 0.42 : 0.26} tamanho={420} style={styles.top} />
+      <Mancha cor={palette.accent}  opacidade={noite ? 0.34 : 0.22} tamanho={440} style={styles.bottom} />
+      {noite && <Feixes cor={palette.primary} />}
     </View>
   );
 }
@@ -87,4 +121,6 @@ export function AppBackground() {
 const styles = StyleSheet.create({
   top: { position: 'absolute', top: -130, right: -110 },
   bottom: { position: 'absolute', bottom: 10, left: -150 },
+  // Mais alto que a tela para a diagonal não deixar canto vazio ao girar.
+  feixe: { position: 'absolute', top: '-25%', left: '-5%', width: '55%', height: '150%' },
 });
