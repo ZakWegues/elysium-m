@@ -87,9 +87,39 @@ export default function MailboxScreen({
     return () => clearInterval(interval);
   }, [refresh]);
 
-  useEffect(() => {
-    listRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length]);
+  /**
+   * 🔴 A conversa abria no MEIO, não na última mensagem.
+   *
+   * A versão anterior mandava `scrollToEnd` num efeito disparado por `messages.length`.
+   * Dois furos, e os dois aparecem justamente na abertura:
+   *
+   * 1. O comprimento vai de 0 para N quando o cache local chega, mas a `FlatList` ainda
+   *    não mediu as linhas. `scrollToEnd` calcula com a altura que ela conhece — que é
+   *    quase nenhuma — e para onde der. Como as bolhas têm alturas bem diferentes (texto
+   *    curto, texto longo, imagem), o erro acumulado joga a lista para o meio.
+   * 2. Se o servidor devolver a mesma quantidade que estava em cache, `messages.length`
+   *    não muda, o efeito não roda de novo, e a âncora errada fica de pé.
+   *
+   * A correção escuta o tamanho do CONTEÚDO em vez da contagem: toda vez que a lista
+   * cresce de verdade — inclusive quando uma imagem termina de carregar e empurra tudo
+   * para baixo — decidimos se acompanhamos.
+   */
+  const jaAncorou = useRef(false);
+  /** O dedo está por perto do fim? Só então a lista acompanha mensagem nova. */
+  const coladoNoFim = useRef(true);
+
+  const aoCrescerConteudo = useCallback(() => {
+    if (!jaAncorou.current) {
+      // Primeira medição de verdade: pula para o fim sem animar. Animar aqui mostraria a
+      // lista rolando sozinha na abertura, que é justamente a sensação de "abriu torto".
+      listRef.current?.scrollToEnd({ animated: false });
+      jaAncorou.current = true;
+      return;
+    }
+    // Depois disso, só acompanha quem estava lendo o fim. Puxar a tela de volta enquanto
+    // o usuário lê uma mensagem antiga é pior que não rolar.
+    if (coladoNoFim.current) listRef.current?.scrollToEnd({ animated: true });
+  }, []);
 
   useEffect(() => {
     const toFetch = messages.filter(
@@ -218,6 +248,15 @@ export default function MailboxScreen({
         data={ordered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
+        onContentSizeChange={aoCrescerConteudo}
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          const faltando = contentSize.height - layoutMeasurement.height - contentOffset.y;
+          // 80 px de tolerância: quem parou a rolagem um dedo acima do fim ainda quer
+          // acompanhar; quem subiu para reler, não.
+          coladoNoFim.current = faltando < 80;
+        }}
+        scrollEventThrottle={64}
         renderItem={({ item }) => {
           const mine = item.from === 'mobile';
           const bg = mine ? palette.primary : palette.surfaceRaised;

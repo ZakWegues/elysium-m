@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, FlatList, Pressable, StyleProp,
   StyleSheet, TextInput, View, ViewStyle,
@@ -174,9 +174,27 @@ export default function ChatScreen({
     return conn;
   }
 
-  useEffect(() => {
-    listRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length]);
+  /**
+   * Mesma correção do lado dos recados: ancorar pelo tamanho do conteúdo, não pela
+   * contagem de mensagens. Abrir uma conversa antiga pelo histórico caía no meio dela,
+   * porque na hora do efeito a `FlatList` ainda não tinha medido as bolhas. Ver o
+   * comentário longo em `MailboxScreen.tsx`.
+   */
+  const jaAncorou = useRef(false);
+  const coladoNoFim = useRef(true);
+
+  // Abrir OUTRA conversa precisa ancorar de novo — senão a segunda abre na posição da
+  // primeira, que é o mesmo sintoma com outra causa.
+  useEffect(() => { jaAncorou.current = false; coladoNoFim.current = true; }, [sessionId]);
+
+  const aoCrescerConteudo = useCallback(() => {
+    if (!jaAncorou.current) {
+      listRef.current?.scrollToEnd({ animated: false });
+      jaAncorou.current = true;
+      return;
+    }
+    if (coladoNoFim.current) listRef.current?.scrollToEnd({ animated: true });
+  }, []);
 
   // Recarrega ao montar a tela: entrar no Chat re-sorteia, como no desktop.
   useEffect(() => {
@@ -308,6 +326,13 @@ export default function ChatScreen({
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
+        onContentSizeChange={aoCrescerConteudo}
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          coladoNoFim.current =
+            contentSize.height - layoutMeasurement.height - contentOffset.y < 80;
+        }}
+        scrollEventThrottle={64}
         renderItem={({ item }) => {
           const bg = item.from === 'me' ? palette.primary : item.from === 'error' ? palette.errorSoft : palette.surfaceRaised;
           const color = item.from === 'me' ? palette.onPrimary : item.from === 'error' ? palette.error : palette.text;

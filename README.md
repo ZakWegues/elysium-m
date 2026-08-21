@@ -104,6 +104,29 @@ npm run build:apk
 
 Funciona sem preparar nada na máquina, mas o plano gratuito coloca a build numa fila que já passou de uma hora e meia — a build em si leva oito minutos. Serve como reserva.
 
+> ⚠️ **NÃO baixe o APK do painel do Expo sem conferir a data e o fingerprint.**
+>
+> O painel guarda todas as builds antigas, e a mais recente lá pode ser de meses atrás.
+> Um APK antigo tem outro fingerprint, e **nenhuma atualização publicada por
+> `npm run update` chega nele** — o app instala, abre e simplesmente nunca muda, sem
+> erro nenhum que explique por quê.
+>
+> Some a isso que o projeto no painel ainda se chama **`neuroaxis-portal`** (o slug foi
+> revertido de propósito quando o rename quebrou o OTA), e o lugar errado parece o certo.
+>
+> Para comparar antes de instalar:
+>
+> ```
+> npx eas-cli build:list --platform android --limit 1   # fingerprint da build da nuvem
+> npx expo-updates fingerprint:generate --platform android   # o do código de agora
+> ```
+>
+> E o de dentro de um APK que você já tem em mãos está em `assets/fingerprint` — é um
+> arquivo de texto, dá para ler renomeando o `.apk` para `.zip`.
+>
+> **Na dúvida, gere local**: o `npm run build:local` sempre sai com o fingerprint do
+> código atual.
+
 ## Atualizar sem gerar APK novo
 
 Mudança que mexe só em JavaScript não precisa de build nenhuma:

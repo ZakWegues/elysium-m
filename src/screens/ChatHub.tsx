@@ -7,6 +7,7 @@ import { useTheme } from '../theme';
 import { Popover, ScreenHeader, Text } from '../components/ui';
 import ChatScreen from './ChatScreen';
 import MailboxScreen from './MailboxScreen';
+import MailboxHistorico from './MailboxHistorico';
 import PresetsPopover from './PresetsPopover';
 
 /**
@@ -41,6 +42,14 @@ export default function ChatHub({
 }) {
   const { palette, tokens } = useTheme();
   const [modo, setModo] = useState<'ia' | 'pc'>(modoInicial ?? 'ia');
+  /**
+   * Cada lado tem o seu histórico, e o botão de relógio abre o do lado em que você está.
+   *
+   * Antes ele abria as Conversas da IA sempre, inclusive estando nos recados do PC — o que
+   * fazia parecer que os dois modos dividiam um histórico só. Os stores sempre foram
+   * separados; era o botão que não sabia disso.
+   */
+  const [historicoPcAberto, setHistoricoPcAberto] = useState(false);
   const [presetsAberto, setPresetsAberto] = useState(false);
   const [ancora, setAncora] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const botaoRef = useRef<View>(null);
@@ -54,11 +63,18 @@ export default function ChatHub({
     });
   }
 
+  if (historicoPcAberto) {
+    return <MailboxHistorico onFechar={() => setHistoricoPcAberto(false)} />;
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
         left={
-          <Pressable onPress={onOpenConversations} hitSlop={8}>
+          <Pressable
+            onPress={() => (modo === 'ia' ? onOpenConversations() : setHistoricoPcAberto(true))}
+            hitSlop={8}
+          >
             <Feather name="clock" size={20} color={palette.textMuted} />
           </Pressable>
         }

@@ -34,6 +34,8 @@ import { Card, MetricBar, ScreenHeader, Text } from '../components/ui';
  */
 
 const CHAVE_CARDS = 'elysium_home_cards';
+/** Horário do desligamento agendado, em epoch ms. Ver `gravarAgendamento`. */
+const CHAVE_AGENDAMENTO = 'elysium_desligamento_agendado';
 
 type Dados = {
   telemetria: TelemetryFrame | null;
@@ -52,6 +54,10 @@ type Ctx = {
   navegar: (tela: 'chat' | 'control') => void;
   abrirPlayer: () => void;
   energia: (op: PowerOperation, label: string, aviso: string) => void;
+  agendarDesligamento: (segundos: number) => void;
+  cancelarDesligamento: () => void;
+  /** Epoch ms do desligamento marcado, ou `null`. */
+  agendado: number | null;
   executarSugestao: (s: Sugestao) => void;
   criarLembrete: (texto: string, hora: Date) => Promise<void>;
   recarregar: () => void;
@@ -92,6 +98,42 @@ export default function HomeScreen({
   /** Fixos ficam no topo e não saem do lugar quando os outros são arrastados. */
   const [fixos, setFixos] = useState<string[]>(['clima']);
   const [editando, setEditando] = useState(false);
+  /**
+   * Tamanho por card: `col` é a fração da linha (1 ou 0,5) e `alt` a altura travada.
+   * Card sem entrada aqui é inteiro e acompanha o conteúdo, que é o comportamento antigo.
+   */
+  const [tamanhos, setTamanhos] = useState<Record<string, { col?: number; alt?: number }>>({});
+  /** Verdadeiro só enquanto um dedo está de fato arrastando um card. Ver `CardArrastavel`. */
+  const [arrastando, setArrastando] = useState(false);
+  /** Epoch ms do desligamento marcado, ou `null`. Ver `gravarAgendamento`. */
+  const [agendado, setAgendado] = useState<number | null>(null);
+
+  // Lê o agendamento guardado e descarta o que já venceu — um horário no passado só
+  // deixaria um aviso mentiroso na tela.
+  useEffect(() => {
+    AsyncStorage.getItem(CHAVE_AGENDAMENTO)
+      .then(bruto => {
+        const quando = Number(bruto);
+        if (bruto && Number.isFinite(quando) && quando > Date.now()) setAgendado(quando);
+        else if (bruto) AsyncStorage.removeItem(CHAVE_AGENDAMENTO).catch(() => { /* best-effort */ });
+      })
+      .catch(err => console.warn('[energia] não consegui ler o agendamento', err));
+  }, []);
+
+  // Enquanto há desligamento marcado, o card mostra quanto falta. Sem este tique a conta
+  // só mudaria quando alguma outra coisa redesenhasse a tela.
+  //
+  // ⚠️ O contador precisa ser um estado SEPARADO: `setAgendado(v => v)` não redesenha
+  // nada, porque o React descarta a atualização quando o valor novo é idêntico ao atual.
+  const [, tique] = useState(0);
+  useEffect(() => {
+    if (agendado === null) return;
+    const t = setInterval(() => {
+      if (agendado <= Date.now()) setAgendado(null);
+      else tique(n => n + 1);
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [agendado]);
 
   useEffect(() => openTelemetryStream(pairing, setTelemetria, setStatus),
     [pairing.activeIp, pairing.port, pairing.token]);
@@ -102,7 +144,10 @@ export default function HomeScreen({
       try {
         const bruto = await AsyncStorage.getItem(CHAVE_CARDS);
         if (!bruto) return;
-        const salvo = JSON.parse(bruto) as { ordem?: string[]; ocultos?: string[]; fixos?: string[] };
+        const salvo = JSON.parse(bruto) as {
+          ordem?: string[]; ocultos?: string[]; fixos?: string[];
+          tamanhos?: Record<string, { col?: number; alt?: number }>;
+        };
         const conhecidos = (salvo.ordem ?? []).filter(id => id in CARDS);
         // Card novo numa versão futura precisa aparecer para quem já tinha configuração
         // gravada — senão nasce invisível e ninguém descobre que existe.
@@ -115,14 +160,58 @@ export default function HomeScreen({
         // Configuração gravada antes desta versão não tem `fixos` — nasce sem nenhum, em
         // vez de reimpor o padrão de fábrica por cima de uma escolha já feita.
         setFixos((salvo.fixos ?? []).filter(id => id in CARDS));
+        // Tamanhos chegaram depois: configuracao antiga nao tem a chave, e nesse caso
+        // todo card nasce inteiro e automatico, exatamente como sempre foi.
+        const tm = salvo.tamanhos ?? {};
+        setTamanhos(Object.fromEntries(Object.entries(tm).filter(([id]) => id in CARDS)));
       } catch { /* fica com o padrão */ }
     })();
   }, []);
 
-  const gravar = useCallback(async (o: string[], oc: string[], fx: string[] = fixos) => {
-    try { await AsyncStorage.setItem(CHAVE_CARDS, JSON.stringify({ ordem: o, ocultos: oc, fixos: fx })); }
-    catch { /* segue com o que está na tela */ }
-  }, [fixos]);
+  const gravar = useCallback(async (
+    o: string[], oc: string[], fx: string[] = fixos,
+    tm: Record<string, { col?: number; alt?: number }> = tamanhos,
+  ) => {
+    try {
+      await AsyncStorage.setItem(CHAVE_CARDS, JSON.stringify({ ordem: o, ocultos: oc, fixos: fx, tamanhos: tm }));
+    } catch { /* segue com o que está na tela */ }
+  }, [fixos, tamanhos]);
+
+  function alternarCard(id: string, ligado: boolean) {
+    const novos = ligado ? [...ocultos, id] : ocultos.filter(x => x !== id);
+    animarProximoLayout();
+    setOcultos(novos);
+    gravar(ordem, novos);
+  }
+
+  function alternarFixo(id: string) {
+    const novos = fixos.includes(id) ? fixos.filter(x => x !== id) : [...fixos, id];
+    animarProximoLayout();
+    setFixos(novos);
+    gravar(ordem, ocultos, novos);
+  }
+
+  function redimensionar(id: string, alt: number | null, col: number) {
+    setTamanhos(prev => {
+      const atual = prev[id] ?? {};
+      // Voltar ao automático apaga a chave em vez de guardar `null`: card sem entrada é
+      // exatamente o padrão, e assim a configuração não engorda com valores neutros.
+      const novo = { ...atual, col, ...(alt === null ? {} : { alt }) };
+      if (alt === null) delete (novo as { alt?: number }).alt;
+      const todos = { ...prev, [id]: novo };
+      gravar(ordem, ocultos, fixos, todos);
+      return todos;
+    });
+  }
+
+  function voltarAoPadrao() {
+    animarProximoLayout();
+    setOrdem(CARDS_PADRAO.concat(Object.keys(CARDS).filter(id => !CARDS_PADRAO.includes(id))));
+    setOcultos(Object.keys(CARDS).filter(id => !CARDS_PADRAO.includes(id)));
+    setFixos([]);
+    setTamanhos({});
+    AsyncStorage.removeItem(CHAVE_CARDS).catch(() => { /* best-effort */ });
+  }
 
   const visiveis = useMemo(() => {
     const vis = ordem.filter(id => id in CARDS && !ocultos.includes(id));
@@ -179,9 +268,70 @@ export default function HomeScreen({
     setOcupado(true);
     try {
       const res = await callRpc(pairing, 'power.control', { operation: op }, { confirmed: true });
+      // Desligar imediato também é um desligamento pendente (o servidor usa 30 s de
+      // padrão): sem registrar aqui, o cartão não ofereceria o botão de cancelar
+      // justamente no caso em que a pessoa mais se arrepende.
+      if (op === 'shutdown') await gravarAgendamento(Date.now() + 30_000);
+      if (op === 'cancel') await gravarAgendamento(null);
       Alert.alert('ELYSIUM-M', res.message);
     } catch (err) { tratarErro(err, `Falha ao ${label.toLowerCase()}`); }
     finally { setOcupado(false); }
+  }
+
+  /**
+   * Agenda o desligamento do PC daqui a N segundos.
+   *
+   * Não inventa serviço nenhum: `power.control` já aceitava `delaySeconds` desde sempre e
+   * ninguém no celular passava o campo — só o caminho da voz usava. O `shutdown.exe /t`
+   * do Windows é quem segura o prazo, então o agendamento sobrevive ao app fechado e ao
+   * celular sair de alcance, que é justamente o que se quer de um agendamento.
+   */
+  async function agendarDesligamento(segundos: number) {
+    const quando = new Date(Date.now() + segundos * 1000);
+    const ok = await confirmDestructive(
+      'Agendar desligamento?',
+      `O PC vai desligar às ${quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}. `
+      + 'Trabalho não salvo se perde. Dá para cancelar por aqui até lá.',
+    );
+    if (ok !== 'confirmed') return;
+
+    setOcupado(true);
+    try {
+      const res = await callRpc(
+        pairing, 'power.control',
+        { operation: 'shutdown', delaySeconds: segundos },
+        { confirmed: true },
+      );
+      await gravarAgendamento(quando.getTime());
+      Alert.alert('ELYSIUM-M', res.message);
+    } catch (err) { tratarErro(err, 'Falha ao agendar'); }
+    finally { setOcupado(false); }
+  }
+
+  async function cancelarDesligamento() {
+    setOcupado(true);
+    try {
+      const res = await callRpc(pairing, 'power.control', { operation: 'cancel' }, { confirmed: true });
+      await gravarAgendamento(null);
+      Alert.alert('ELYSIUM-M', res.message);
+    } catch (err) { tratarErro(err, 'Falha ao cancelar'); }
+    finally { setOcupado(false); }
+  }
+
+  /**
+   * Guarda o horário marcado no aparelho.
+   *
+   * ⚠️ É memória do CELULAR, não do PC: o Windows não expõe "há um desligamento
+   * agendado?" de forma barata. Por isso o registro expira sozinho quando o horário
+   * passa — assim um agendamento cancelado no próprio PC não fica fantasma na tela para
+   * sempre. Chave nova, e criar chave é seguro; renomear é que não pode ir por OTA.
+   */
+  async function gravarAgendamento(quando: number | null) {
+    setAgendado(quando);
+    try {
+      if (quando === null) await AsyncStorage.removeItem(CHAVE_AGENDAMENTO);
+      else await AsyncStorage.setItem(CHAVE_AGENDAMENTO, String(quando));
+    } catch (err) { console.warn('[energia] não consegui guardar o agendamento', err); }
   }
 
   async function executarSugestao(s: Sugestao) {
@@ -205,7 +355,8 @@ export default function HomeScreen({
     dados: { ...dados, telemetria },
     pairing, ocupado,
     navegar: onNavigate, abrirPlayer: onOpenPlayer,
-    energia, executarSugestao, criarLembrete, recarregar: carregar,
+    energia, agendarDesligamento, cancelarDesligamento, agendado,
+    executarSugestao, criarLembrete, recarregar: carregar,
   };
 
   // ── arrastar: troca com o vizinho ao passar de meio card
@@ -254,71 +405,113 @@ export default function HomeScreen({
       <ScrollView
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={carregar} tintColor={palette.primary} />}
-        // Enquanto se arrasta um card, a rolagem tem que ficar quieta — senão o dedo faz
-        // as duas coisas ao mesmo tempo.
-        scrollEnabled={!editando}
+        // Só para de rolar enquanto um arrasto está REALMENTE em curso. Antes isto era
+        // `!editando`, o que matava a rolagem durante toda a personalização e tornava
+        // impossível chegar nos cards de baixo. Ver o comentário em `CardArrastavel`.
+        scrollEnabled={!arrastando}
       >
         {editando && (
           <Card glass style={{ gap: tokens.spacing.sm }}>
-            <Text variant="label">Cards da tela</Text>
-            <View style={styles.chips}>
-              {Object.entries(CARDS).map(([id, def]) => {
-                const ligado = !ocultos.includes(id);
-                return (
-                  <Pressable
-                    key={id}
-                    onPress={() => {
-                      const novos = ligado ? [...ocultos, id] : ocultos.filter(x => x !== id);
-                      animarProximoLayout();
-                      setOcultos(novos);
-                      gravar(ordem, novos);
-                    }}
-                    style={[styles.chip, {
-                      borderRadius: tokens.radii.full,
-                      backgroundColor: ligado ? palette.primarySoft : 'transparent',
-                      borderColor: palette.glassBorder,
-                    }]}
-                  >
-                    <Feather name={def.icone} size={13} color={ligado ? palette.primary : palette.textMuted} />
-                    <Text variant="caption" color={ligado ? palette.primary : palette.textMuted}>{def.titulo}</Text>
-                    <Pressable
-                      onPress={() => {
-                        const novos = fixos.includes(id) ? fixos.filter(x => x !== id) : [...fixos, id];
-                        animarProximoLayout();
-                        setFixos(novos);
-                        gravar(ordem, ocultos, novos);
-                      }}
-                      hitSlop={6}
-                    >
-                      <Feather name="bookmark" size={12} color={fixos.includes(id) ? palette.accent : palette.textMuted} />
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.cabecalho}>
+              <Text variant="label">Cards da tela</Text>
+              <Pressable onPress={voltarAoPadrao} hitSlop={8} style={{ marginLeft: 'auto' }}>
+                <Text variant="caption" color={palette.primary}>Voltar ao padrão</Text>
+              </Pressable>
             </View>
+
+            {/*
+              🔴 Era uma nuvem de chips onde cada um acumulava DOIS toques diferentes —
+              ligar no corpo, fixar num ícone aninhado dentro dele. Botão dentro de botão
+              é loteria com o dedo, e reordenar só existia como arrasto, que exige mira.
+              Agora é uma linha por card com alvos separados, e a ordem também muda por
+              botão. É o mesmo desenho que o desktop adotou no bloco 33, pelo mesmo motivo.
+            */}
+            {Object.entries(CARDS).map(([id, def]) => {
+              const ligado = !ocultos.includes(id);
+              const fixo = fixos.includes(id);
+              const pos = visiveis.indexOf(id);
+              return (
+                <View key={id} style={styles.linhaCfg}>
+                  <Pressable
+                    onPress={() => alternarCard(id, ligado)}
+                    hitSlop={6}
+                    style={styles.linhaCfgAlvo}
+                  >
+                    <Feather
+                      name={ligado ? 'check-square' : 'square'}
+                      size={16}
+                      color={ligado ? palette.primary : palette.textMuted}
+                    />
+                    <Feather name={def.icone} size={13} color={palette.textMuted} />
+                    <Text variant="body" color={ligado ? palette.text : palette.textMuted}>
+                      {def.titulo}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable onPress={() => alternarFixo(id)} hitSlop={8} style={styles.iconeCfg}>
+                    <Feather name="bookmark" size={15} color={fixo ? palette.accent : palette.textMuted} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => mover(pos, pos - 1)}
+                    disabled={!ligado || fixo || pos <= 0}
+                    hitSlop={8}
+                    style={[styles.iconeCfg, { opacity: !ligado || fixo || pos <= 0 ? 0.25 : 1 }]}
+                  >
+                    <Feather name="chevron-up" size={17} color={palette.textMuted} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => mover(pos, pos + 1)}
+                    disabled={!ligado || fixo || pos < 0 || pos >= visiveis.length - 1}
+                    hitSlop={8}
+                    style={[styles.iconeCfg, { opacity: !ligado || fixo || pos < 0 || pos >= visiveis.length - 1 ? 0.25 : 1 }]}
+                  >
+                    <Feather name="chevron-down" size={17} color={palette.textMuted} />
+                  </Pressable>
+                </View>
+              );
+            })}
+
             <Text variant="caption" color={palette.textMuted}>
-              Segure e arraste um card para trocar de lugar.
+              Arraste pela alça ☰ para trocar de lugar, e pelo canto ↘ para mudar o tamanho.
+              A rolagem continua funcionando.
             </Text>
           </Card>
         )}
 
-        {visiveis.map((id, i) => (
-          <CardArrastavel
-            key={id}
-            indice={i}
-            ativo={editando && !fixos.includes(id)}
-            onMover={mover}
-          >
-            <Card glass style={{ gap: tokens.spacing.sm }}>
-              <View style={styles.cabecalho}>
-                <Feather name={CARDS[id].icone} size={14} color={palette.textMuted} />
-                <Text variant="label" color={palette.textMuted}>{CARDS[id].titulo}</Text>
-                {editando && <Feather name="menu" size={14} color={palette.textMuted} style={{ marginLeft: 'auto' }} />}
-              </View>
-              {CARDS[id].corpo(ctx)}
-            </Card>
-          </CardArrastavel>
-        ))}
+        {/* Linha que embrulha: é o que permite dois meios-cards lado a lado. Com todos os
+            cards inteiros, o resultado é idêntico à pilha de antes. */}
+        <View style={styles.grelha}>
+          {visiveis.map((id, i) => {
+            const t = tamanhos[id];
+            return (
+              <CardArrastavel
+                key={id}
+                indice={i}
+                ativo={editando && !fixos.includes(id)}
+                largura={t?.col ?? 1}
+                alturaFixa={t?.alt ?? null}
+                onMover={mover}
+                onArrastando={setArrastando}
+                onRedimensionar={(alt, col) => redimensionar(id, alt, col)}
+              >
+                {alca => (
+                  <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt ? 1 : undefined }}>
+                    <View style={styles.cabecalho}>
+                      <Feather name={CARDS[id].icone} size={14} color={palette.textMuted} />
+                      <Text variant="label" color={palette.textMuted}>{CARDS[id].titulo}</Text>
+                      {editando && !fixos.includes(id) && (
+                        <View {...alca} hitSlop={12} style={{ marginLeft: 'auto', paddingLeft: 10 }}>
+                          <Feather name="menu" size={16} color={palette.primary} />
+                        </View>
+                      )}
+                    </View>
+                    {CARDS[id].corpo(ctx)}
+                  </Card>
+                )}
+              </CardArrastavel>
+            );
+          })}
+        </View>
 
         {visiveis.length === 0 && (
           <Text variant="caption" color={palette.textMuted}>
@@ -335,21 +528,42 @@ export default function HomeScreen({
  * continua clicável normalmente, e um gesto de rolagem não deve ser confundido com arrasto.
  */
 function CardArrastavel({
-  indice, ativo, onMover, children,
+  indice, ativo, largura, alturaFixa, onMover, onArrastando, onRedimensionar, children,
 }: {
   indice: number;
   ativo: boolean;
+  /** Fração da linha que este card ocupa: 1 = inteiro, 0.5 = metade. */
+  largura: number;
+  /** Altura travada pelo usuário, em px, ou `null` para acompanhar o conteúdo. */
+  alturaFixa: number | null;
   onMover: (de: number, para: number) => void;
-  children: React.ReactNode;
+  onArrastando: (v: boolean) => void;
+  onRedimensionar: (alt: number | null, col: number) => void;
+  children: (alca: object) => React.ReactNode;
 }) {
   const y = useRef(new Animated.Value(0)).current;
   const altura = useRef(120);
   const acumulado = useRef(0);
+  /** Altura e coluna no instante em que o dedo encostou — o arrasto é relativo a elas. */
+  const baseAltura = useRef(0);
+  const baseLargura = useRef(1);
 
+  /**
+   * 🔴 O ARRASTO SAIU DO CARD INTEIRO E FOI PARA A ALÇA.
+   *
+   * Antes o `PanResponder` cobria o card todo, e por isso o modo de edição precisava
+   * desligar a rolagem (`scrollEnabled={!editando}`) para os dois gestos não brigarem
+   * pelo mesmo dedo. O efeito colateral era grave: com a rolagem morta, **não dava para
+   * chegar nos cards de baixo** — abrir a personalização travava você nos primeiros dois
+   * ou três, e o card que você tocava sem querer virava o único que dava para mexer.
+   *
+   * Com o gesto restrito à alça, a `ScrollView` volta a funcionar durante a edição e a
+   * rolagem só para enquanto um arrasto está de fato em curso.
+   */
   const pan = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    // Só assume o gesto depois de 6px na vertical: abaixo disso ainda pode ser um toque.
-    onMoveShouldSetPanResponder: (_e, g) => ativo && Math.abs(g.dy) > 6,
+    onStartShouldSetPanResponder: () => ativo,
+    onMoveShouldSetPanResponder: (_e, g) => ativo && Math.abs(g.dy) > 4,
+    onPanResponderGrant: () => onArrastando(true),
     onPanResponderMove: (_e, g) => {
       y.setValue(g.dy);
       const passos = Math.round(g.dy / altura.current);
@@ -360,17 +574,68 @@ function CardArrastavel({
     },
     onPanResponderRelease: () => {
       acumulado.current = 0;
+      onArrastando(false);
       anima(y, 0, MOV.base).start();
     },
-  }), [ativo, indice, onMover]);
+    onPanResponderTerminate: () => { acumulado.current = 0; onArrastando(false); },
+  }), [ativo, indice, onMover, onArrastando]);
+
+  /**
+   * Canto de redimensionar, como a quina de uma janela do Windows.
+   *
+   * Vertical muda a altura livremente; horizontal decide entre card inteiro e meio card.
+   * A largura não é livre de propósito: numa tela de telefone, larguras arbitrárias
+   * deixam sobras irregulares entre um card e o vizinho e nada nunca alinha. Duas
+   * posições encaixam sempre.
+   */
+  const panTamanho = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      onArrastando(true);
+      baseAltura.current = altura.current - 12;
+      baseLargura.current = largura;
+    },
+    onPanResponderMove: (_e, g) => {
+      const nova = Math.max(72, Math.round((baseAltura.current + g.dy) / 8) * 8);
+      // 60 px de folga antes de trocar de coluna: sem isso, um arrasto vertical com o
+      // dedo levemente torto trocaria a largura sem ninguém pedir.
+      let col = baseLargura.current;
+      if (g.dx < -60) col = 0.5;
+      else if (g.dx > 60) col = 1;
+      onRedimensionar(nova, col);
+    },
+    onPanResponderRelease: () => onArrastando(false),
+    onPanResponderTerminate: () => onArrastando(false),
+  }), [largura, onArrastando, onRedimensionar]);
 
   return (
     <Animated.View
-      {...(ativo ? pan.panHandlers : {})}
       onLayout={e => { altura.current = e.nativeEvent.layout.height + 12; }}
-      style={{ transform: [{ translateY: y }] }}
+      style={{
+        transform: [{ translateY: y }],
+        // `48%` em vez de `50%` para o `gap` da linha caber entre os dois meios-cards.
+        width: largura === 1 ? '100%' : '48%',
+        ...(alturaFixa !== null ? { height: alturaFixa } : {}),
+      }}
     >
-      {children}
+      {/* `overflow: hidden` é o que faz a altura travada valer: sem ele o conteúdo
+          transborda o card em vez de ser cortado, e o card "não redimensiona". */}
+      <View style={{ flex: alturaFixa !== null ? 1 : undefined, overflow: 'hidden' }}>
+        {children(ativo ? pan.panHandlers : {})}
+      </View>
+
+      {ativo && (
+        <View
+          {...panTamanho.panHandlers}
+          // Área de toque maior que o desenho: 12 px de canto é fácil de ver e difícil
+          // de acertar com o dedo.
+          hitSlop={{ top: 14, left: 14, right: 6, bottom: 6 }}
+          style={styles.cantoTamanho}
+        >
+          <Feather name="corner-down-right" size={13} color="rgba(255,255,255,0.85)" />
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -420,7 +685,15 @@ const CARDS: Record<string, DefCard> = {
   },
   energia: {
     titulo: 'Energia', icone: 'power', precisa: [],
-    corpo: ({ energia, ocupado }) => <Energia acionar={energia} ocupado={ocupado} />,
+    corpo: ({ energia, agendarDesligamento, cancelarDesligamento, agendado, ocupado }) => (
+      <Energia
+        acionar={energia}
+        agendar={agendarDesligamento}
+        cancelarAgendamento={cancelarDesligamento}
+        agendado={agendado}
+        ocupado={ocupado}
+      />
+    ),
   },
 };
 
@@ -621,32 +894,177 @@ function Atalhos({
 }
 
 function Energia({
-  acionar, ocupado,
+  acionar, agendar, cancelarAgendamento, agendado, ocupado,
 }: {
   acionar: (op: PowerOperation, label: string, aviso: string) => void;
+  agendar: (segundos: number) => void;
+  cancelarAgendamento: () => void;
+  agendado: number | null;
   ocupado: boolean;
 }) {
   const { palette, tokens } = useTheme();
+  const [abrindoHora, setAbrindoHora] = useState(false);
+  const [horaTexto, setHoraTexto] = useState('');
+
   const botoes = [
     { op: 'lock' as const, label: 'Bloquear', icone: 'lock' as const, aviso: 'A tela do PC será bloqueada.' },
     { op: 'sleep' as const, label: 'Suspender', icone: 'moon' as const, aviso: 'O PC vai suspender.' },
     { op: 'shutdown' as const, label: 'Desligar', icone: 'power' as const, aviso: 'O PC desliga em 30 segundos. Trabalho não salvo se perde.' },
   ];
+
+  /** Atalhos em minutos. Acima de 24 h o servidor recusa — ver `LIMITE_AGENDAMENTO_S`. */
+  const atalhos = [15, 30, 60, 120];
+
+  function confirmarHora() {
+    const segundos = segundosAte(horaTexto);
+    if (segundos === null) {
+      Alert.alert('Hora inválida', 'Escreva no formato 23:30.');
+      return;
+    }
+    if (segundos > LIMITE_AGENDAMENTO_S) {
+      Alert.alert('Longe demais', 'O Windows aceita agendar o desligamento com até 24 horas de antecedência.');
+      return;
+    }
+    setAbrindoHora(false);
+    setHoraTexto('');
+    agendar(segundos);
+  }
+
   return (
-    <View style={styles.linhaEnergia}>
-      {botoes.map(b => (
-        <Pressable
-          key={b.op}
-          onPress={() => acionar(b.op, b.label, b.aviso)}
-          disabled={ocupado}
-          style={[styles.botaoEnergia, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft, opacity: ocupado ? 0.5 : 1 }]}
-        >
-          <Feather name={b.icone} size={17} color={b.op === 'shutdown' ? palette.error : palette.primary} />
-          <Text variant="caption" color={b.op === 'shutdown' ? palette.error : palette.primary}>{b.label}</Text>
-        </Pressable>
-      ))}
+    <View style={{ gap: tokens.spacing.sm }}>
+      <View style={styles.linhaEnergia}>
+        {botoes.map(b => (
+          <Pressable
+            key={b.op}
+            onPress={() => acionar(b.op, b.label, b.aviso)}
+            disabled={ocupado}
+            style={[styles.botaoEnergia, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft, opacity: ocupado ? 0.5 : 1 }]}
+          >
+            <Feather name={b.icone} size={17} color={b.op === 'shutdown' ? palette.error : palette.primary} />
+            <Text variant="caption" color={b.op === 'shutdown' ? palette.error : palette.primary}>{b.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Agendamento em pé: o que está marcado e como desmarcar, sem precisar lembrar de
+          um comando de voz. Enquanto há um agendamento, oferecer outro só confundiria —
+          o Windows guarda um de cada vez, e o segundo pedido é recusado até cancelar. */}
+      {agendado !== null ? (
+        <View style={[styles.agendaAtiva, {
+          borderRadius: tokens.radii.md,
+          borderColor: palette.error,
+          backgroundColor: palette.errorSoft,
+        }]}>
+          <Feather name="power" size={15} color={palette.error} />
+          <View style={{ flex: 1 }}>
+            <Text variant="caption" color={palette.error}>Desliga às {relogio(agendado)}</Text>
+            <Text variant="caption" color={palette.textMuted}>{faltando(agendado)}</Text>
+          </View>
+          <Pressable
+            onPress={cancelarAgendamento}
+            disabled={ocupado}
+            hitSlop={6}
+            style={[styles.botaoCancelar, { borderRadius: tokens.radii.sm, borderColor: palette.error }]}
+          >
+            <Text variant="caption" color={palette.error}>Cancelar</Text>
+          </Pressable>
+        </View>
+      ) : abrindoHora ? (
+        <View style={styles.formLinha}>
+          <TextInput
+            value={horaTexto}
+            onChangeText={setHoraTexto}
+            placeholder="23:30"
+            placeholderTextColor={palette.textMuted}
+            keyboardType="numbers-and-punctuation"
+            autoFocus
+            onSubmitEditing={confirmarHora}
+            style={[styles.campo, {
+              flex: 1, borderRadius: tokens.radii.md,
+              borderColor: palette.glassBorder, color: palette.text,
+            }]}
+          />
+          <Pressable onPress={confirmarHora} style={[styles.botaoIcone, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+            <Feather name="check" size={16} color={palette.primary} />
+          </Pressable>
+          <Pressable onPress={() => { setAbrindoHora(false); setHoraTexto(''); }} style={styles.botaoIcone}>
+            <Feather name="x" size={16} color={palette.textMuted} />
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <Text variant="caption" color={palette.textMuted}>Agendar desligamento</Text>
+          <View style={styles.chips}>
+            {atalhos.map(min => (
+              <Pressable
+                key={min}
+                onPress={() => agendar(min * 60)}
+                disabled={ocupado}
+                style={[styles.chip, {
+                  borderRadius: tokens.radii.full,
+                  borderColor: palette.glassBorder,
+                  opacity: ocupado ? 0.5 : 1,
+                }]}
+              >
+                <Feather name="clock" size={12} color={palette.textMuted} />
+                <Text variant="caption" color={palette.text}>
+                  {min < 60 ? `${min} min` : `${min / 60} h`}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable
+              onPress={() => setAbrindoHora(true)}
+              disabled={ocupado}
+              style={[styles.chip, {
+                borderRadius: tokens.radii.full,
+                borderColor: palette.glassBorder,
+                opacity: ocupado ? 0.5 : 1,
+              }]}
+            >
+              <Feather name="edit-2" size={12} color={palette.textMuted} />
+              <Text variant="caption" color={palette.text}>Escolher hora</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
+}
+
+/** Teto do `power.control` no servidor: `delaySeconds` entre 0 e 86400. */
+const LIMITE_AGENDAMENTO_S = 86400;
+
+/**
+ * "23:30" → quantos segundos faltam até lá.
+ *
+ * Hora já passada hoje vira amanhã, em vez de erro: quem digita 07:00 às 23h quer o
+ * próximo 07:00, e recusar seria pedir para a pessoa fazer a conta que o app pode fazer.
+ * Devolve `null` quando o texto não é uma hora.
+ */
+function segundosAte(texto: string): number | null {
+  const m = texto.trim().match(/^(\d{1,2})\s*[:h]?\s*(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+
+  const alvo = new Date();
+  alvo.setHours(h, min, 0, 0);
+  if (alvo.getTime() <= Date.now()) alvo.setDate(alvo.getDate() + 1);
+  return Math.round((alvo.getTime() - Date.now()) / 1000);
+}
+
+function relogio(ts: number): string {
+  return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function faltando(ts: number): string {
+  const s = Math.max(0, Math.round((ts - Date.now()) / 1000));
+  if (s < 60) return `em ${s} s`;
+  const min = Math.round(s / 60);
+  if (min < 60) return `em ${min} min`;
+  const h = Math.floor(min / 60);
+  return `em ${h} h ${min % 60} min`;
 }
 
 const styles = StyleSheet.create({
@@ -664,6 +1082,22 @@ const styles = StyleSheet.create({
   caixaTexto: { padding: 10, borderWidth: StyleSheet.hairlineWidth },
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   ladrilho: { flexGrow: 1, minWidth: '30%', alignItems: 'center', gap: 6, paddingVertical: 16 },
+  grelha: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' },
+  linhaCfg: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  linhaCfgAlvo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  iconeCfg: { paddingHorizontal: 6, paddingVertical: 7 },
+  cantoTamanho: {
+    position: 'absolute', right: 2, bottom: 2,
+    width: 24, height: 24, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
   linhaEnergia: { flexDirection: 'row', gap: 8 },
   botaoEnergia: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12 },
+  agendaAtiva: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  botaoCancelar: { paddingVertical: 6, paddingHorizontal: 11, borderWidth: StyleSheet.hairlineWidth },
 });
