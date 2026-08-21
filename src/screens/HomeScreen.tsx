@@ -191,17 +191,42 @@ export default function HomeScreen({
     gravar(ordem, ocultos, novos);
   }
 
+  /**
+   * Espelho do `tamanhos` para ler o valor corrente sem depender do estado.
+   *
+   * O redimensionamento dispara a cada quadro do arrasto, e ler `tamanhos` direto do
+   * fechamento daria o valor de antes do gesto começar — o card voltaria ao tamanho
+   * original entre um quadro e outro.
+   */
+  const tamanhosRef = useRef(tamanhos);
+  useEffect(() => { tamanhosRef.current = tamanhos; }, [tamanhos]);
+
+  /**
+   * 🔴 GRAVAR AQUI SERIA GRAVAR A CADA QUADRO.
+   *
+   * A primeira versão chamava `gravar()` de dentro do atualizador do `setTamanhos`. Dois
+   * problemas somados: atualizador do React tem que ser puro — em modo concorrente ele
+   * pode rodar duas vezes e o efeito colateral iria junto — e, pior, o gesto chama isto a
+   * cada movimento do dedo, o que virava dezenas de escritas no `AsyncStorage` por
+   * segundo durante um único arrasto.
+   *
+   * Agora o gesto só mexe na tela; quem grava é `fimDoRedimensionamento`, ao soltar. É o
+   * mesmo desenho do desktop, onde a gravação mora no `aoSoltar`.
+   */
   function redimensionar(id: string, alt: number | null, col: number) {
-    setTamanhos(prev => {
-      const atual = prev[id] ?? {};
-      // Voltar ao automático apaga a chave em vez de guardar `null`: card sem entrada é
-      // exatamente o padrão, e assim a configuração não engorda com valores neutros.
-      const novo = { ...atual, col, ...(alt === null ? {} : { alt }) };
-      if (alt === null) delete (novo as { alt?: number }).alt;
-      const todos = { ...prev, [id]: novo };
-      gravar(ordem, ocultos, fixos, todos);
-      return todos;
-    });
+    const atual = tamanhosRef.current[id] ?? {};
+    // Voltar ao automático apaga a chave em vez de guardar `null`: card sem entrada é
+    // exatamente o padrão, e assim a configuração não engorda com valores neutros.
+    const novo: { col?: number; alt?: number } = { ...atual, col, ...(alt === null ? {} : { alt }) };
+    if (alt === null) delete novo.alt;
+
+    const todos = { ...tamanhosRef.current, [id]: novo };
+    tamanhosRef.current = todos;
+    setTamanhos(todos);
+  }
+
+  function fimDoRedimensionamento() {
+    gravar(ordem, ocultos, fixos, tamanhosRef.current);
   }
 
   function voltarAoPadrao() {
@@ -493,6 +518,7 @@ export default function HomeScreen({
                 onMover={mover}
                 onArrastando={setArrastando}
                 onRedimensionar={(alt, col) => redimensionar(id, alt, col)}
+                onFimRedimensionar={fimDoRedimensionamento}
               >
                 {alca => (
                   <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt ? 1 : undefined }}>
@@ -528,7 +554,7 @@ export default function HomeScreen({
  * continua clicável normalmente, e um gesto de rolagem não deve ser confundido com arrasto.
  */
 function CardArrastavel({
-  indice, ativo, largura, alturaFixa, onMover, onArrastando, onRedimensionar, children,
+  indice, ativo, largura, alturaFixa, onMover, onArrastando, onRedimensionar, onFimRedimensionar, children,
 }: {
   indice: number;
   ativo: boolean;
@@ -539,6 +565,8 @@ function CardArrastavel({
   onMover: (de: number, para: number) => void;
   onArrastando: (v: boolean) => void;
   onRedimensionar: (alt: number | null, col: number) => void;
+  /** Chamado uma vez, ao soltar a quina: e quem persiste. */
+  onFimRedimensionar: () => void;
   children: (alca: object) => React.ReactNode;
 }) {
   const y = useRef(new Animated.Value(0)).current;
@@ -605,9 +633,10 @@ function CardArrastavel({
       else if (g.dx > 60) col = 1;
       onRedimensionar(nova, col);
     },
-    onPanResponderRelease: () => onArrastando(false),
-    onPanResponderTerminate: () => onArrastando(false),
-  }), [largura, onArrastando, onRedimensionar]);
+    // Gravar so ao soltar: durante o gesto isto dispara a cada quadro.
+    onPanResponderRelease: () => { onArrastando(false); onFimRedimensionar(); },
+    onPanResponderTerminate: () => { onArrastando(false); onFimRedimensionar(); },
+  }), [largura, onArrastando, onRedimensionar, onFimRedimensionar]);
 
   return (
     <Animated.View
