@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Animated, PanResponder, Pressable, RefreshControl, ScrollView,
+  Alert, Pressable, RefreshControl, ScrollView,
   StyleSheet, TextInput, View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pairing } from '../lib/pairing';
@@ -14,7 +16,7 @@ import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/telemetry';
 import { findMetric } from '../lib/telemetryFormat';
-import { MOV, animarProximoLayout, anima } from '../lib/motion';
+import { ENTRA, LAYOUT, MOV, SAI, tempo } from '../lib/motion';
 import { useTheme } from '../theme';
 import { SpotifyBar } from './SpotifyPlayer';
 import { Card, MetricBar, ScreenHeader, Text } from '../components/ui';
@@ -27,10 +29,14 @@ import { Card, MetricBar, ScreenHeader, Text } from '../components/ui';
  * e pode ser ligado, desligado e arrastado para outro lugar. É o espelho do que o desktop
  * ganhou no mesmo bloco, e os dois leem pelos mesmos métodos RPC.
  *
- * ⚠️ O arrasto usa `PanResponder` + `Animated`, ambos do core do React Native. Não entra
- * `react-native-gesture-handler` nem `reanimated`: são dependências NATIVAS, mudariam o
- * fingerprint do `expo-updates` e obrigariam a gerar um APK novo. Isto precisa viajar por
- * `npm run update`.
+ * ⚠️ O arrasto usa `react-native-gesture-handler` + `reanimated`, e isso é uma REVERSÃO
+ * deliberada do bloco 24, que proibia as duas por serem nativas — proibição que existia
+ * porque tudo precisava viajar por OTA. Com o APK novo já obrigatório, o motivo caiu.
+ *
+ * O que se ganha aqui em concreto: o dedo, a posição do card e a altura do redimensionamento
+ * vivem na thread de UI. Antes cada quadro de arrasto era uma volta pela thread de JS, que
+ * nesta tela é a mais ocupada do app — telemetria por WebSocket, re-sorteio das bolhas a
+ * cada 120 ms e o tique do Spotify a cada 400 ms, todos disparando `setState`.
  */
 
 const CHAVE_CARDS = 'elysium_home_cards';
@@ -177,16 +183,17 @@ export default function HomeScreen({
     } catch { /* segue com o que está na tela */ }
   }, [fixos, tamanhos]);
 
+  // Nada de `animarProximoLayout` antes do `setState`: o `LayoutAnimation` era no-op na
+  // Nova Arquitetura (§14) e nenhuma destas transições chegava a acontecer. Quem anima
+  // agora é o `layout={LAYOUT}` na própria view, junto do `entering`/`exiting`.
   function alternarCard(id: string, ligado: boolean) {
     const novos = ligado ? [...ocultos, id] : ocultos.filter(x => x !== id);
-    animarProximoLayout();
     setOcultos(novos);
     gravar(ordem, novos);
   }
 
   function alternarFixo(id: string) {
     const novos = fixos.includes(id) ? fixos.filter(x => x !== id) : [...fixos, id];
-    animarProximoLayout();
     setFixos(novos);
     gravar(ordem, ocultos, novos);
   }
@@ -230,7 +237,6 @@ export default function HomeScreen({
   }
 
   function voltarAoPadrao() {
-    animarProximoLayout();
     setOrdem(CARDS_PADRAO.concat(Object.keys(CARDS).filter(id => !CARDS_PADRAO.includes(id))));
     setOcultos(Object.keys(CARDS).filter(id => !CARDS_PADRAO.includes(id)));
     setFixos([]);
@@ -399,7 +405,6 @@ export default function HomeScreen({
     let i = 0;
     const nova = ordem.map(id => (visiveis.includes(id) ? novaVisivel[i++] : id));
 
-    animarProximoLayout();
     setOrdem(nova);
     gravar(nova, ocultos);
   }
@@ -413,7 +418,7 @@ export default function HomeScreen({
         right={
           <View style={styles.linhaStatus}>
             <Pressable
-              onPress={() => { animarProximoLayout(); setEditando(v => !v); }}
+              onPress={() => setEditando(v => !v)}
               hitSlop={10}
               style={{ marginRight: 10 }}
             >
@@ -520,15 +525,15 @@ export default function HomeScreen({
                 onRedimensionar={(alt, col) => redimensionar(id, alt, col)}
                 onFimRedimensionar={fimDoRedimensionamento}
               >
-                {alca => (
+                {Alca => (
                   <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt ? 1 : undefined }}>
                     <View style={styles.cabecalho}>
                       <Feather name={CARDS[id].icone} size={14} color={palette.textMuted} />
                       <Text variant="label" color={palette.textMuted}>{CARDS[id].titulo}</Text>
                       {editando && !fixos.includes(id) && (
-                        <View {...alca} hitSlop={12} style={{ marginLeft: 'auto', paddingLeft: 10 }}>
+                        <Alca>
                           <Feather name="menu" size={16} color={palette.primary} />
-                        </View>
+                        </Alca>
                       )}
                     </View>
                     {CARDS[id].corpo(ctx)}
@@ -567,14 +572,47 @@ function CardArrastavel({
   onRedimensionar: (alt: number | null, col: number) => void;
   /** Chamado uma vez, ao soltar a quina: e quem persiste. */
   onFimRedimensionar: () => void;
-  children: (alca: object) => React.ReactNode;
+  /** Recebe a alça pronta para embrulhar o ícone ☰ — ver `Alca`, mais abaixo. */
+  children: (Alca: React.ComponentType<{ children: React.ReactNode }>) => React.ReactNode;
 }) {
-  const y = useRef(new Animated.Value(0)).current;
-  const altura = useRef(120);
-  const acumulado = useRef(0);
+  const y = useSharedValue(0);
+  const altura = useSharedValue(120);
+  const acumulado = useSharedValue(0);
   /** Altura e coluna no instante em que o dedo encostou — o arrasto é relativo a elas. */
-  const baseAltura = useRef(0);
-  const baseLargura = useRef(1);
+  const baseAltura = useSharedValue(0);
+  const baseLargura = useSharedValue(1);
+  /** A altura VIVA do gesto. Enquanto o dedo anda, só ela muda — o React fica fora. */
+  const altViva = useSharedValue(alturaFixa ?? 0);
+  const travada = useSharedValue(alturaFixa !== null);
+  const colViva = useSharedValue(largura);
+
+  useEffect(() => {
+    travada.value = alturaFixa !== null;
+    if (alturaFixa !== null) altViva.value = alturaFixa;
+  }, [alturaFixa]);
+  useEffect(() => { colViva.value = largura; }, [largura]);
+
+  /**
+   * 🔴 OS RETORNOS DE CHAMADA PRECISAM DE IDENTIDADE ESTÁVEL, E NÃO É DETALHE.
+   *
+   * O `indice` deste card MUDA durante o próprio arrasto — é o que reordenar significa — e
+   * `onMover` é recriado a cada render da tela. Se o objeto de gesto dependesse deles, ele
+   * seria recriado no meio do gesto, o `GestureDetector` remontaria e o dedo seria solto
+   * sozinho na primeira troca de posição. Com as ações atrás de um ref e o índice num valor
+   * compartilhado, o gesto nasce uma vez e continua vendo sempre o valor atual.
+   */
+  const acoes = useRef({ onMover, onArrastando, onRedimensionar, onFimRedimensionar });
+  acoes.current = { onMover, onArrastando, onRedimensionar, onFimRedimensionar };
+  const indiceVivo = useSharedValue(indice);
+  useEffect(() => { indiceVivo.value = indice; }, [indice]);
+
+  const mover = useCallback((de: number, para: number) => acoes.current.onMover(de, para), []);
+  const sinalizar = useCallback((v: boolean) => acoes.current.onArrastando(v), []);
+  const aplicar = useCallback((alt: number, col: number) => acoes.current.onRedimensionar(alt, col), []);
+  const soltar = useCallback((alt: number, col: number) => {
+    acoes.current.onRedimensionar(alt, col);
+    acoes.current.onFimRedimensionar();
+  }, []);
 
   /**
    * 🔴 O ARRASTO SAIU DO CARD INTEIRO E FOI PARA A ALÇA.
@@ -588,25 +626,29 @@ function CardArrastavel({
    * Com o gesto restrito à alça, a `ScrollView` volta a funcionar durante a edição e a
    * rolagem só para enquanto um arrasto está de fato em curso.
    */
-  const pan = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => ativo,
-    onMoveShouldSetPanResponder: (_e, g) => ativo && Math.abs(g.dy) > 4,
-    onPanResponderGrant: () => onArrastando(true),
-    onPanResponderMove: (_e, g) => {
-      y.setValue(g.dy);
-      const passos = Math.round(g.dy / altura.current);
-      if (passos !== acumulado.current) {
-        onMover(indice, indice + (passos - acumulado.current));
-        acumulado.current = passos;
+  const arrasto = useMemo(() => Gesture.Pan()
+    .enabled(ativo)
+    // Os mesmos 4 px de antes: abaixo disso é toque, e a `ScrollView` continua dona do dedo.
+    .activeOffsetY([-4, 4])
+    .onBegin(() => {
+      acumulado.value = 0;
+      runOnJS(sinalizar)(true);
+    })
+    .onUpdate((e) => {
+      y.value = e.translationY;
+      const passos = Math.round(e.translationY / altura.value);
+      if (passos !== acumulado.value) {
+        runOnJS(mover)(indiceVivo.value, indiceVivo.value + (passos - acumulado.value));
+        acumulado.value = passos;
       }
-    },
-    onPanResponderRelease: () => {
-      acumulado.current = 0;
-      onArrastando(false);
-      anima(y, 0, MOV.base).start();
-    },
-    onPanResponderTerminate: () => { acumulado.current = 0; onArrastando(false); },
-  }), [ativo, indice, onMover, onArrastando]);
+    })
+    // `onFinalize` cobre soltar E cancelar num lugar só. Com o `PanResponder` isto eram
+    // dois caminhos, e o de cancelamento esquecia de devolver o card ao lugar.
+    .onFinalize(() => {
+      acumulado.value = 0;
+      y.value = tempo(0, MOV.base);
+      runOnJS(sinalizar)(false);
+    }), [ativo, mover, sinalizar]);
 
   /**
    * Canto de redimensionar, como a quina de uma janela do Windows.
@@ -616,54 +658,91 @@ function CardArrastavel({
    * deixam sobras irregulares entre um card e o vizinho e nada nunca alinha. Duas
    * posições encaixam sempre.
    */
-  const panTamanho = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      onArrastando(true);
-      baseAltura.current = altura.current - 12;
-      baseLargura.current = largura;
-    },
-    onPanResponderMove: (_e, g) => {
-      const nova = Math.max(72, Math.round((baseAltura.current + g.dy) / 8) * 8);
+  const arrastoTamanho = useMemo(() => Gesture.Pan()
+    .onBegin(() => {
+      baseAltura.value = altura.value - 12;
+      baseLargura.value = colViva.value;
+      travada.value = true;
+      altViva.value = altura.value - 12;
+      runOnJS(sinalizar)(true);
+    })
+    .onUpdate((e) => {
+      // A ALTURA NÃO PASSA MAIS PELO REACT DURANTE O GESTO. Antes cada quadro era um
+      // `setState` na tela inteira; agora é uma escrita num valor compartilhado, e o React
+      // só fica sabendo ao soltar — que é também quando a gravação acontece (§22, bloco 50).
+      altViva.value = Math.max(72, Math.round((baseAltura.value + e.translationY) / 8) * 8);
       // 60 px de folga antes de trocar de coluna: sem isso, um arrasto vertical com o
       // dedo levemente torto trocaria a largura sem ninguém pedir.
-      let col = baseLargura.current;
-      if (g.dx < -60) col = 0.5;
-      else if (g.dx > 60) col = 1;
-      onRedimensionar(nova, col);
-    },
-    // Gravar so ao soltar: durante o gesto isto dispara a cada quadro.
-    onPanResponderRelease: () => { onArrastando(false); onFimRedimensionar(); },
-    onPanResponderTerminate: () => { onArrastando(false); onFimRedimensionar(); },
-  }), [largura, onArrastando, onRedimensionar, onFimRedimensionar]);
+      let col = baseLargura.value;
+      if (e.translationX < -60) col = 0.5;
+      else if (e.translationX > 60) col = 1;
+      // A largura é layout de verdade (100% ou 48%), então essa parte precisa do React.
+      // Só que ela muda nas travessias, não por quadro.
+      if (col !== colViva.value) {
+        colViva.value = col;
+        runOnJS(aplicar)(altViva.value, col);
+      }
+    })
+    .onFinalize(() => {
+      runOnJS(sinalizar)(false);
+      runOnJS(soltar)(altViva.value, colViva.value);
+    }), [aplicar, sinalizar, soltar]);
+
+  const estilo = useAnimatedStyle(() => ({
+    transform: [{ translateY: y.value }],
+    height: travada.value ? altViva.value : undefined,
+  }));
+
+  /**
+   * A alça ☰, já embrulhada no detector. Vai memoizada porque o card a renderiza como
+   * componente: identidade nova a cada render remontaria o `GestureDetector` — e remontar
+   * no meio de um arrasto solta o dedo sozinho.
+   */
+  const Alca = useMemo(
+    () => ({ children: filhos }: { children: React.ReactNode }) => (
+      <GestureDetector gesture={arrasto}>
+        <View hitSlop={12} style={styles.alca}>{filhos}</View>
+      </GestureDetector>
+    ),
+    [arrasto],
+  );
 
   return (
     <Animated.View
-      onLayout={e => { altura.current = e.nativeEvent.layout.height + 12; }}
-      style={{
-        transform: [{ translateY: y }],
-        // `48%` em vez de `50%` para o `gap` da linha caber entre os dois meios-cards.
-        width: largura === 1 ? '100%' : '48%',
-        ...(alturaFixa !== null ? { height: alturaFixa } : {}),
-      }}
+      layout={LAYOUT}
+      entering={ENTRA}
+      exiting={SAI}
+      onLayout={e => { altura.value = e.nativeEvent.layout.height + 12; }}
+      style={[
+        {
+          // `48%` em vez de `50%` para o `gap` da linha caber entre os dois meios-cards.
+          width: largura === 1 ? '100%' : '48%',
+          // A altura travada aparece nos DOIS lugares de propósito: aqui para a árvore do
+          // React saber o tamanho do card, e no estilo animado para o gesto poder mexer
+          // nela sem passar pelo React. Fora do gesto os dois valores são o mesmo, e é isso
+          // que impede o `layout={LAYOUT}` de interpolar a altura de volta para a medida.
+          ...(alturaFixa !== null ? { height: alturaFixa } : {}),
+        },
+        estilo,
+      ]}
     >
       {/* `overflow: hidden` é o que faz a altura travada valer: sem ele o conteúdo
           transborda o card em vez de ser cortado, e o card "não redimensiona". */}
       <View style={{ flex: alturaFixa !== null ? 1 : undefined, overflow: 'hidden' }}>
-        {children(ativo ? pan.panHandlers : {})}
+        {children(Alca)}
       </View>
 
       {ativo && (
-        <View
-          {...panTamanho.panHandlers}
-          // Área de toque maior que o desenho: 12 px de canto é fácil de ver e difícil
-          // de acertar com o dedo.
-          hitSlop={{ top: 14, left: 14, right: 6, bottom: 6 }}
-          style={styles.cantoTamanho}
-        >
-          <Feather name="corner-down-right" size={13} color="rgba(255,255,255,0.85)" />
-        </View>
+        <GestureDetector gesture={arrastoTamanho}>
+          <View
+            // Área de toque maior que o desenho: 12 px de canto é fácil de ver e difícil
+            // de acertar com o dedo.
+            hitSlop={{ top: 14, left: 14, right: 6, bottom: 6 }}
+            style={styles.cantoTamanho}
+          >
+            <Feather name="corner-down-right" size={13} color="rgba(255,255,255,0.85)" />
+          </View>
+        </GestureDetector>
       )}
     </Animated.View>
   );
@@ -1115,6 +1194,7 @@ const styles = StyleSheet.create({
   linhaCfg: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   linhaCfgAlvo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
   iconeCfg: { paddingHorizontal: 6, paddingVertical: 7 },
+  alca: { marginLeft: 'auto', paddingLeft: 10 },
   cantoTamanho: {
     position: 'absolute', right: 2, bottom: 2,
     width: 24, height: 24, borderRadius: 12,

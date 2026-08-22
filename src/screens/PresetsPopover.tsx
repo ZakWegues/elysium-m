@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { callRpc, PresetEntry } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
-import { animarProximoLayout } from '../lib/motion';
+import { ENTRA, LAYOUT, SAI } from '../lib/motion';
 import { useTheme } from '../theme';
 import { Text } from '../components/ui';
 
@@ -55,7 +56,6 @@ export default function PresetsPopover({
   async function apagar(nome: string) {
     try {
       await callRpc(pairing, 'presets.delete', { name: nome });
-      animarProximoLayout();
       await carregar();
     } catch (e) { Alert.alert('Preset', errMessage(e)); }
   }
@@ -74,7 +74,7 @@ export default function PresetsPopover({
       )}
 
       {presets?.map(p => (
-        <View key={p.name} style={styles.linha}>
+        <Animated.View key={p.name} layout={LAYOUT} entering={ENTRA} exiting={SAI} style={styles.linha}>
           <Pressable
             onPress={() => rodar(p.name)}
             disabled={ocupado}
@@ -96,11 +96,11 @@ export default function PresetsPopover({
           >
             <Feather name="x" size={15} color={palette.textMuted} />
           </Pressable>
-        </View>
+        </Animated.View>
       ))}
 
       <Pressable
-        onPress={() => { animarProximoLayout(); setCriando(true); }}
+        onPress={() => setCriando(true)}
         style={[styles.novo, { borderRadius: tokens.radii.md, borderColor: palette.glassBorder }]}
       >
         <Feather name="plus" size={14} color={palette.primary} />

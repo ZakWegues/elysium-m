@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect } from 'react';
+import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
 import { GlassFill } from './GlassSurface';
-import { MOLA, MOV, anima, movimentoReduzido } from '../../lib/motion';
+import { CURVA_UI, MOV, mola, movimentoReduzido, tempo } from '../../lib/motion';
 
 /**
  * Popover ancorado, estilo iOS.
@@ -16,7 +17,8 @@ import { MOLA, MOV, anima, movimentoReduzido } from '../../lib/motion';
  * parecer preso ao botão em vez de flutuar solto.
  *
  * É o único lugar do app que usa mola. O resto segue a escala do `motion.ts`; mola em tudo
- * seria o "bounce em todo hover" que denuncia interface gerada.
+ * seria o "bounce em todo hover" que denuncia interface gerada. A rigidez continua sendo
+ * 380, o número do bloco 24 — o que mudou foi só de que lado da ponte ela é calculada.
  */
 export default function Popover({
   visible,
@@ -34,22 +36,25 @@ export default function Popover({
 }) {
   const { palette, tokens } = useTheme();
   const { width: telaW, height: telaH } = useWindowDimensions();
-  const escala = useRef(new Animated.Value(0.9)).current;
-  const opacidade = useRef(new Animated.Value(0)).current;
+  const escala = useSharedValue(0.9);
+  const opacidade = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      opacidade.setValue(0);
-      escala.setValue(movimentoReduzido() ? 1 : 0.9);
-      Animated.parallel([
-        Animated.spring(escala, { toValue: 1, ...MOLA }),
-        anima(opacidade, 1, MOV.micro),
-      ]).start();
+      opacidade.value = 0;
+      escala.value = movimentoReduzido() ? 1 : 0.9;
+      escala.value = mola(1);
+      opacidade.value = tempo(1, MOV.micro, CURVA_UI);
     } else {
       // Saída mais rápida que a entrada, como manda a escala.
-      anima(opacidade, 0, MOV.saida).start();
+      opacidade.value = tempo(0, MOV.saida, CURVA_UI);
     }
   }, [visible]);
+
+  const caixaAnimada = useAnimatedStyle(() => ({
+    opacity: opacidade.value,
+    transform: [{ scale: escala.value }],
+  }));
 
   if (!anchor) return null;
 
@@ -70,12 +75,11 @@ export default function Popover({
               width,
               top: topo,
               right: direita,
-              opacity: opacidade,
-              transform: [{ scale: escala }],
               borderRadius: tokens.radii.lg,
               borderColor: palette.glassBorder,
               backgroundColor: palette.surfaceRaised,
             },
+            caixaAnimada,
           ]}
         >
           {/* A careta: um quadrado girado com a mesma cor e borda da caixa. A metade de

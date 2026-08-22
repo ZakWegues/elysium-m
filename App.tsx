@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
@@ -21,18 +23,25 @@ import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
 import { useShareIntent } from './src/lib/shareIntent';
-import { MOV, anima } from './src/lib/motion';
+import { MOV, tempo } from './src/lib/motion';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <AppInner />
-        </ThemeProvider>
-      </SafeAreaProvider>
+      {/*
+        A raiz do gesture-handler precisa envolver TUDO — inclusive o que abre em `Modal`,
+        que no Android é uma janela nativa separada. Sem ela, um `GestureDetector` lá dentro
+        simplesmente nunca recebe o dedo, e sem erro nenhum no console.
+      */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <AppInner />
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </ErrorBoundary>
   );
 }
@@ -256,27 +265,30 @@ function AppInner() {
  * sem biblioteca de navegação, o app trocava de tela de um quadro para o outro, o que lê
  * como travamento e não como transição.
  *
- * `useNativeDriver` em tudo: sem ele a animação roda na thread de JS e engasga junto com
- * as chamadas RPC que a tela nova dispara ao montar, que é exatamente quando ela aparece.
+ * 🔴 POR QUE ISTO SAIU DO `Animated` DO CORE. `useNativeDriver: true` tira a interpolação
+ * da thread de JS, mas não tira a PARTIDA: quem monta a animação e a entrega para o lado
+ * nativo ainda é o JS, e aqui ela começa no mesmo quadro em que a tela nova monta e dispara
+ * os RPCs dela. O primeiro quadro da transição competia com exatamente o trabalho que a
+ * transição existe para esconder. Com valores compartilhados, a animação já nasce do outro
+ * lado — 220 ms, mesma curva, mesmo deslocamento de 8 px.
  */
 function TelaAnimada({ chave, children }: { chave: string; children: React.ReactNode }) {
-  const opacidade = useRef(new Animated.Value(1)).current;
-  const deslocamento = useRef(new Animated.Value(0)).current;
+  const opacidade = useSharedValue(1);
+  const deslocamento = useSharedValue(0);
 
   useEffect(() => {
-    opacidade.setValue(0);
-    deslocamento.setValue(8);
-    Animated.parallel([
-      anima(opacidade, 1, MOV.base),
-      anima(deslocamento, 0, MOV.base),
-    ]).start();
+    opacidade.value = 0;
+    deslocamento.value = 8;
+    opacidade.value = tempo(1, MOV.base);
+    deslocamento.value = tempo(0, MOV.base);
   }, [chave]);
 
-  return (
-    <Animated.View style={{ flex: 1, opacity: opacidade, transform: [{ translateY: deslocamento }] }}>
-      {children}
-    </Animated.View>
-  );
+  const estilo = useAnimatedStyle(() => ({
+    opacity: opacidade.value,
+    transform: [{ translateY: deslocamento.value }],
+  }));
+
+  return <Animated.View style={[{ flex: 1 }, estilo]}>{children}</Animated.View>;
 }
 
 const styles = StyleSheet.create({

@@ -1,6 +1,10 @@
-import { ReactNode, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { ReactNode, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  interpolate, runOnJS, useAnimatedStyle, useSharedValue,
+} from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
+import { CURVA_UI, LAYOUT, MOV, tempo } from '../../lib/motion';
 import { useTheme } from '../../theme';
 import { Card } from './Card';
 import { Text } from './Text';
@@ -9,10 +13,13 @@ import { Text } from './Text';
  * Seção recolhível. O conteúdo só é montado quando aberta — várias destas na mesma
  * tela consultariam o PC em paralelo se montassem todas de uma vez.
  *
- * A transição usa `Animated` do core em vez de `LayoutAnimation`: na Nova Arquitetura
- * (padrão desde o SDK 54) o opt-in `setLayoutAnimationEnabledExperimental` virou no-op
- * e só rendia aviso no console. Opacidade e rotação rodam na thread nativa, então não
- * dependem do trabalho de layout.
+ * A transição nunca pôde usar `LayoutAnimation`: na Nova Arquitetura (padrão desde o SDK
+ * 54) o opt-in `setLayoutAnimationEnabledExperimental` é no-op e só rendia aviso no
+ * console. O que era `Animated` do core agora é worklet — opacidade e rotação são
+ * calculadas na thread de UI, e o `layout={LAYOUT}` do cartão interpola a altura que
+ * aparecer, que é a parte que o `LayoutAnimation` prometia e não entregava.
+ *
+ * Os tempos são os do bloco 24 e não mudaram: 160 ms para abrir, 120 para fechar.
  */
 export function Drawer({
   title,
@@ -34,24 +41,28 @@ export function Drawer({
 }) {
   const { palette, tokens } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
-  const anim = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current;
+  const anim = useSharedValue(defaultOpen ? 1 : 0);
+
+  const fechar = () => setOpen(false);
 
   function toggle() {
     if (open) {
       // Desmonta só no fim, senão o conteúdo some antes de terminar de desaparecer.
-      Animated.timing(anim, { toValue: 0, duration: 120, useNativeDriver: true })
-        .start(({ finished }) => { if (finished) setOpen(false); });
+      anim.value = tempo(0, MOV.micro, CURVA_UI, (fim?: boolean) => {
+        'worklet';
+        if (fim) runOnJS(fechar)();
+      });
     } else {
       setOpen(true);
       onOpen?.();
-      Animated.timing(anim, { toValue: 1, duration: 160, useNativeDriver: true }).start();
+      anim.value = tempo(1, 160, CURVA_UI);
     }
   }
 
-  const chevronRotation = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  });
+  const seta = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${interpolate(anim.value, [0, 1], [0, 180])}deg` }],
+  }));
+  const corpo = useAnimatedStyle(() => ({ opacity: anim.value }));
 
   return (
     <Card glass style={{ gap: open ? tokens.spacing.md : 0 }}>
@@ -64,13 +75,13 @@ export function Drawer({
           ) : null}
         </View>
         {right}
-        <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
+        <Animated.View style={seta}>
           <Feather name="chevron-down" size={18} color={palette.textMuted} />
         </Animated.View>
       </Pressable>
 
       {open && (
-        <Animated.View style={{ opacity: anim, gap: tokens.spacing.md }}>
+        <Animated.View layout={LAYOUT} style={[{ gap: tokens.spacing.md }, corpo]}>
           {children}
         </Animated.View>
       )}

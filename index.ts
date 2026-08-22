@@ -1,3 +1,6 @@
+// O gesture-handler exige ser o PRIMEIRO import do app: ele troca a raiz de toque do
+// Android, e qualquer view montada antes disso fica fora do sistema de gestos.
+import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
 
 import App from './App';
