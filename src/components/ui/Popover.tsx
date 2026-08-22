@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
@@ -60,6 +60,22 @@ export default function Popover({
     }
   }, [visible]);
 
+  /**
+   * 🔴 O BOTÃO FÍSICO DE VOLTAR ERA DO `Modal` (`onRequestClose`).
+   *
+   * Ao tirar o `Modal` para o desfoque voltar a funcionar, isto veio junto e é fácil não
+   * notar: com o painel aberto, voltar SAI DO APP em vez de fechar o painel. Mesma
+   * providência da gaveta em `GlassModal`.
+   */
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
   const caixaAnimada = useAnimatedStyle(() => ({
     opacity: opacidade.value,
     transform: [{ scale: escala.value }],
@@ -96,15 +112,19 @@ export default function Popover({
           <View
             style={[
               styles.careta,
-              { right: caretaDireita, backgroundColor: palette.glassSurfaceStrong, borderColor: palette.glassBorder },
+              // A careta fica FORA do recorte, então não tem desfoque por baixo: ela usa
+              // a mesma tinta do painel, senão apareceria como um bico mais claro.
+              { right: caretaDireita, backgroundColor: palette.glassPanel, borderColor: palette.glassBorder },
             ]}
           />
           {/* O vidro mora numa camada própria com `overflow: hidden`: a caixa precisa
               ficar visível para a careta escapar dela, e sem este recorte o desfoque
-              vazaria pelos cantos quadrados. Raio baixo e tinta baixa — translúcido e
-              LEVEMENTE borrado, não uma placa leitosa. */}
+              vazaria pelos cantos quadrados.
+              🔴 RAIO ALTO E TINTA ALTA, os dois juntos — este painel tem texto dentro e
+              legibilidade vem antes de vidro. É o desenho do One UI: cor e luz difusa,
+              não as formas do fundo. Ver `glassPanel` em palettes.ts. */}
           <View style={[StyleSheet.absoluteFill, { borderRadius: tokens.radii.lg, overflow: 'hidden' }]}>
-            <GlassFill intensity={20} edge={false} />
+            <GlassFill intensity={100} edge={false} tintColor={palette.glassPanel} />
             <LinearGradient
               colors={palette.glassSheen}
               pointerEvents="none"

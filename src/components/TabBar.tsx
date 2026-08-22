@@ -167,9 +167,9 @@ export function TabBar({
   return (
     <GestureDetector gesture={pan}>
       <View style={{ overflow: 'hidden' }}>
-        {/* O outro desfoque REAL do app (o primeiro é o ScreenHeader), e com raio menor
-            pelo mesmo motivo: raio alto sobre tinta translúcida é o que deixa leitoso. */}
-        <GlassFill intensity={28} strong edge={false} />
+        {/* O outro desfoque REAL do app (o primeiro é o ScreenHeader). Mesma moderação:
+            os rótulos das abas já liam bem antes. */}
+        <GlassFill intensity={45} strong edge={false} />
         <View
           onLayout={medir}
           style={[

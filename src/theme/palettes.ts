@@ -81,13 +81,17 @@ export type Palette = {
    */
   glassSheen: readonly [string, string];
   /**
-   * Tinta das gavetas e painéis que sobem por cima de tudo.
+   * Tinta dos PAINÉIS que precisam ser lidos: predefinições, notificações, qualquer
+   * caixa flutuante com texto dentro.
    *
-   * É o ÚNICO lugar onde o branco SOBE em vez de descer: uma gaveta precisa ler como
-   * gaveta — claramente translúcida e borrada — e não como janela aberta na tela. Todo o
-   * resto do vidro foi para alfa mais baixo, porque "leitoso" é alfa de branco alto e não
-   * raio de blur.
+   * 🔴 DIREÇÃO NOVA — HyperOS / One UI, não iOS. O painel do One UI não mostra as
+   * formas do fundo: mostra COR e luz difusa, e o texto lê perfeitamente. Isso é alfa
+   * ALTO com raio ALTO, que é o oposto do "leitoso": leitoso era alfa alto de BRANCO
+   * PURO com raio baixo, e é por isso que a tinta daqui vem da paleta do tema, não do
+   * branco. Nenhum painel de texto abaixo deste alfa — legibilidade vem antes de vidro.
    */
+  glassPanel: string;
+  /** Tinta da gaveta de Ajustes. Mesma regra do `glassPanel`: cor do tema, alfa alto. */
   glassSheet: string;
   /** Tinta da BlurView: precisa acompanhar o modo, senão o vidro clareia o escuro. */
   blurTint: 'light' | 'dark';
@@ -103,16 +107,11 @@ const neutrosClaro = {
   error: '#C0392B',
   errorSoft: '#F8D7DA',
   success: '#2E8B47',
-  // 🔴 TRANSPARÊNCIA E BORRÃO SÃO ALAVANCAS OPOSTAS. Para o fundo aparecer de verdade é
-  // preciso BAIXAR o alfa E REDUZIR o raio do blur, juntos: alfa alto com blur alto só
-  // deixa o borrão mais claro — que é exatamente o "leitoso" reclamado. Estes números são
-  // ~metade dos anteriores; o corpo do card vem do fundo, não da tinta.
-  glassSurface: 'rgba(255,255,255,0.10)',
-  glassSurfaceStrong: 'rgba(255,255,255,0.20)',
-  glassBorder: 'rgba(255,255,255,0.38)',
+  glassBorder: 'rgba(255,255,255,0.45)',
   glassBackdrop: 'rgba(18,20,24,0.28)',
+  // O brilho da aresta continua baixo: ELE é o que fazia o app leitoso, e subir alfa de
+  // painel não é motivo para trazer de volta um véu de branco puro por cima de tudo.
   glassSheen: ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0)'] as const,
-  glassSheet: 'rgba(255,255,255,0.46)',
   blurTint: 'light' as const,
 };
 
@@ -132,14 +131,8 @@ const neutrosEscuro = {
   error: '#FF6B6B',
   errorSoft: 'rgba(255,107,107,0.16)',
   success: '#4ADE80',
-  // Mais encorpado que a primeira versão: quem dava volume aos cards no escuro era o véu
-  // branco que saiu do GlassSurface. Sem isto, vidro sobre a noite fica invisível.
-  glassSurface: 'rgba(255,255,255,0.06)',
-  glassSurfaceStrong: 'rgba(255,255,255,0.11)',
-  glassBorder: 'rgba(255,255,255,0.14)',
+  glassBorder: 'rgba(255,255,255,0.18)',
   glassBackdrop: 'rgba(0,0,0,0.55)',
-  // A gaveta é a exceção também aqui: na noite ela precisa de corpo para não sumir.
-  glassSheet: 'rgba(255,255,255,0.16)',
   // Um quinto do brilho do modo claro. Branco forte sobre superfície escura não lê como
   // reflexo, lê como sujeira.
   glassSheen: ['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)'] as const,
@@ -227,11 +220,58 @@ const ROTULOS: Record<ThemeName, Record<Familia, string>> = {
   crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo' },
 };
 
+/** `#rrggbb` → [r, g, b]. Só aceita hex de 6 dígitos, que é o que as faces usam. */
+function canais(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Mistura dois hex. `t` é quanto do segundo entra. */
+function misturar(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = canais(a);
+  const [br, bg, bb] = canais(b);
+  const c = (x: number, y: number) => Math.round(x + (y - x) * t);
+  return `#${[c(ar, br), c(ag, bg), c(ab, bb)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function comAlfa(hex: string, alfa: number): string {
+  const [r, g, b] = canais(hex);
+  return `rgba(${r},${g},${b},${alfa})`;
+}
+
+/**
+ * 🔴 A TINTA DO VIDRO VEM DA PALETA, NÃO DO BRANCO.
+ *
+ * Branco puro em alfa alto é literalmente a definição de "leitoso" — foi o que o véu do
+ * `GlassSurface` fazia, e é o que se vê quando um painel translúcido some no fundo claro.
+ * Aqui a base é a cor da superfície do tema puxada um pouco na direção da primária: no
+ * vidro, branco com 10% de primária; na noite, a `surface` com 14%. O painel passa a
+ * mostrar COR e luz difusa em vez de formas do fundo, que é o desenho do One UI.
+ *
+ * Os alfas sobem em escada conforme a superfície precise ser LIDA:
+ * card < barra < gaveta < painel de texto.
+ */
+function vidro(face: Face, familia: Familia) {
+  const noite = familia === 'ely';
+  const base = noite ? misturar(face.surface, face.primary, 0.14) : misturar('#FFFFFF', face.primary, 0.10);
+  return {
+    glassSurface: comAlfa(base, noite ? 0.26 : 0.34),
+    glassSurfaceStrong: comAlfa(base, noite ? 0.42 : 0.52),
+    // Gaveta e painel são quase opacos de propósito: o critério de aceite é texto legível
+    // sobre QUALQUER fundo, inclusive sobre uma mancha clara passando por baixo.
+    glassSheet: comAlfa(base, noite ? 0.86 : 0.88),
+    glassPanel: comAlfa(base, noite ? 0.90 : 0.92),
+  };
+}
+
 function build(name: ThemeName, familia: Familia): Palette {
   const tema = temas[name];
   const face = familia === 'ely' ? tema.dark : tema.light;
   const neutros = familia === 'ely' ? neutrosEscuro : neutrosClaro;
-  return { name, label: tema.label, rotulo: ROTULOS[name][familia], ...neutros, ...face };
+  return {
+    name, label: tema.label, rotulo: ROTULOS[name][familia],
+    ...neutros, ...face, ...vidro(face, familia),
+  };
 }
 
 /**

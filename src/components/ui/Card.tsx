@@ -25,7 +25,7 @@ export function Card({ glass = false, blur = false, style, children, ...rest }: 
       ]}
       {...rest}
     >
-      {glass && <GlassFill intensity={22} blur={blur} />}
+      {glass && <GlassFill intensity={45} blur={blur} />}
       {children}
     </View>
   );

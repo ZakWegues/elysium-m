@@ -47,9 +47,9 @@ export function ScreenHeader({
   return (
     <View style={{ overflow: 'hidden' }}>
       {/* Um dos dois únicos desfoques REAIS que rolam junto com o conteúdo (o outro é a
-          TabBar), e com raio bem menor que os 60 de antes — o pedido é ver o fundo, e
-          raio alto sobre tinta translúcida devolve o leitoso. */}
-      <GlassFill intensity={26} strong edge={false} />
+          TabBar). Sobe menos que os painéis de texto: o cabeçalho nunca esteve ilegível,
+          e é a superfície mais cara do app por acompanhar a rolagem. */}
+      <GlassFill intensity={45} strong edge={false} />
       <View
         style={[
           styles.row,

@@ -149,9 +149,8 @@ export function GlassCircle({
         style,
       ]}
     >
-      {/* Raio baixo de propósito: o pedido é ver o fundo, e blur alto sobre alfa alto é
-          justamente o que devolve o aspecto leitoso. */}
-      <GlassFill intensity={18} edge={false} tintColor={ativo ? palette.primarySoft : undefined} />
+      {/* Meio-termo: o botão tem ícone, não texto corrido, e sobe menos que os painéis. */}
+      <GlassFill intensity={45} edge={false} tintColor={ativo ? palette.primarySoft : undefined} />
       {children}
     </Pressable>
   );

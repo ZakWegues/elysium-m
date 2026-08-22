@@ -4,6 +4,9 @@ import {
   StyleSheet, TextInput, View, ViewStyle,
 } from 'react-native';
 import * as Speech from 'expo-speech';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
+import { fromByteArray } from 'base64-js';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
@@ -13,6 +16,7 @@ import { enqueueCommand } from '../lib/commandQueue';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
+import { MAILBOX_MAX_ATTACHMENT_BYTES, sendMessage } from '../lib/mailbox';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV, anima } from '../lib/motion';
@@ -246,6 +250,56 @@ export default function ChatScreen({
     }
   }
 
+  /**
+   * Anexar arquivo — o mesmo botão dos dois lados do switch.
+   *
+   * O arquivo viaja pelo MESMO caminho do lado do PC (`mailbox`), porque é lá que um
+   * anexo tem onde chegar: o `sendCommand` da IA leva texto e devolve texto. O que muda é
+   * só o ponto de partida, e a bolha confirma para onde foi — sem isso o arquivo sumiria
+   * numa conversa que não mostra anexo nenhum.
+   */
+  async function handleAnexar() {
+    if (sending) return;
+    const escolha = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      copyToCacheDirectory: false,
+    });
+    if (escolha.canceled || !escolha.assets[0]) return;
+    const asset = escolha.assets[0];
+
+    setSending(true);
+    try {
+      const bytes = new Uint8Array(await new File(asset.uri).arrayBuffer());
+      if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) {
+        Alert.alert('Arquivo grande demais', 'Limite de 5MB por anexo.');
+        return;
+      }
+      await sendMessage(pairing, {
+        kind: 'file',
+        attachment: {
+          name: asset.name,
+          mimeType: asset.mimeType ?? 'application/octet-stream',
+          base64: fromByteArray(bytes),
+        },
+      });
+      const ts = Date.now();
+      setMessages((prev) => [
+        ...prev,
+        { id: `file-${ts}`, from: 'me', text: `📎 ${asset.name}`, ts },
+        { id: `file-ok-${ts + 1}`, from: 'reply', text: 'Arquivo entregue na caixa do PC.', ts: ts + 1 },
+      ]);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
+        onUnpair();
+        return;
+      }
+      Alert.alert('Falha ao enviar o arquivo', errMessage(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleRecordStart() {
     if (sending || recording) return;
     if (micStatus !== 'ready') {
@@ -414,8 +468,13 @@ export default function ChatScreen({
             { padding: tokens.spacing.md, borderTopColor: palette.glassBorder },
           ]}
         >
-        <GlassCircle onPress={() => setCameraOpen(true)} disabled={sending}>
+        <GlassCircle size={40} onPress={() => setCameraOpen(true)} disabled={sending}>
           <Feather name="camera" size={20} color={palette.primary} />
+        </GlassCircle>
+        {/* Anexar fica à esquerda, colado na câmera, nos DOIS lados do switch: são os dois
+            botões que trazem algo de fora para a conversa. */}
+        <GlassCircle size={40} onPress={handleAnexar} disabled={sending}>
+          <Feather name="paperclip" size={20} color={palette.primary} />
         </GlassCircle>
         <TextInput
           style={[
@@ -436,6 +495,7 @@ export default function ChatScreen({
           editable={!sending}
         />
         <GlassCircle
+          size={40}
           ativo={recording}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
@@ -447,7 +507,7 @@ export default function ChatScreen({
             color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
           />
         </GlassCircle>
-        <GlassCircle ativo onPress={() => handleSend()} disabled={sending}>
+        <GlassCircle size={40} ativo onPress={() => handleSend()} disabled={sending}>
           <Feather name="arrow-up" size={20} color={palette.primary} />
         </GlassCircle>
         </View>

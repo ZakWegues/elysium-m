@@ -98,8 +98,8 @@ export function GlassModal({
           },
         ]}
       >
-        {/* Raio alto e tinta própria: a gaveta é a exceção declarada do bloco. */}
-        <GlassFill intensity={85} tintColor={palette.glassSheet} />
+        {/* Raio alto e tinta própria — ver `glassSheet` em palettes.ts. */}
+        <GlassFill intensity={100} tintColor={palette.glassSheet} />
         {/* Brilho reflexivo na aresta de cima, como o topo curvo de uma placa de vidro */}
         <LinearGradient
           // Da paleta, não literal: 70% de branco é reflexo no vidro claro e mancha no escuro.
