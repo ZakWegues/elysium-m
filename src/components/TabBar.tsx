@@ -43,6 +43,9 @@ const MAX_INDICE = NAV.length - 1;
  * que é o que a mão espera de um controle que responde ao arremesso, e não só à posição.
  */
 const PROJECAO = 0.12;
+// A amarra com o literal de dentro do worklet: mudar um sem o outro para de compilar.
+const conferenciaDaProjecao: 0.12 = PROJECAO;
+void conferenciaDaProjecao;
 
 /**
  * Resistência elástica nas duas pontas: além da primeira e da última aba o indicador ainda
@@ -51,10 +54,14 @@ const PROJECAO = 0.12;
  */
 const RESISTENCIA = 0.35;
 
-function comElastico(v: number): number {
+function comElastico(v: number, maximo: number): number {
   'worklet';
-  if (v < 0) return v * RESISTENCIA;
-  if (v > MAX_INDICE) return MAX_INDICE + (v - MAX_INDICE) * RESISTENCIA;
+  // O teto e a resistência ENTRAM COMO LITERAL/ARGUMENTO em vez de virem do módulo: worklet
+  // não enxerga escopo de módulo, só o que o Babel captura do corpo. Ver o comentário do
+  // `tempo()` em motion.ts — foi assim que o app morreu ao soltar o dedo aqui.
+  const resistencia = 0.35;
+  if (v < 0) return v * resistencia;
+  if (v > maximo) return maximo + (v - maximo) * resistencia;
   return v;
 }
 
@@ -99,6 +106,8 @@ export function TabBar({
   const visivel = useSharedValue(indiceAtivo < 0 ? 0 : 1);
   /** A aba que está de fato na frente, legível de dentro do gesto. */
   const ativoVivo = useSharedValue(Math.max(0, indiceAtivo));
+  /** O teto da régua, num valor compartilhado — worklet não lê constante de módulo. */
+  const maximo = useSharedValue(MAX_INDICE);
 
   useEffect(() => {
     visivel.value = tempo(indiceAtivo < 0 ? 0 : 1, MOV.micro, CURVA_UI);
@@ -126,7 +135,7 @@ export function TabBar({
         })
         .onUpdate((e) => {
           if (larguraTab.value <= 0) return;
-          progresso.value = comElastico(inicio.value + e.translationX / larguraTab.value);
+          progresso.value = comElastico(inicio.value + e.translationX / larguraTab.value, maximo.value);
         })
         // O segundo argumento é falso quando o gesto foi CANCELADO — app indo para segundo
         // plano, outro handler tomando o dedo. Cancelamento não escolhe destino nenhum: o
@@ -134,12 +143,14 @@ export function TabBar({
         .onEnd((e, sucesso) => {
           if (larguraTab.value <= 0) return;
           if (!sucesso) {
-            progresso.value = tempo(ativoVivo.value, MOV.base);
+            progresso.value = tempo(ativoVivo.value);
             return;
           }
-          const projetado = progresso.value + (e.velocityX / larguraTab.value) * PROJECAO;
-          const destino = Math.min(MAX_INDICE, Math.max(0, Math.round(projetado)));
-          progresso.value = tempo(destino, MOV.base);
+          // 0,12 s de projeção, literal pelo mesmo motivo do resto: constante de módulo não
+          // existe na thread de UI. O valor e o porquê estão em PROJECAO, logo acima.
+          const projetado = progresso.value + (e.velocityX / larguraTab.value) * 0.12;
+          const destino = Math.min(maximo.value, Math.max(0, Math.round(projetado)));
+          progresso.value = tempo(destino);
           runOnJS(navegar)(destino);
         }),
     [navegar],

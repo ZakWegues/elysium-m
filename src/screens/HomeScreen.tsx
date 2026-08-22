@@ -646,7 +646,7 @@ function CardArrastavel({
     // dois caminhos, e o de cancelamento esquecia de devolver o card ao lugar.
     .onFinalize(() => {
       acumulado.value = 0;
-      y.value = tempo(0, MOV.base);
+      y.value = tempo(0);
       runOnJS(sinalizar)(false);
     }), [ativo, mover, sinalizar]);
 

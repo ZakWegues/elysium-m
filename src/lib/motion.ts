@@ -130,24 +130,49 @@ export function durUI(ms: number): number {
   return reduzirUI.value ? 0 : ms;
 }
 
-/** `anima()` do lado da thread de UI: mesma escala, mesmas curvas. */
+/**
+ * 🔴 VALOR PADRÃO EM PARÂMETRO DE WORKLET DERRUBA O APP.
+ *
+ * A primeira versão disto era `ms: number = MOV.base, easing = SUAVE_UI`, e o app morria
+ * com `ReferenceError: Property 'SUAVE_UI' doesn't exist` ao soltar o dedo na barra de
+ * abas. O plugin do Babel monta o worklet capturando o que o CORPO da função referencia; o
+ * valor padrão mora na assinatura, fica fora dessa varredura, e na thread de UI — onde
+ * escopo de módulo não existe — o identificador simplesmente não está lá.
+ *
+ * O sintoma engana porque o mesmo identificador funciona no corpo de outro worklet. A regra
+ * é a posição, não o identificador: dentro do corpo, capturado; na assinatura, não.
+ *
+ * Daí a forma abaixo. Os padrões são resolvidos no corpo, e são LITERAIS mais o `Easing` do
+ * próprio Reanimated (que é worklet), sem depender de nenhuma constante deste módulo. A
+ * escala continua sendo uma só: o `conferenciaDaEscala` logo abaixo quebra o typecheck se
+ * alguém mudar `MOV` e esquecer daqui.
+ */
 export function tempo(
   para: number,
-  ms: number = MOV.base,
-  easing: EasingFactoryFn = SUAVE_UI,
+  ms?: number,
+  easing?: EasingFactoryFn,
   /** Roda na thread de UI ao terminar. `false` quando a animação foi interrompida. */
   aoFim?: (terminou?: boolean) => void,
 ) {
   'worklet';
-  return withTiming(para, { duration: durUI(ms), easing }, aoFim);
+  const duracao = reduzirUI.value ? 0 : (ms ?? 220);
+  const curva = easing ?? EasingUI.bezier(0.2, 0.8, 0.2, 1);
+  return withTiming(para, { duration: duracao, easing: curva }, aoFim);
 }
 
-/** Mola — só o popover usa, como manda o bloco 24. */
+/** Mola — só o popover usa, como manda o bloco 24. Números literais, mesmo motivo. */
 export function mola(para: number) {
   'worklet';
   if (reduzirUI.value) return withTiming(para, { duration: 0 });
-  return withSpring(para, MOLA_UI);
+  return withSpring(para, { stiffness: 380, damping: 22, mass: 1 });
 }
+
+/**
+ * A amarra entre os literais dos worklets e a escala declarada em cima. Não roda nada: se
+ * `MOV.base` deixar de ser 220 ou a mola deixar de ser 380/22, isto para de compilar.
+ */
+const conferenciaDaEscala: [220, 380, 22] = [MOV.base, MOLA_UI.stiffness, MOLA_UI.damping];
+void conferenciaDaEscala;
 
 type EasingFactoryFn = typeof SUAVE_UI;
 
