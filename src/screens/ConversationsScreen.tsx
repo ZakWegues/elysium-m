@@ -71,6 +71,7 @@ export default function ConversationsScreen({
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
+        semAjustes
         title="Conversas"
         right={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

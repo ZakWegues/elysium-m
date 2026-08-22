@@ -16,7 +16,7 @@ import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
-import { AppBackground, BlurTargetProvider, GlassModal } from './src/components/ui';
+import { AjustesProvider, AppBackground, BlurTargetProvider, GlassModal } from './src/components/ui';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
@@ -185,6 +185,10 @@ function AppInner() {
     // `KeyboardAvoidingView` não serve: no edge-to-edge do Android (padrão do Expo
     // desde o SDK 54) o sistema não redimensiona mais a janela, e a caixa de texto
     // simplesmente ficava debaixo do teclado.
+    // A engrenagem de Ajustes vive no canto superior direito de todo ScreenHeader, e
+    // recebe daqui o que abrir. Ver o comentário em ScreenHeader.tsx: ela saiu da barra
+    // de abas porque gaveta não é destino de navegação.
+    <AjustesProvider abrir={() => setSettingsModalVisible(true)}>
     <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}>
       {/* Só o fundo entra no alvo de desfoque. Incluir as telas faria cada card de
           vidro tentar desfocar uma árvore que o contém. */}
@@ -242,21 +246,19 @@ function AppInner() {
       {/* Sai de cena enquanto o usuário digita: com o teclado aberto sobra pouca
           altura, e a barra empurraria a caixa de texto pra fora da vista. */}
       {!keyboard.visible && (
-        <TabBar
-          active={screen}
-          onNavigate={setScreen}
-          onOpenModal={() => setSettingsModalVisible(true)}
-          badges={{ chat: mailboxUnread }}
-        />
+        <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
 
+      {/* A gaveta é o ÚLTIMO irmão de propósito: sem o `Modal` nativo, quem a põe por cima
+          da barra de abas é a ordem de desenho (mais o zIndex dela). */}
       <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
         <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />
       </GlassModal>
     </View>
+    </AjustesProvider>
   );
 }
 

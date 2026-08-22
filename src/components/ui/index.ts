@@ -1,11 +1,11 @@
 export { Text } from './Text';
 export { Button } from './Button';
 export { Card } from './Card';
-export { ScreenHeader } from './ScreenHeader';
+export { ScreenHeader, AjustesProvider } from './ScreenHeader';
 export { MetricBar } from './MetricBar';
 export { GlassModal } from './GlassModal';
 export { Drawer } from './Drawer';
-export { GlassFill } from './GlassSurface';
+export { GlassFill, GlassCircle } from './GlassSurface';
 export { AppBackground } from './AppBackground';
 export { BlurTargetProvider, useBlurTarget } from './BlurTarget';
 export { default as Popover } from './Popover';

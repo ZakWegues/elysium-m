@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
@@ -15,6 +15,15 @@ import { CURVA_UI, MOV, mola, movimentoReduzido, tempo } from '../../lib/motion'
  * formulário, não para um menu que sai de um botão. Aqui a caixa **escala a partir do
  * canto onde o botão está**, com uma careta apontando para ele — é isso que faz o popover
  * parecer preso ao botão em vez de flutuar solto.
+ *
+ * 🔴 POR QUE ELE NÃO É MAIS UM `Modal` DO RN. Dentro de um `Modal` o Android abre uma
+ * janela nativa separada, e nenhuma `BlurView` lá dentro consegue amostrar o app que
+ * está atrás — o painel ficava com tinta chapada e nenhum desfoque, sem erro nenhum que
+ * denunciasse. Agora ele é uma camada absoluta DENTRO da árvore da tela, que é a única
+ * forma de o vidro funcionar no Android (§14).
+ *
+ * A âncora continua vindo de `measureInWindow`: a camada cobre a tela toda a partir da
+ * raiz da tela do Chat, então coordenada de janela e coordenada daqui coincidem.
  *
  * É o único lugar do app que usa mola. O resto segue a escala do `motion.ts`; mola em tudo
  * seria o "bounce em todo hover" que denuncia interface gerada. A rigidez continua sendo
@@ -64,10 +73,11 @@ export default function Popover({
   const topo = Math.min(anchor.y + anchor.height + 10, telaH - 120);
   const caretaDireita = Math.max(10, Math.min(anchor.width / 2 - 6, width - 22));
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      {/* O toque no fundo fecha; o toque dentro da caixa não sobe até aqui. */}
-      <Pressable style={styles.fundo} onPress={onClose}>
+    // O toque no fundo fecha; o toque dentro da caixa não sobe até aqui.
+    <Pressable style={styles.fundo} onPress={onClose}>
         <Animated.View
           style={[
             styles.caixa,
@@ -77,7 +87,6 @@ export default function Popover({
               right: direita,
               borderRadius: tokens.radii.lg,
               borderColor: palette.glassBorder,
-              backgroundColor: palette.surfaceRaised,
             },
             caixaAnimada,
           ]}
@@ -87,26 +96,37 @@ export default function Popover({
           <View
             style={[
               styles.careta,
-              { right: caretaDireita, backgroundColor: palette.surfaceRaised, borderColor: palette.glassBorder },
+              { right: caretaDireita, backgroundColor: palette.glassSurfaceStrong, borderColor: palette.glassBorder },
             ]}
           />
-          <GlassFill intensity={70} strong edge={false} />
-          <LinearGradient
-            colors={palette.glassSheen}
-            pointerEvents="none"
-            style={[styles.brilho, { borderTopLeftRadius: tokens.radii.lg, borderTopRightRadius: tokens.radii.lg }]}
-          />
+          {/* O vidro mora numa camada própria com `overflow: hidden`: a caixa precisa
+              ficar visível para a careta escapar dela, e sem este recorte o desfoque
+              vazaria pelos cantos quadrados. Raio baixo e tinta baixa — translúcido e
+              LEVEMENTE borrado, não uma placa leitosa. */}
+          <View style={[StyleSheet.absoluteFill, { borderRadius: tokens.radii.lg, overflow: 'hidden' }]}>
+            <GlassFill intensity={20} edge={false} />
+            <LinearGradient
+              colors={palette.glassSheen}
+              pointerEvents="none"
+              style={styles.brilho}
+            />
+          </View>
           <Pressable onPress={() => {}} style={{ padding: tokens.spacing.md }}>
             {children}
           </Pressable>
         </Animated.View>
-      </Pressable>
-    </Modal>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  fundo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' },
+  // Absoluto, não `flex: 1`: agora ele é uma camada por cima da tela, não a raiz de uma
+  // janela. Escurecimento mais fraco — com o painel translúcido, um véu forte por baixo
+  // reapareceria dentro do próprio vidro.
+  fundo: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.18)', zIndex: 20,
+  },
   caixa: {
     position: 'absolute',
     borderWidth: StyleSheet.hairlineWidth,

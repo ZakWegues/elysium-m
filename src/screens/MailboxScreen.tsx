@@ -18,7 +18,7 @@ import {
 import { loadFavorites, saveCache, loadCache, toggleFavorite as toggleFavoriteStore } from '../lib/mailboxStore';
 import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
-import { GlassFill, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -330,8 +330,9 @@ export default function MailboxScreen({
         }}
       />
 
+      {/* Mesmo desenho do lado da IA: barra em tinta chapada, botões em vidro real. */}
       <View style={{ overflow: 'hidden' }}>
-        <GlassFill intensity={65} strong edge={false} />
+        <GlassFill intensity={40} strong edge={false} blur={false} />
         <View
           style={[
             styles.composer,
@@ -350,12 +351,12 @@ export default function MailboxScreen({
           </View>
         )}
         <View style={styles.composerRow}>
-          <Pressable style={styles.iconButton} onPress={handlePaste}>
-            <Feather name="clipboard" size={20} color={palette.textMuted} />
-          </Pressable>
-          <Pressable style={styles.iconButton} onPress={handleAttach}>
-            <Feather name="paperclip" size={20} color={palette.textMuted} />
-          </Pressable>
+          <GlassCircle onPress={handlePaste}>
+            <Feather name="clipboard" size={20} color={palette.primary} />
+          </GlassCircle>
+          <GlassCircle onPress={handleAttach}>
+            <Feather name="paperclip" size={20} color={palette.primary} />
+          </GlassCircle>
           <TextInput
             style={[styles.input, { borderColor: palette.border, borderRadius: tokens.radii.full, color: palette.text }]}
             value={draft}
@@ -364,17 +365,17 @@ export default function MailboxScreen({
             placeholderTextColor={palette.textMuted}
             editable={!sending}
           />
-          <Pressable
-            style={[styles.iconButton, { backgroundColor: palette.primary, borderRadius: 22, opacity: sending ? 0.5 : 1 }]}
+          <GlassCircle
+            ativo
             onPress={handleSend}
             disabled={sending || (!draft.trim() && !attachment)}
           >
             {sending ? (
-              <ActivityIndicator size="small" color={palette.onPrimary} />
+              <ActivityIndicator size="small" color={palette.primary} />
             ) : (
-              <Feather name="arrow-up" size={20} color={palette.onPrimary} />
+              <Feather name="arrow-up" size={20} color={palette.primary} />
             )}
-          </Pressable>
+          </GlassCircle>
         </View>
         </View>
       </View>
@@ -392,7 +393,6 @@ const styles = StyleSheet.create({
   composer: { borderTopWidth: 1, gap: 8 },
   composerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   attachmentChip: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 },
-  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,
     borderWidth: 1,

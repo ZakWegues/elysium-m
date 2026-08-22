@@ -70,6 +70,7 @@ export default function MailboxHistorico({ onFechar }: { onFechar: () => void })
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
+        semAjustes
         title="Histórico do PC"
         left={
           <Pressable onPress={onFechar} hitSlop={8}>

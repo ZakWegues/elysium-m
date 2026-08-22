@@ -4,7 +4,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { MOV, anima } from '../lib/motion';
 import { useTheme } from '../theme';
-import { Popover, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, Popover, ScreenHeader, Text } from '../components/ui';
 import ChatScreen from './ChatScreen';
 import MailboxScreen from './MailboxScreen';
 import MailboxHistorico from './MailboxHistorico';
@@ -55,8 +55,9 @@ export default function ChatHub({
   const botaoRef = useRef<View>(null);
 
   function abrirPresets() {
-    // `measureInWindow` porque o popover é um Modal — ele vive fora da árvore desta tela,
-    // e coordenadas relativas ao pai não valeriam nada lá dentro.
+    // `measureInWindow` mesmo com o popover já dentro da árvore: esta tela começa na
+    // origem da janela, então as duas coordenadas coincidem, e medir na janela continua
+    // sendo o único jeito que não depende de quantos pais existem no meio.
     botaoRef.current?.measureInWindow((x, y, width, height) => {
       setAncora({ x, y, width, height });
       setPresetsAberto(true);
@@ -70,27 +71,23 @@ export default function ChatHub({
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
+        // Os dois cantos são o mesmo objeto: círculo de vidro, ícone fino em cor de
+        // texto, sem glow. Antes o histórico era um ícone solto à esquerda e os presets
+        // uma bolinha com borda à direita — dois pesos para dois alvos irmãos.
         left={
-          <Pressable
+          <GlassCircle
+            size={34}
             onPress={() => (modo === 'ia' ? onOpenConversations() : setHistoricoPcAberto(true))}
-            hitSlop={8}
           >
-            <Feather name="clock" size={20} color={palette.textMuted} />
-          </Pressable>
+            <Feather name="clock" size={17} color={palette.textMuted} />
+          </GlassCircle>
         }
         center={<SwitchModo modo={modo} onTroca={setModo} temNovidade={(naoLidos ?? 0) > 0} />}
         right={
           <View ref={botaoRef} collapsable={false}>
-            <Pressable
-              onPress={abrirPresets}
-              hitSlop={8}
-              style={[styles.bolinha, {
-                borderColor: palette.glassBorder,
-                backgroundColor: presetsAberto ? palette.primarySoft : 'transparent',
-              }]}
-            >
+            <GlassCircle size={34} ativo={presetsAberto} onPress={abrirPresets}>
               <Feather name="sliders" size={17} color={presetsAberto ? palette.primary : palette.textMuted} />
-            </Pressable>
+            </GlassCircle>
           </View>
         }
       />
@@ -176,11 +173,6 @@ function SwitchModo({
 }
 
 const styles = StyleSheet.create({
-  bolinha: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   switch: { flexDirection: 'row', padding: 3, borderWidth: StyleSheet.hairlineWidth, minWidth: 150 },
   polegar: { position: 'absolute', top: 3, bottom: 3, left: 3 },
   lado: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6 },

@@ -2,7 +2,12 @@ import { StyleSheet, View, ViewProps } from 'react-native';
 import { useTheme } from '../../theme';
 import { GlassFill } from './GlassSurface';
 
-export function Card({ glass = false, style, children, ...rest }: ViewProps & { glass?: boolean }) {
+/**
+ * `glass` dá a tinta e a borda de vidro; `blur` — desligado por padrão — é que liga o
+ * desfoque real. Ver o comentário de `GlassFill`: seis cards de vidro na mesma tela eram
+ * seis recapturas por quadro de rolagem, e é isso que fazia a Início engasgar.
+ */
+export function Card({ glass = false, blur = false, style, children, ...rest }: ViewProps & { glass?: boolean; blur?: boolean }) {
   const { palette, tokens } = useTheme();
 
   return (
@@ -20,7 +25,7 @@ export function Card({ glass = false, style, children, ...rest }: ViewProps & { 
       ]}
       {...rest}
     >
-      {glass && <GlassFill intensity={45} />}
+      {glass && <GlassFill intensity={22} blur={blur} />}
       {children}
     </View>
   );

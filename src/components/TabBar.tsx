@@ -8,9 +8,19 @@ import { CURVA_UI, MOV, tempo } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
-export type Screen = 'home' | 'chat' | 'control' | 'settings' | 'conversations';
+/** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
+export type Screen = 'home' | 'chat' | 'control' | 'conversations';
 
-const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap; modal?: boolean }[] = [
+/**
+ * Só destinos de verdade.
+ *
+ * 🔴 AJUSTES SAIU DAQUI. Ele ocupava um dos quatro lugares sem ser uma página: abre uma
+ * gaveta por cima da tela, e sair dela não é navegar para lugar nenhum. Com ele fora, some
+ * junto toda a maquinaria de "aba que não é aba" — a régua do indicador volta a ser a
+ * lista inteira, sem buraco. O acionador foi para o canto superior direito do
+ * `ScreenHeader`, como o desktop resolveu no bloco 36.
+ */
+const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap }[] = [
   // O app abria direto no chat, o que fazia sentido quando conversar era quase tudo
   // que ele fazia. Com controle remoto, lembretes e player, chat virou uma aba entre
   // outras — e nada mostrava de imediato se o PC estava de pé.
@@ -23,19 +33,9 @@ const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap
   // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
   // gavetas. Antes eram duas abas separadas, Sistema e Remoto.
   { screen: 'control', label: 'PC', icon: 'monitor' },
-  { screen: 'settings', label: 'Ajustes', icon: 'settings', modal: true },
 ];
 
-/**
- * As abas que são destino de verdade. A de Ajustes abre um modal e por isso não entra nem
- * no indicador nem no arrasto — ela é um botão que mora na mesma barra.
- *
- * ⚠️ Os modais têm que ficar no FIM do `TABS`. O indicador usa o índice da lista completa
- * como coordenada (é o que casa com o `flex: 1` de cada aba), e um modal no meio abriria um
- * buraco na régua.
- */
-const NAV = TABS.filter((t) => !t.modal);
-const MAX_INDICE = NAV.length - 1;
+const MAX_INDICE = TABS.length - 1;
 
 /**
  * Quanto do impulso do dedo conta na escolha do destino, em segundos de projeção. Com 0,12
@@ -85,12 +85,10 @@ function comElastico(v: number, maximo: number): number {
 export function TabBar({
   active,
   onNavigate,
-  onOpenModal,
   badges,
 }: {
   active: Screen;
   onNavigate: (screen: Screen) => void;
-  onOpenModal: (screen: 'settings') => void;
   badges?: Partial<Record<Screen, number>>;
 }) {
   const { palette, tokens } = useTheme();
@@ -98,7 +96,7 @@ export function TabBar({
 
   // -1 quando a tela aberta não é aba nenhuma (Conversas, por exemplo). Aí o indicador
   // some em vez de apontar para uma aba que não é a que está na frente.
-  const indiceAtivo = TABS.findIndex((t) => !t.modal && t.screen === active);
+  const indiceAtivo = TABS.findIndex((t) => t.screen === active);
 
   const progresso = useSharedValue(Math.max(0, indiceAtivo));
   const larguraTab = useSharedValue(0);
@@ -118,7 +116,7 @@ export function TabBar({
   }, [indiceAtivo]);
 
   const navegar = useCallback((i: number) => {
-    const alvo = NAV[i];
+    const alvo = TABS[i];
     if (alvo && alvo.screen !== active) onNavigate(alvo.screen);
   }, [active, onNavigate]);
 
@@ -169,7 +167,9 @@ export function TabBar({
   return (
     <GestureDetector gesture={pan}>
       <View style={{ overflow: 'hidden' }}>
-        <GlassFill intensity={65} strong edge={false} />
+        {/* O outro desfoque REAL do app (o primeiro é o ScreenHeader), e com raio menor
+            pelo mesmo motivo: raio alto sobre tinta translúcida é o que deixa leitoso. */}
+        <GlassFill intensity={28} strong edge={false} />
         <View
           onLayout={medir}
           style={[
@@ -195,7 +195,7 @@ export function TabBar({
               indice={i}
               progresso={progresso}
               badge={badges?.[tab.screen] ?? 0}
-              onPress={() => (tab.modal ? onOpenModal(tab.screen as 'settings') : onNavigate(tab.screen))}
+              onPress={() => onNavigate(tab.screen)}
             />
           ))}
         </View>
@@ -225,9 +225,6 @@ function Aba({
   const { palette } = useTheme();
 
   const aceso = useAnimatedStyle(() => {
-    // Aba de modal nunca acende: ela não é destino, e piscar enquanto o dedo passa por
-    // cima prometeria uma navegação que não vai acontecer.
-    if (tab.modal) return { opacity: 0, transform: [{ scale: 1 }] };
     const perto = Math.max(0, 1 - Math.abs(progresso.value - indice));
     return { opacity: perto, transform: [{ scale: 0.96 + 0.04 * perto }] };
   });

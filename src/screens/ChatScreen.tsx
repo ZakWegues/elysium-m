@@ -17,7 +17,7 @@ import CameraAsk from './CameraAsk';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV, anima } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassFill, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 
 type MicStatus = 'checking' | 'ready' | 'denied';
 
@@ -403,21 +403,20 @@ export default function ChatScreen({
         </View>
       )}
 
+      {/* A barra em si é tinta chapada: ela acompanha a lista, e desfocar uma faixa
+          inteira por quadro é o custo que este bloco foi tirar da rolagem. Os BOTÕES é
+          que viram vidro de verdade — são três regiões de 44 px, fixas. */}
       <View style={{ overflow: 'hidden' }}>
-        <GlassFill intensity={65} strong edge={false} />
+        <GlassFill intensity={40} strong edge={false} blur={false} />
         <View
           style={[
             styles.inputRow,
             { padding: tokens.spacing.md, borderTopColor: palette.glassBorder },
           ]}
         >
-        <Pressable
-          style={[styles.roundButton, { backgroundColor: palette.primarySoft }]}
-          onPress={() => setCameraOpen(true)}
-          disabled={sending}
-        >
+        <GlassCircle onPress={() => setCameraOpen(true)} disabled={sending}>
           <Feather name="camera" size={20} color={palette.primary} />
-        </Pressable>
+        </GlassCircle>
         <TextInput
           style={[
             styles.input,
@@ -436,26 +435,21 @@ export default function ChatScreen({
           returnKeyType="send"
           editable={!sending}
         />
-        <Pressable
-          style={[
-            styles.roundButton,
-            {
-              backgroundColor: recording ? palette.error : micStatus !== 'ready' ? palette.border : palette.primarySoft,
-            },
-          ]}
+        <GlassCircle
+          ativo={recording}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
           disabled={sending || micStatus !== 'ready'}
         >
-          <Feather name="mic" size={20} color={recording ? '#fff' : micStatus !== 'ready' ? palette.textMuted : palette.primary} />
-        </Pressable>
-        <Pressable
-          style={[styles.roundButton, { backgroundColor: palette.primary, opacity: sending ? 0.5 : 1 }]}
-          onPress={() => handleSend()}
-          disabled={sending}
-        >
-          <Feather name="arrow-up" size={20} color={palette.onPrimary} />
-        </Pressable>
+          <Feather
+            name="mic"
+            size={20}
+            color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
+          />
+        </GlassCircle>
+        <GlassCircle ativo onPress={() => handleSend()} disabled={sending}>
+          <Feather name="arrow-up" size={20} color={palette.primary} />
+        </GlassCircle>
         </View>
       </View>
 
@@ -512,11 +506,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 10,
   },
-  roundButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
 });

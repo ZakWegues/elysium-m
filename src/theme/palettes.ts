@@ -80,6 +80,15 @@ export type Palette = {
    * escuro cobria o app de uma névoa leitosa. Agora a intensidade vem do modo.
    */
   glassSheen: readonly [string, string];
+  /**
+   * Tinta das gavetas e painéis que sobem por cima de tudo.
+   *
+   * É o ÚNICO lugar onde o branco SOBE em vez de descer: uma gaveta precisa ler como
+   * gaveta — claramente translúcida e borrada — e não como janela aberta na tela. Todo o
+   * resto do vidro foi para alfa mais baixo, porque "leitoso" é alfa de branco alto e não
+   * raio de blur.
+   */
+  glassSheet: string;
   /** Tinta da BlurView: precisa acompanhar o modo, senão o vidro clareia o escuro. */
   blurTint: 'light' | 'dark';
 };
@@ -94,12 +103,16 @@ const neutrosClaro = {
   error: '#C0392B',
   errorSoft: '#F8D7DA',
   success: '#2E8B47',
-  // Bem translúcidos de propósito — o blur por baixo é que dá corpo, não a tinta.
-  glassSurface: 'rgba(255,255,255,0.18)',
-  glassSurfaceStrong: 'rgba(255,255,255,0.34)',
-  glassBorder: 'rgba(255,255,255,0.55)',
+  // 🔴 TRANSPARÊNCIA E BORRÃO SÃO ALAVANCAS OPOSTAS. Para o fundo aparecer de verdade é
+  // preciso BAIXAR o alfa E REDUZIR o raio do blur, juntos: alfa alto com blur alto só
+  // deixa o borrão mais claro — que é exatamente o "leitoso" reclamado. Estes números são
+  // ~metade dos anteriores; o corpo do card vem do fundo, não da tinta.
+  glassSurface: 'rgba(255,255,255,0.10)',
+  glassSurfaceStrong: 'rgba(255,255,255,0.20)',
+  glassBorder: 'rgba(255,255,255,0.38)',
   glassBackdrop: 'rgba(18,20,24,0.28)',
-  glassSheen: ['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)'] as const,
+  glassSheen: ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0)'] as const,
+  glassSheet: 'rgba(255,255,255,0.46)',
   blurTint: 'light' as const,
 };
 
@@ -121,13 +134,15 @@ const neutrosEscuro = {
   success: '#4ADE80',
   // Mais encorpado que a primeira versão: quem dava volume aos cards no escuro era o véu
   // branco que saiu do GlassSurface. Sem isto, vidro sobre a noite fica invisível.
-  glassSurface: 'rgba(255,255,255,0.10)',
-  glassSurfaceStrong: 'rgba(255,255,255,0.16)',
-  glassBorder: 'rgba(255,255,255,0.20)',
+  glassSurface: 'rgba(255,255,255,0.06)',
+  glassSurfaceStrong: 'rgba(255,255,255,0.11)',
+  glassBorder: 'rgba(255,255,255,0.14)',
   glassBackdrop: 'rgba(0,0,0,0.55)',
+  // A gaveta é a exceção também aqui: na noite ela precisa de corpo para não sumir.
+  glassSheet: 'rgba(255,255,255,0.16)',
   // Um quinto do brilho do modo claro. Branco forte sobre superfície escura não lê como
   // reflexo, lê como sujeira.
-  glassSheen: ['rgba(255,255,255,0.11)', 'rgba(255,255,255,0)'] as const,
+  glassSheen: ['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)'] as const,
   blurTint: 'dark' as const,
 };
 
@@ -219,7 +234,13 @@ function build(name: ThemeName, familia: Familia): Palette {
   return { name, label: tema.label, rotulo: ROTULOS[name][familia], ...neutros, ...face };
 }
 
-const names: ThemeName[] = ['elisio', 'mare', 'crepusculo'];
+/**
+ * A ordem em que as três cores aparecem na tela — a MESMA do `THEMES` do
+ * `dashboard.html`, que lista Vidro Líquido, Maré e Âmbar nessa sequência. Estava
+ * invertida, e as duas telas do mesmo ecossistema mostravam a mesma lista em ordens
+ * diferentes.
+ */
+const names: ThemeName[] = ['crepusculo', 'mare', 'elisio'];
 
 /** Família Vidro Líquido — os três `lg` do desktop. */
 export const palettes: Record<ThemeName, Palette> = Object.fromEntries(

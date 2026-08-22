@@ -1,18 +1,40 @@
+import { createContext, ReactNode, useContext } from 'react';
 import { StyleSheet, View, ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../../theme';
-import { GlassFill } from './GlassSurface';
+import { GlassCircle, GlassFill } from './GlassSurface';
 import { Text } from './Text';
+
+/**
+ * Quem abre a gaveta de Ajustes.
+ *
+ * 🔴 AJUSTES SAIU DA BARRA DE ABAS. Ele ocupava um dos quatro lugares da navegação
+ * inferior sem ser um destino: abre uma gaveta por cima da tela, e voltar dela não é
+ * navegar. A barra de baixo ficou só com destinos reais (Início, Chat, PC) e o acionador
+ * foi para o canto superior direito — a mesma solução que o desktop tomou no bloco 36.
+ *
+ * O acionador mora no `ScreenHeader` porque toda tela já tem um, e um contexto evita
+ * passar a mesma função por cinco telas que não têm nada a ver com Ajustes.
+ */
+const AjustesContext = createContext<(() => void) | null>(null);
+
+export function AjustesProvider({ abrir, children }: { abrir: () => void; children: ReactNode }) {
+  return <AjustesContext.Provider value={abrir}>{children}</AjustesContext.Provider>;
+}
 
 export function ScreenHeader({
   title,
   left,
   center,
   right,
+  semAjustes = false,
   style,
   ...rest
 }: ViewProps & {
   title?: string;
+  /** Telas empilhadas (Conversas, Histórico) não repetem a engrenagem. */
+  semAjustes?: boolean;
   /** Ocupa o lugar do título — usado pelo switch IA ↔ PC no Chat. */
   center?: React.ReactNode;
   left?: React.ReactNode;
@@ -20,10 +42,14 @@ export function ScreenHeader({
 }) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const abrirAjustes = useContext(AjustesContext);
 
   return (
     <View style={{ overflow: 'hidden' }}>
-      <GlassFill intensity={60} strong edge={false} />
+      {/* Um dos dois únicos desfoques REAIS que rolam junto com o conteúdo (o outro é a
+          TabBar), e com raio bem menor que os 60 de antes — o pedido é ver o fundo, e
+          raio alto sobre tinta translúcida devolve o leitoso. */}
+      <GlassFill intensity={26} strong edge={false} />
       <View
         style={[
           styles.row,
@@ -40,7 +66,14 @@ export function ScreenHeader({
       >
         {left}
         {center ?? <Text variant="heading">{title}</Text>}
-        {right}
+        <View style={styles.direita}>
+          {right}
+          {!semAjustes && abrirAjustes && (
+            <GlassCircle size={32} onPress={abrirAjustes}>
+              <Feather name="settings" size={17} color={palette.textMuted} />
+            </GlassCircle>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -52,4 +85,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  direita: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

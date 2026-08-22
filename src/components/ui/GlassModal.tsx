@@ -1,6 +1,5 @@
-import { ReactNode, useEffect, useRef } from 'react';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
@@ -8,6 +7,23 @@ import { GlassFill } from './GlassSurface';
 import { Text } from './Text';
 
 const SHEET_OFFSCREEN_Y = 700;
+
+/**
+ * A gaveta — e por que ela deixou de ser um `Modal` do RN.
+ *
+ * 🔴 Dentro de um `Modal` o Android abre uma JANELA NATIVA SEPARADA, e nenhuma
+ * `BlurView` lá dentro enxerga o app que ficou atrás (§14). A gaveta ficava com tinta
+ * chapada e desfoque zero, o que é exatamente a queixa de "quase transparente demais":
+ * sem desfoque, translúcido não lê como vidro, lê como janela. Agora ela é uma camada
+ * absoluta dentro da árvore do app, e o `blurTarget` do fundo volta a funcionar.
+ *
+ * AQUI O ALFA SOBE E O RAIO SOBE JUNTO — ao contrário do resto do bloco. Card e popover
+ * querem revelar o fundo; a gaveta quer esconder a tela de trás sem apagá-la. São pedidos
+ * opostos, e por isso ela tem um token próprio (`glassSheet`).
+ *
+ * O botão físico de voltar era responsabilidade do `Modal` (`onRequestClose`). Sem ele,
+ * o `BackHandler` assume — senão voltar com a gaveta aberta sairia do app.
+ */
 
 export function GlassModal({
   visible,
@@ -24,9 +40,21 @@ export function GlassModal({
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(SHEET_OFFSCREEN_Y)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  /** Continua montada durante a saída; sem isto a gaveta sumiria de um quadro pro outro. */
+  const [montada, setMontada] = useState(visible);
+
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
 
   useEffect(() => {
     if (visible) {
+      setMontada(true);
       translateY.setValue(SHEET_OFFSCREEN_Y);
       Animated.parallel([
         Animated.spring(translateY, {
@@ -42,19 +70,18 @@ export function GlassModal({
       Animated.parallel([
         Animated.timing(translateY, { toValue: SHEET_OFFSCREEN_Y, duration: 200, useNativeDriver: true }),
         Animated.timing(backdropOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) setMontada(false);
+      });
     }
   }, [visible, translateY, backdropOpacity]);
 
+  if (!montada) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      {/* Este Modal é uma janela nativa própria no Android, então nenhuma BlurView
-          aqui dentro consegue amostrar o app que está atrás — é limitação de
-          plataforma, não de configuração. Pedimos 'none' explicitamente e ficamos com
-          a tinta escura, que é o que realmente produz o escurecimento do fundo. */}
+    <View style={styles.camada}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-          <BlurView intensity={30} tint="dark" blurMethod="none" style={StyleSheet.absoluteFill} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassBackdrop }]} />
         </Pressable>
       </Animated.View>
@@ -71,7 +98,8 @@ export function GlassModal({
           },
         ]}
       >
-        <GlassFill intensity={75} strong />
+        {/* Raio alto e tinta própria: a gaveta é a exceção declarada do bloco. */}
+        <GlassFill intensity={85} tintColor={palette.glassSheet} />
         {/* Brilho reflexivo na aresta de cima, como o topo curvo de uma placa de vidro */}
         <LinearGradient
           // Da paleta, não literal: 70% de branco é reflexo no vidro claro e mancha no escuro.
@@ -98,11 +126,14 @@ export function GlassModal({
           {children}
         </ScrollView>
       </Animated.View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Cobre a tela inteira por cima de tudo, inclusive da barra de abas — o mesmo alcance
+  // que a janela do Modal dava, agora dentro da árvore.
+  camada: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 30 },
   sheet: {
     position: 'absolute',
     left: 0,
