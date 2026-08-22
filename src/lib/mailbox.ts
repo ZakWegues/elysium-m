@@ -13,6 +13,8 @@ export type MailboxMessage = {
   attachment: MailboxAttachmentMeta | null;
   createdAt: number;
   readAt: number | null;
+  /** A qual conversa o recado pertence. Ausente so em cache gravado antes das sessoes. */
+  sessionId?: string;
 };
 
 async function request<T>(
@@ -53,8 +55,13 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
-export async function listMessages(pairing: Pairing): Promise<MailboxMessage[]> {
-  const data = await request<{ items: MailboxMessage[] }>(pairing, '/api/mailbox/messages');
+/**
+ * Sem `sessionId` o PC devolve a thread inteira, como sempre devolveu — e por isso um
+ * aparelho ainda nao atualizado continua funcionando contra um PC que ja tem sessoes.
+ */
+export async function listMessages(pairing: Pairing, sessionId?: string | null): Promise<MailboxMessage[]> {
+  const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
+  const data = await request<{ items: MailboxMessage[] }>(pairing, `/api/mailbox/messages${qs}`);
   return data.items;
 }
 
@@ -63,9 +70,10 @@ export async function sendMessage(
   message: {
     kind: MailboxKind;
     text?: string;
+    sessionId?: string | null;
     attachment?: { name: string; mimeType: string; base64: string };
   }
-): Promise<{ id: string; createdAt: number }> {
+): Promise<{ id: string; createdAt: number; sessionId?: string }> {
   // Anexo de 5 MB vira ~6,7 MB em base64; num Wi-Fi ruim isso não cabe no timeout padrão.
   const timeoutMs = message.attachment ? UPLOAD_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
   return request(pairing, '/api/mailbox/messages', {

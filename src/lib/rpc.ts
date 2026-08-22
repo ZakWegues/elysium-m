@@ -64,6 +64,16 @@ export type RpcMethod =
   | 'chat.save'
   | 'chat.favorite'
   | 'chat.delete'
+  // Conversas do lado PC (a Caixa). Entraram junto com as sessoes do mailbox: ate aqui
+  // a Caixa era UMA thread infinita, e o §16 registrava a falta do DELETE como C15.
+  | 'mailbox.sessions.list'
+  | 'mailbox.sessions.create'
+  | 'mailbox.sessions.rename'
+  | 'mailbox.sessions.favorite'
+  | 'mailbox.sessions.open'
+  | 'mailbox.sessions.save'
+  | 'mailbox.sessions.delete'
+  | 'mailbox.messages.delete'
   | 'pairing.endpoints'
   // Entraram na fase 3. Os quatro de preset existem porque o `presetsStore` do desktop
   // nunca tinha sido exposto: até aqui a tela de presets montava "executa o preset X" e
@@ -240,6 +250,14 @@ export type RpcResults = {
   'chat.save': { session: SyncedChatSession };
   'chat.favorite': { favorite: boolean | null };
   'chat.delete': { deleted: boolean };
+  'mailbox.sessions.list': { sessions: SyncedMailboxSession[] };
+  'mailbox.sessions.create': { session: SyncedMailboxSession };
+  'mailbox.sessions.rename': { session: SyncedMailboxSession | null };
+  'mailbox.sessions.favorite': { favorite: boolean | null };
+  'mailbox.sessions.open': { ok: boolean };
+  'mailbox.sessions.save': { session: SyncedMailboxSession };
+  'mailbox.sessions.delete': { deleted: boolean };
+  'mailbox.messages.delete': { deleted: boolean };
   'presets.list': { presets: PresetEntry[] };
   'presets.run': { ran: string | null; reply: string };
   'presets.save': { saved: string };
@@ -268,11 +286,29 @@ export type SyncedChatSession = {
   messages: { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number }[];
 };
 
+/**
+ * Uma conversa da Caixa. Mesmo formato do `SyncedChatSession`, sem as mensagens: elas
+ * ja moram no PC e chegam pelo /api/mailbox/messages, nao pelo RPC.
+ */
+export type SyncedMailboxSession = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  favorite: boolean;
+  /** Quantos recados a conversa tem. So a lista devolve. */
+  count?: number;
+};
+
 /** Espelha a marcação `destructive` do desktop — ver elysium/src/services/rpc.ts. */
 export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
   'system.killProcess',
   'apps.close',
   'power.control',
+  // Apagar conversa da Caixa leva os recados e os anexos do disco do PC junto, e nao
+  // tem desfazer. Mesma trava dos outros destrutivos.
+  'mailbox.sessions.delete',
+  'mailbox.messages.delete',
 ]);
 
 export type RpcOptions = {

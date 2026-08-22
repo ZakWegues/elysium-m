@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { MailboxMessage } from '../lib/mailbox';
-import { loadCache, loadFavorites } from '../lib/mailboxStore';
+import {
+  deleteSessionLocal, loadCache, loadFavorites, loadSessions,
+  MailboxSession, newMailboxSessionId, saveSessionLocal, setActiveSessionId,
+} from '../lib/mailboxStore';
+import { syncMailboxSessions } from '../lib/mailboxSync';
+import { confirmDestructive } from '../lib/confirm';
+import { Pairing } from '../lib/pairing';
 import { useTheme } from '../theme';
-import { Card, ScreenHeader, Text } from '../components/ui';
+import { Button, Card, ScreenHeader, Text } from '../components/ui';
 
 /**
  * Histórico do lado "PC" — os recados trocados entre celular e computador.
@@ -19,20 +25,99 @@ import { Card, ScreenHeader, Text } from '../components/ui';
  * Lê do cache local de propósito, sem pedir nada ao PC: quem abre o histórico quer procurar
  * uma coisa que já viu, e isso tem que funcionar com o PC desligado.
  */
-export default function MailboxHistorico({ onFechar }: { onFechar: () => void }) {
+export default function MailboxHistorico({
+  pairing, sessionId, onSelecionar, onFechar,
+}: {
+  pairing: Pairing;
+  /** Conversa aberta no momento, para marcá-la na lista. */
+  sessionId: string | null;
+  onSelecionar: (id: string) => void;
+  onFechar: () => void;
+}) {
   const { palette, tokens } = useTheme();
   const [mensagens, setMensagens] = useState<MailboxMessage[]>([]);
   const [favoritos, setFavoritos] = useState<Record<string, boolean>>({});
   const [busca, setBusca] = useState('');
   const [soFavoritos, setSoFavoritos] = useState(false);
+  const [sessoes, setSessoes] = useState<MailboxSession[]>([]);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [renomeando, setRenomeando] = useState<string | null>(null);
+  const [rascunho, setRascunho] = useState('');
+
+  const recarregar = useCallback(async () => {
+    const [cache, favs, lista] = await Promise.all([loadCache(), loadFavorites(), loadSessions()]);
+    setMensagens(cache.messages);
+    setFavoritos(favs);
+    setSessoes(lista);
+  }, []);
+
+  /** Mostra o que existe aqui primeiro, depois concilia com o PC. */
+  const sincronizar = useCallback(async () => {
+    setSincronizando(true);
+    const r = await syncMailboxSessions(pairing);
+    setOffline(r.status === 'offline');
+    await recarregar();
+    setSincronizando(false);
+  }, [pairing, recarregar]);
 
   useEffect(() => {
-    (async () => {
-      const [cache, favs] = await Promise.all([loadCache(), loadFavorites()]);
-      setMensagens(cache.messages);
-      setFavoritos(favs);
-    })().catch(err => console.error('[histórico-pc] falha lendo o cache', err));
-  }, []);
+    recarregar()
+      .then(sincronizar)
+      .catch(err => console.error('[histórico-pc] falha lendo o cache', err));
+  }, [recarregar, sincronizar]);
+
+  async function novaConversa() {
+    const agora = Date.now();
+    const nova: MailboxSession = {
+      id: newMailboxSessionId(), title: 'Novos recados',
+      createdAt: agora, updatedAt: agora, favorite: false,
+    };
+    await saveSessionLocal(nova);
+    await setActiveSessionId(nova.id);
+    await recarregar();
+    // 🔴 ESPERA a sincronização antes de abrir. A conversa nasce só aqui; se o primeiro
+    // recado sair antes de o PC conhecer o id, o servidor não acha a sessão e joga a
+    // mensagem na conversa ativa dele — o recado cairia na conversa errada.
+    await sincronizar();
+    onSelecionar(nova.id);
+  }
+
+  async function abrir(id: string) {
+    await setActiveSessionId(id);
+    onSelecionar(id);
+  }
+
+  async function favoritar(s: MailboxSession) {
+    // `updatedAt` sobe: favoritar muda o que sobrevive à poda, e é essa marca que faz o
+    // PC aceitar a versão do celular em vez de devolver a dele.
+    await saveSessionLocal({ ...s, favorite: !s.favorite, updatedAt: Date.now() });
+    await recarregar();
+    sincronizar();
+  }
+
+  async function confirmarRenome(s: MailboxSession) {
+    const novo = rascunho.trim().slice(0, 60);
+    setRenomeando(null);
+    if (!novo || novo === s.title) return;
+    await saveSessionLocal({ ...s, title: novo, updatedAt: Date.now() });
+    await recarregar();
+    sincronizar();
+  }
+
+  async function apagar(s: MailboxSession) {
+    // Apagar leva os recados e os anexos do disco do PC junto, e não tem desfazer — é
+    // destrutivo de verdade, então passa pela mesma trava dos outros.
+    const r = await confirmDestructive(
+      'Apagar conversa',
+      `"${s.title}" e os recados dela somem do PC. Não dá para desfazer.`
+    );
+    if (r !== 'confirmed') return;
+    await deleteSessionLocal(s.id);
+    await recarregar();
+    sincronizar();
+    if (s.id === sessionId) onSelecionar('');
+  }
 
   /**
    * A lista sai do mais novo para o mais antigo, ao contrário da conversa.
@@ -44,6 +129,9 @@ export default function MailboxHistorico({ onFechar }: { onFechar: () => void })
   const { linhas, total } = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const filtradas = mensagens
+      // O histórico é da conversa aberta. Sem o filtro ele voltaria a ser a thread única
+      // e infinita que esta fase inteira existiu para acabar.
+      .filter(m => (sessionId ? m.sessionId === sessionId : true))
       .filter(m => (soFavoritos ? favoritos[m.id] : true))
       .filter(m => {
         if (!termo) return true;
@@ -65,24 +153,82 @@ export default function MailboxHistorico({ onFechar }: { onFechar: () => void })
       out.push({ tipo: 'msg', chave: m.id, msg: m });
     }
     return { linhas: out, total: filtradas.length };
-  }, [mensagens, favoritos, busca, soFavoritos]);
+  }, [mensagens, favoritos, busca, soFavoritos, sessionId]);
 
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
         semAjustes
-        title="Histórico do PC"
+        title="Conversas do PC"
         left={
           <Pressable onPress={onFechar} hitSlop={8}>
             <Feather name="chevron-left" size={22} color={palette.text} />
           </Pressable>
         }
         right={
-          <Pressable onPress={() => setSoFavoritos(v => !v)} hitSlop={8}>
-            <Feather name="star" size={18} color={soFavoritos ? palette.accent : palette.textMuted} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {sincronizando
+              ? <ActivityIndicator size="small" color={palette.primary} />
+              : <Pressable onPress={sincronizar} hitSlop={8}>
+                  <Feather name="refresh-cw" size={17} color={palette.textMuted} />
+                </Pressable>}
+            <Pressable onPress={() => setSoFavoritos(v => !v)} hitSlop={8}>
+              <Feather name="star" size={18} color={soFavoritos ? palette.accent : palette.textMuted} />
+            </Pressable>
+          </View>
         }
       />
+
+      {/* Conversas do lado PC. Ficam AQUI, e não numa segunda tela: o botão de relógio já
+          é o histórico deste lado do switch (bloco 43), e separar "as conversas" de "o que
+          foi dito nelas" daria dois destinos para o mesmo assunto. */}
+      <View style={{ paddingHorizontal: tokens.spacing.lg, gap: tokens.spacing.sm }}>
+        <Button title="+ Nova conversa" onPress={novaConversa} />
+
+        <Text variant="caption" color={offline ? palette.error : palette.textMuted}>
+          {offline
+            ? 'PC fora de alcance — mostrando a cópia local. Sincroniza sozinho quando voltar.'
+            : 'Sincronizado com o PC. As 5 mais recentes ficam guardadas; favoritar tira dessa contagem.'}
+        </Text>
+
+        {sessoes.map(s => (
+          <Card key={s.id} style={[styles.linhaSessao, s.id === sessionId && { borderColor: palette.primary }]}>
+            {renomeando === s.id ? (
+              <TextInput
+                value={rascunho}
+                onChangeText={setRascunho}
+                onBlur={() => confirmarRenome(s)}
+                onSubmitEditing={() => confirmarRenome(s)}
+                autoFocus
+                maxLength={60}
+                style={{ flex: 1, color: palette.text, fontSize: 14, paddingVertical: 0 }}
+              />
+            ) : (
+              <Pressable style={{ flex: 1 }} onPress={() => abrir(s.id)}>
+                <Text variant="subheading" numberOfLines={1}>{s.title}</Text>
+                <Text variant="caption" color={palette.textMuted}>
+                  {s.count != null ? `${s.count} recado${s.count === 1 ? '' : 's'} · ` : ''}
+                  {rotuloDoDia(s.updatedAt)}
+                </Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={() => { setRascunho(s.title); setRenomeando(s.id); }}
+              hitSlop={8}
+              style={{ marginRight: 10 }}
+            >
+              <Feather name="edit-2" size={17} color={palette.textMuted} />
+            </Pressable>
+            <Pressable onPress={() => favoritar(s)} hitSlop={8} style={{ marginRight: 10 }}>
+              <Feather name="star" size={18} color={s.favorite ? palette.accent : palette.border} />
+            </Pressable>
+            <Pressable onPress={() => apagar(s)} hitSlop={8}>
+              <Feather name="trash-2" size={17} color={palette.textMuted} />
+            </Pressable>
+          </Card>
+        ))}
+      </View>
 
       <View style={{ paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm }}>
         <View style={[styles.busca, {
@@ -186,4 +332,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   linha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  linhaSessao: { flexDirection: 'row', alignItems: 'center' },
 });

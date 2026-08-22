@@ -16,6 +16,8 @@ import {
   sendMessage,
 } from '../lib/mailbox';
 import { loadFavorites, saveCache, loadCache, toggleFavorite as toggleFavoriteStore } from '../lib/mailboxStore';
+import { callRpc } from '../lib/rpc';
+import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
@@ -28,11 +30,17 @@ export default function MailboxScreen({
   pairing,
   onUnpair,
   semCabecalho,
+  sessionId,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
   /** Dentro do ChatHub o cabeçalho é do hub, com o switch IA ↔ PC. */
   semCabecalho?: boolean;
+  /**
+   * Conversa aberta. `null` deixa o PC decidir (a ativa dele) — é o que mantém o app
+   * funcionando contra um PC que ainda não conhece conversas separadas.
+   */
+  sessionId?: string | null;
 }) {
   const { palette, tokens } = useTheme();
   const [messages, setMessages] = useState<MailboxMessage[]>([]);
@@ -47,9 +55,18 @@ export default function MailboxScreen({
 
   const refresh = useCallback(async () => {
     try {
-      const items = await listMessages(pairing);
+      const items = await listMessages(pairing, sessionId ?? null);
       setMessages(items);
-      saveCache({ messages: items });
+      // O cache guarda TODAS as conversas. Gravar só as desta apagaria o histórico
+      // offline das outras — que é justamente o que a tela de histórico lê.
+      loadCache()
+        .then(cache => {
+          const outras = sessionId
+            ? cache.messages.filter(m => m.sessionId !== sessionId)
+            : [];
+          return saveCache({ messages: [...outras, ...items] });
+        })
+        .catch(err => console.warn('[caixa] falha ao gravar cache', err));
 
       const unreadFromPc = items.filter((m) => m.from === 'pc' && !m.readAt);
       if (unreadFromPc.length > 0) {
@@ -70,17 +87,19 @@ export default function MailboxScreen({
       }
       console.error('[mailbox] falha ao atualizar', err);
     }
-  }, [pairing, onUnpair]);
+  }, [pairing, onUnpair, sessionId]);
 
   useEffect(() => {
     (async () => {
       const [cache, favs] = await Promise.all([loadCache(), loadFavorites()]);
-      setMessages(cache.messages);
+      setMessages(
+        sessionId ? cache.messages.filter(m => m.sessionId === sessionId) : cache.messages
+      );
       setFavorites(favs);
       setLoading(false);
       refresh();
     })();
-  }, [refresh]);
+  }, [refresh, sessionId]);
 
   useEffect(() => {
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
@@ -107,19 +126,53 @@ export default function MailboxScreen({
   const jaAncorou = useRef(false);
   /** O dedo está por perto do fim? Só então a lista acompanha mensagem nova. */
   const coladoNoFim = useRef(true);
+  /**
+   * 🔴 O QUE AINDA ABRIA NO MEIO, e por quê.
+   *
+   * O bloco 42 trocou a contagem de mensagens pelo tamanho do conteúdo, o que estava
+   * certo, mas travava a âncora no PRIMEIRO `onContentSizeChange`. Esse primeiro evento
+   * não é a lista inteira: a `FlatList` renderiza a janela inicial (10 linhas), dispara
+   * o evento com a altura DELAS, e só depois monta o resto. O `scrollToEnd` daquele
+   * instante vai para o fim de 10 linhas — o meio da conversa.
+   *
+   * Depois disso a decisão passava a depender do `onScroll`, e aí entra a corrida: o
+   * evento de rolagem chega com o `contentSize` do quadro anterior. Se mais linhas
+   * montaram no meio, `faltando` vem grande, `coladoNoFim` vira false e a âncora desiste
+   * de vez — parada exatamente onde estava. Conversa mais curta só reduz a chance de a
+   * corrida acontecer; não corrige nada.
+   *
+   * A correção é não usar POSIÇÃO para decidir enquanto o usuário não tocou na lista.
+   * Só o arrasto dele solta a âncora, e voltar ao fim a prende de novo.
+   */
+  const usuarioArrastou = useRef(false);
 
-  const aoCrescerConteudo = useCallback(() => {
-    if (!jaAncorou.current) {
-      // Primeira medição de verdade: pula para o fim sem animar. Animar aqui mostraria a
-      // lista rolando sozinha na abertura, que é justamente a sensação de "abriu torto".
-      listRef.current?.scrollToEnd({ animated: false });
+  // A conversa mudou: a âncora recomeça. Sem isso, trocar de conversa herdaria o estado
+  // de rolagem da anterior e abriria a nova no lugar errado.
+  useEffect(() => {
+    jaAncorou.current = false;
+    usuarioArrastou.current = false;
+    coladoNoFim.current = true;
+  }, [sessionId]);
+
+  const aoCrescerConteudo = useCallback((_l: number, altura: number) => {
+    if (__DEV__) {
+      console.log("[caixa] conteudo cresceu", {
+        altura, jaAncorou: jaAncorou.current, arrastou: usuarioArrastou.current,
+        coladoNoFim: coladoNoFim.current,
+      });
+    }
+    if (!usuarioArrastou.current) {
+      // Enquanto o dedo não entrou na história, TODO crescimento reancora. A primeira vez
+      // sem animar (animar mostraria a lista rolando sozinha na abertura, que é a própria
+      // sensação de "abriu torto"); as seguintes acompanham suave.
+      listRef.current?.scrollToEnd({ animated: jaAncorou.current });
       jaAncorou.current = true;
       return;
     }
-    // Depois disso, só acompanha quem estava lendo o fim. Puxar a tela de volta enquanto
-    // o usuário lê uma mensagem antiga é pior que não rolar.
+    // Depois do primeiro arrasto, só acompanha quem estava lendo o fim. Puxar a tela de
+    // volta enquanto o usuário lê uma mensagem antiga é pior que não rolar.
     if (coladoNoFim.current) listRef.current?.scrollToEnd({ animated: true });
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     const toFetch = messages.filter(
@@ -189,6 +242,7 @@ export default function MailboxScreen({
       await sendMessage(pairing, {
         kind: attachment ? 'file' : guessKind(text),
         text: text || undefined,
+        sessionId: sessionId ?? null,
         attachment: attachmentPayload,
       });
 
@@ -210,6 +264,37 @@ export default function MailboxScreen({
   async function handleToggleFavorite(id: string) {
     const next = await toggleFavoriteStore(id);
     setFavorites(next);
+  }
+
+  /**
+   * Segurar abre as ações do recado. Antes segurar favoritava direto, o que não deixava
+   * lugar nenhum para apagar — e apagar recado era justamente o `DELETE` que faltava no
+   * contrato do mailbox (§16, C15).
+   */
+  function handleLongPress(message: MailboxMessage) {
+    Alert.alert('Recado', message.text ?? message.attachment?.name ?? 'Sem conteúdo', [
+      {
+        text: favorites[message.id] ? 'Desfavoritar' : 'Favoritar',
+        onPress: () => handleToggleFavorite(message.id),
+      },
+      { text: 'Apagar', style: 'destructive', onPress: () => apagarRecado(message) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  }
+
+  async function apagarRecado(message: MailboxMessage) {
+    // Destrutivo no desktop: apaga o recado e o anexo do disco. O `confirmed` só vai
+    // depois que a identidade foi validada aqui — sem ele o PC responde 403.
+    const r = await confirmDestructive('Apagar recado', 'Some do PC junto com o anexo. Não dá para desfazer.');
+    if (r !== 'confirmed') return;
+    try {
+      await callRpc(pairing, 'mailbox.messages.delete', { id: message.id }, { confirmed: true });
+      setMessages(prev => prev.filter(m => m.id !== message.id));
+      const cache = await loadCache();
+      await saveCache({ messages: cache.messages.filter(m => m.id !== message.id) });
+    } catch (err) {
+      Alert.alert('Falha ao apagar', errMessage(err));
+    }
   }
 
   async function handleOpenAttachment(message: MailboxMessage) {
@@ -249,12 +334,18 @@ export default function MailboxScreen({
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
         onContentSizeChange={aoCrescerConteudo}
+        // O arrasto do dedo é o ÚNICO jeito de soltar a âncora. Posição de rolagem sozinha
+        // não serve: durante a montagem ela chega defasada e derrubava a âncora no meio.
+        onScrollBeginDrag={() => { usuarioArrastou.current = true; }}
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
           const faltando = contentSize.height - layoutMeasurement.height - contentOffset.y;
           // 80 px de tolerância: quem parou a rolagem um dedo acima do fim ainda quer
           // acompanhar; quem subiu para reler, não.
           coladoNoFim.current = faltando < 80;
+          // Voltou ao fim de verdade: a âncora volta a valer como se a tela tivesse
+          // acabado de abrir.
+          if (faltando < 8) usuarioArrastou.current = false;
         }}
         scrollEventThrottle={64}
         renderItem={({ item }) => {
@@ -268,7 +359,7 @@ export default function MailboxScreen({
               onPress={() => {
                 if (item.attachment && !isImage) handleOpenAttachment(item);
               }}
-              onLongPress={() => handleToggleFavorite(item.id)}
+              onLongPress={() => handleLongPress(item)}
             >
               <View
                 style={[

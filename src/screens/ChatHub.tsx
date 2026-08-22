@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
+import { getActiveSessionId, setActiveSessionId } from '../lib/mailboxStore';
 import { MOV, anima } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, Popover, ScreenHeader, Text } from '../components/ui';
@@ -50,6 +51,21 @@ export default function ChatHub({
    * separados; era o botão que não sabia disso.
    */
   const [historicoPcAberto, setHistoricoPcAberto] = useState(false);
+  /**
+   * Conversa aberta do lado PC. Mora aqui, e não dentro da Caixa, pelo mesmo motivo que
+   * o `sessionId` da IA mora acima deste componente: quem troca de conversa é o histórico,
+   * que é irmão da tela e não filho dela.
+   *
+   * `null` deixa o PC decidir (a conversa ativa dele) — é o que mantém a tela funcionando
+   * contra um desktop que ainda não conhece conversas separadas.
+   */
+  const [mailboxSessionId, setMailboxSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getActiveSessionId()
+      .then(id => setMailboxSessionId(id))
+      .catch(err => console.warn('[caixa] falha lendo a conversa ativa', err));
+  }, []);
   const [presetsAberto, setPresetsAberto] = useState(false);
   const [ancora, setAncora] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const botaoRef = useRef<View>(null);
@@ -65,7 +81,20 @@ export default function ChatHub({
   }
 
   if (historicoPcAberto) {
-    return <MailboxHistorico onFechar={() => setHistoricoPcAberto(false)} />;
+    return (
+      <MailboxHistorico
+        pairing={pairing}
+        sessionId={mailboxSessionId}
+        onSelecionar={(id) => {
+          // String vazia = a conversa aberta foi apagada; volta a deixar o PC decidir.
+          const alvo = id || null;
+          setMailboxSessionId(alvo);
+          setActiveSessionId(alvo).catch(() => {});
+          if (id) setHistoricoPcAberto(false);
+        }}
+        onFechar={() => setHistoricoPcAberto(false)}
+      />
+    );
   }
 
   return (
@@ -105,7 +134,12 @@ export default function ChatHub({
             semCabecalho
           />
         ) : (
-          <MailboxScreen pairing={pairing} onUnpair={onUnpair} semCabecalho />
+          <MailboxScreen
+            pairing={pairing}
+            onUnpair={onUnpair}
+            sessionId={mailboxSessionId}
+            semCabecalho
+          />
         )}
       </View>
 
