@@ -64,6 +64,12 @@ export type RpcMethod =
   | 'chat.save'
   | 'chat.favorite'
   | 'chat.delete'
+  // 🔴 LÁPIDE NO SENTIDO PC → CELULAR. O `chat.list` passou a devolver também os ids que
+  // o PC apagou; o `ackDeleted` é o celular confirmando que apagou a cópia dele, e é só
+  // depois dele que o PC solta o registro. Sem esse par, apagar no PC não se propagava:
+  // o passo de `chat.save` reempurrava a conversa e ela voltava viva.
+  | 'chat.ackDeleted'
+  | 'chat.rename'
   // Conversas do lado PC (a Caixa). Entraram junto com as sessoes do mailbox: ate aqui
   // a Caixa era UMA thread infinita, e o §16 registrava a falta do DELETE como C15.
   | 'mailbox.sessions.list'
@@ -73,6 +79,7 @@ export type RpcMethod =
   | 'mailbox.sessions.open'
   | 'mailbox.sessions.save'
   | 'mailbox.sessions.delete'
+  | 'mailbox.sessions.ackDeleted'
   | 'mailbox.messages.delete'
   | 'pairing.endpoints'
   // Entraram na fase 3. Os quatro de preset existem porque o `presetsStore` do desktop
@@ -245,18 +252,22 @@ export type RpcResults = {
   'spotify.playSearch': { playing: { track: string; artist: string } };
   'spotify.shuffle': { ok: true };
   'spotify.repeat': { ok: true };
-  'chat.list': { sessions: SyncedChatSession[] };
+  /** `deleted`: ids apagados NO PC que este aparelho ainda precisa aplicar. */
+  'chat.list': { sessions: SyncedChatSession[]; deleted?: string[] };
   'chat.get': { session: SyncedChatSession | null };
   'chat.save': { session: SyncedChatSession };
   'chat.favorite': { favorite: boolean | null };
   'chat.delete': { deleted: boolean };
-  'mailbox.sessions.list': { sessions: SyncedMailboxSession[] };
+  'chat.ackDeleted': { cleared: number };
+  'chat.rename': { session: SyncedChatSession | null };
+  'mailbox.sessions.list': { sessions: SyncedMailboxSession[]; deleted?: string[] };
   'mailbox.sessions.create': { session: SyncedMailboxSession };
   'mailbox.sessions.rename': { session: SyncedMailboxSession | null };
   'mailbox.sessions.favorite': { favorite: boolean | null };
   'mailbox.sessions.open': { ok: boolean };
   'mailbox.sessions.save': { session: SyncedMailboxSession };
   'mailbox.sessions.delete': { deleted: boolean };
+  'mailbox.sessions.ackDeleted': { cleared: number };
   'mailbox.messages.delete': { deleted: boolean };
   'presets.list': { presets: PresetEntry[] };
   'presets.run': { ran: string | null; reply: string };
@@ -283,6 +294,8 @@ export type SyncedChatSession = {
   createdAt: number;
   updatedAt: number;
   favorite: boolean;
+  /** Nome dado à mão. Viaja no contrato: sem ele o outro lado recalcularia o título. */
+  titleCustom?: boolean;
   messages: { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number }[];
 };
 

@@ -129,6 +129,31 @@ export async function clearTombstones(ids: string[]): Promise<void> {
   await AsyncStorage.setItem(TOMBSTONE_KEY, JSON.stringify(restantes));
 }
 
+/**
+ * 🔴 APLICA AS EXCLUSÕES FEITAS NO PC.
+ *
+ * O outro sentido da lápide. O `mailbox.sessions.list` devolve os ids que o PC apagou;
+ * aqui eles saem da cópia local — sessão, recados em cache e a conversa ativa. Adotar a
+ * lista devolvida sozinha não bastava: o cache de mensagens e o `activeSessionId` não
+ * moram nela, e o histórico offline continuaria mostrando recados de conversa morta.
+ */
+export async function purgeDeleted(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const alvo = new Set(ids);
+  const sessions = await loadSessions();
+  await replaceSessions(sessions.filter(s => !alvo.has(s.id)));
+
+  const cache = await loadCache();
+  await saveCache({ messages: cache.messages.filter(m => !alvo.has(m.sessionId ?? '')) });
+
+  const ativa = await getActiveSessionId();
+  if (ativa && alvo.has(ativa)) await setActiveSessionId(null);
+
+  // As lápides locais desses ids também saem: o PC já os apagou, não há o que propagar.
+  await clearTombstones(ids);
+  return ids;
+}
+
 export async function getActiveSessionId(): Promise<string | null> {
   return AsyncStorage.getItem(ACTIVE_KEY);
 }

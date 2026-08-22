@@ -13,6 +13,11 @@ export type ChatSession = {
   createdAt: number;
   updatedAt: number;
   favorite: boolean;
+  /**
+   * Nome dado à mão. Sem esta marca a próxima mensagem sobrescreveria o título com o
+   * `deriveTitle` da primeira fala, e o renomear duraria até o usuário responder.
+   */
+  titleCustom?: boolean;
   messages: StoredMessage[];
 };
 
@@ -48,7 +53,16 @@ export async function saveSession(session: ChatSession): Promise<void> {
     // O favorito guardado vence o que veio do chamador. A tela de chat carrega esse
     // valor uma vez e o mantém numa ref; favoritar pela tela de Conversas depois disso
     // deixava a ref velha, e a próxima mensagem desfazia o favorito sem ninguém pedir.
-    sessions[index] = { ...session, favorite: sessions[index].favorite };
+    //
+    // O título dado à mão vence pelo mesmo motivo: a tela de chat manda sempre o
+    // `deriveTitle`, e sem esta linha o renomear morreria na mensagem seguinte.
+    const guardada = sessions[index];
+    sessions[index] = {
+      ...session,
+      favorite: guardada.favorite,
+      title: guardada.titleCustom ? guardada.title : session.title,
+      titleCustom: guardada.titleCustom,
+    };
   } else {
     sessions.push(session);
   }
@@ -102,6 +116,39 @@ export async function clearTombstones(ids: string[]): Promise<void> {
  */
 export async function replaceAll(sessions: ChatSession[]): Promise<void> {
   await writeAll(sessions);
+}
+
+/**
+ * Renomear NÃO sobe o `updatedAt`: ele é o critério de conflito da sincronização e a
+ * ordem da lista. Trocar o nome não é atividade nova na conversa.
+ */
+export async function renameSession(id: string, title: string): Promise<void> {
+  const limpo = title.trim().slice(0, 60);
+  if (!limpo) return;
+  const sessions = await readAll();
+  const session = sessions.find((s) => s.id === id);
+  if (!session) return;
+  session.title = limpo;
+  session.titleCustom = true;
+  await writeAll(sessions);
+}
+
+/**
+ * 🔴 APLICA AS EXCLUSÕES FEITAS NO PC.
+ *
+ * O outro sentido da lápide. O `chat.list` devolve os ids que o PC apagou; aqui eles
+ * saem da cópia local. Adotar só a lista devolvida quase bastaria — mas quase: a tela de
+ * chat pode ter a conversa aberta em memória e regravá-la logo depois, e a lápide do PC
+ * só é liberada pelo `chat.ackDeleted`, que o sync manda depois desta função.
+ */
+export async function purgeDeleted(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const alvo = new Set(ids);
+  const sessions = await readAll();
+  await writeAll(sessions.filter((s) => !alvo.has(s.id)));
+  // As lápides locais desses ids também saem: o PC já os apagou, não há o que propagar.
+  await clearTombstones(ids);
+  return ids;
 }
 
 export async function toggleFavorite(id: string): Promise<void> {

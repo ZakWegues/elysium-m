@@ -1,7 +1,8 @@
 import { Pairing } from './pairing';
 import { callRpc } from './rpc';
 import {
-  clearTombstones, loadSessions, MailboxSession, readTombstones, replaceSessions,
+  clearTombstones, loadSessions, MailboxSession, purgeDeleted, readTombstones,
+  replaceSessions,
 } from './mailboxStore';
 
 /**
@@ -27,6 +28,15 @@ import {
  *
  * Vence quem tem `updatedAt` maior, decidido no PC (`mergeMailboxSession`). O `createdAt`
  * guardado é preservado — o celular pode não saber quando a conversa nasceu.
+ *
+ * ## Exclusão nos DOIS sentidos
+ *
+ * Lápide dos dois lados, não de um só. Daqui para o PC, os `delete` vão antes dos `save`
+ * e o registro local só é limpo depois do sucesso. Do PC para cá, o
+ * `mailbox.sessions.list` devolve `deleted` — os ids que ele apagou — e o
+ * `mailbox.sessions.ackDeleted` é a confirmação que solta a lápide de lá. Enquanto ela
+ * está de pé, o PC RECUSA o `save` daquele id: é isso que impede a conversa de
+ * ressuscitar no passo 2, um passo antes de este aparelho saber que ela morreu.
  *
  * ## Offline
  *
@@ -76,11 +86,24 @@ async function run(pairing: Pairing): Promise<MailboxSyncResult> {
       });
     }
 
-    // 3. Adota o resultado.
-    const { sessions } = await callRpc(pairing, 'mailbox.sessions.list');
+    // 3. Adota o resultado, e aplica o que o PC apagou.
+    const { sessions, deleted: apagadasNoPc } = await callRpc(pairing, 'mailbox.sessions.list');
     await replaceSessions(sessions);
+    // Leva junto o cache de recados e o `activeSessionId`, que não moram na lista
+    // devolvida — sem isso o histórico offline seguiria mostrando conversa morta.
+    const aplicadas = await purgeDeleted(apagadasNoPc ?? []);
 
-    return { status: 'synced', sessions, pushed: locais.length, deleted: confirmados.length };
+    // 4. Só agora o PC pode soltar a lápide dele. Confirmar antes de gravar deixaria uma
+    //    janela em que o registro sumiu de lá e a conversa ainda existe aqui — e o
+    //    próximo `save` a ressuscitaria.
+    if (aplicadas.length > 0) {
+      await callRpc(pairing, 'mailbox.sessions.ackDeleted', { ids: aplicadas });
+    }
+
+    return {
+      status: 'synced', sessions, pushed: locais.length,
+      deleted: confirmados.length + aplicadas.length,
+    };
   } catch {
     // Sem rede ou PC fora do ar. A cópia local segue valendo e as exclusões continuam
     // registradas para a próxima tentativa.

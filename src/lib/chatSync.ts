@@ -1,7 +1,7 @@
 import { Pairing } from './pairing';
 import { callRpc } from './rpc';
 import {
-  ChatSession, clearTombstones, listSessions, readTombstones, replaceAll,
+  ChatSession, clearTombstones, listSessions, purgeDeleted, readTombstones, replaceAll,
 } from './chatHistoryStore';
 
 /**
@@ -19,6 +19,15 @@ import {
  * Vence quem tem `updatedAt` maior, decidido no PC. Para um usuário com dois
  * aparelhos, isso cobre o caso real — mexer no celular depois de mexer no PC — sem a
  * complexidade de relógios vetoriais.
+ *
+ * ## Exclusão nos DOIS sentidos
+ *
+ * Lápide dos dois lados, não de um só. Daqui para o PC, os `chat.delete` vão antes dos
+ * `chat.save` e o registro local só é limpo depois do sucesso. Do PC para cá, o
+ * `chat.list` devolve `deleted` — os ids que ele apagou — e o `chat.ackDeleted` é a
+ * confirmação que solta a lápide de lá. Enquanto ela está de pé, o PC RECUSA o
+ * `chat.save` daquele id: é isso que impede a conversa de ressuscitar no passo 2, um
+ * passo antes de este aparelho descobrir que ela morreu.
  *
  * ## Offline
  *
@@ -59,11 +68,22 @@ async function run(pairing: Pairing): Promise<SyncResult> {
       await callRpc(pairing, 'chat.save', { session });
     }
 
-    // 3. Adota o resultado.
-    const { sessions } = await callRpc(pairing, 'chat.list');
+    // 3. Adota o resultado, e aplica o que o PC apagou.
+    const { sessions, deleted: apagadasNoPc } = await callRpc(pairing, 'chat.list');
     await replaceAll(sessions);
+    const aplicadas = await purgeDeleted(apagadasNoPc ?? []);
 
-    return { status: 'synced', sessions, pushed: local.length, deleted: confirmed.length };
+    // 4. Só agora o PC pode soltar a lápide dele. Confirmar antes de gravar deixaria uma
+    //    janela em que o registro sumiu de lá e a conversa ainda existe aqui — e o
+    //    próximo `chat.save` a ressuscitaria, que é exatamente o bug que a lápide evita.
+    if (aplicadas.length > 0) {
+      await callRpc(pairing, 'chat.ackDeleted', { ids: aplicadas });
+    }
+
+    return {
+      status: 'synced', sessions, pushed: local.length,
+      deleted: confirmed.length + aplicadas.length,
+    };
   } catch {
     // Sem rede ou PC fora do ar. A cópia local segue valendo e as exclusões continuam
     // registradas para a próxima tentativa.
