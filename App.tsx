@@ -11,6 +11,8 @@ import HomeScreen from './src/screens/HomeScreen';
 import SpotifyPlayer from './src/screens/SpotifyPlayer';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
+import OnboardingScreen, { CHAVE_ONBOARDING } from './src/screens/OnboardingScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearPairing, loadPairing, savePairing, Pairing } from './src/lib/pairing';
 import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -68,9 +70,13 @@ function AppInner() {
     menos: () => setSobreposicoes(n => Math.max(0, n - 1)),
   }), []);
 
+  /** null = ainda não leu; true = mostrar as três telas de boas-vindas. */
+  const [onboarding, setOnboarding] = useState<boolean | null>(null);
+
   useEffect(() => {
-    loadPairing().then((p) => {
+    Promise.all([loadPairing(), AsyncStorage.getItem(CHAVE_ONBOARDING).catch(() => '1')]).then(([p, visto]) => {
       setPairing(p);
+      setOnboarding(!visto);
       setLoading(false);
     });
   }, []);
@@ -278,6 +284,9 @@ function AppInner() {
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
+
+      {/* Boas-vindas, uma vez, depois do primeiro pareamento. Por cima de tudo. */}
+      {onboarding && <OnboardingScreen onDone={() => setOnboarding(false)} />}
 
       {/* A gaveta é o ÚLTIMO irmão de propósito: sem o `Modal` nativo, quem a põe por cima
           da barra de abas é a ordem de desenho (mais o zIndex dela). */}

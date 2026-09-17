@@ -42,6 +42,14 @@ import BuscaPanel from './BuscaPanel';
  */
 
 const CHAVE_CARDS = 'elysium_home_cards';
+
+function saudacao(): string {
+  const h = new Date().getHours();
+  if (h < 5) return 'Boa madrugada';
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 /** Horário do desligamento agendado, em epoch ms. Ver `gravarAgendamento`. */
 const CHAVE_AGENDAMENTO = 'elysium_desligamento_agendado';
 
@@ -422,7 +430,7 @@ export default function HomeScreen({
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
-        title="ELYSIUM-M"
+        title={`${saudacao()}, Zak`}
         right={
           <View style={styles.linhaStatus}>
             <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
@@ -431,14 +439,13 @@ export default function HomeScreen({
             <Pressable
               onPress={() => setEditando(v => !v)}
               hitSlop={10}
-              style={{ marginLeft: 6, marginRight: 10 }}
+              style={{ marginLeft: 6, marginRight: 4 }}
             >
               <Feather name="sliders" size={17} color={editando ? palette.primary : palette.textMuted} />
             </Pressable>
+            {/* Só o ponto: a saudação virou o título e não sobra largura para "PC online"
+                aqui. O texto do estado mora na linha abaixo do cabeçalho. */}
             <View style={[styles.ponto, { backgroundColor: online ? palette.success : palette.error }]} />
-            <Text variant="caption" color={online ? palette.success : palette.error}>
-              {online ? 'PC online' : 'PC offline'}
-            </Text>
           </View>
         }
       />
@@ -451,6 +458,18 @@ export default function HomeScreen({
         // impossível chegar nos cards de baixo. Ver o comentário em `CardArrastavel`.
         scrollEnabled={!arrastando}
       >
+        {/* A saudação do desktop (bloco 33), aqui também: a Início precisa dizer de cara
+            que é a Início, e o estado do PC merece uma frase, não só um ponto no canto. */}
+        {!editando && (
+          <View style={{ paddingHorizontal: 4, paddingBottom: 2 }}>
+            <Text variant="caption" color={palette.textMuted}>
+              {online ? 'PC online' : 'PC fora de alcance'}
+              {dados.lembretes.length > 0 ? ` · ${dados.lembretes.length} lembrete${dados.lembretes.length > 1 ? 's' : ''} pendente${dados.lembretes.length > 1 ? 's' : ''}` : ''}
+              {dados.clima ? ` · ${Math.round(dados.clima.temperatura)}° lá fora` : ''}
+            </Text>
+          </View>
+        )}
+
         {editando && (
           <Card glass style={{ gap: tokens.spacing.sm }}>
             <View style={styles.cabecalho}>
