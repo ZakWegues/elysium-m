@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,14 @@ import { GlassFill } from './GlassSurface';
 import { Text } from './Text';
 
 const SHEET_OFFSCREEN_Y = 700;
+
+/**
+ * Quantas gavetas estão abertas agora. O `App` lê isto para esconder a TabBar: a gaveta
+ * é uma camada absoluta DENTRO da tela que a abriu, então não tem como cobrir a barra —
+ * que fica visível e clicável por baixo do véu. Sem a barra, a tela cresce até o rodapé e
+ * o véu cobre tudo, que é o que uma gaveta modal promete.
+ */
+export const SobreposicaoContext = createContext<{ mais: () => void; menos: () => void } | null>(null);
 
 /**
  * A gaveta — e por que ela deixou de ser um `Modal` do RN.
@@ -42,6 +50,13 @@ export function GlassModal({
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   /** Continua montada durante a saída; sem isto a gaveta sumiria de um quadro pro outro. */
   const [montada, setMontada] = useState(visible);
+  const sobreposicao = useContext(SobreposicaoContext);
+
+  useEffect(() => {
+    if (!visible || !sobreposicao) return;
+    sobreposicao.mais();
+    return () => sobreposicao.menos();
+  }, [visible, sobreposicao]);
 
   useEffect(() => {
     if (!visible) return;

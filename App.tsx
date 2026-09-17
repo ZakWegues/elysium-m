@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -16,7 +16,7 @@ import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
-import { AjustesProvider, AppBackground, BlurTargetProvider, GlassModal } from './src/components/ui';
+import { AjustesProvider, AppBackground, BlurTargetProvider, GlassModal, SobreposicaoContext } from './src/components/ui';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
@@ -61,6 +61,12 @@ function AppInner() {
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
 
   const [queued, setQueued] = useState(0);
+  /** Gavetas abertas em qualquer tela. Com uma de pé, a TabBar sai — ver GlassModal.tsx. */
+  const [sobreposicoes, setSobreposicoes] = useState(0);
+  const sobreposicao = useMemo(() => ({
+    mais: () => setSobreposicoes(n => n + 1),
+    menos: () => setSobreposicoes(n => Math.max(0, n - 1)),
+  }), []);
 
   useEffect(() => {
     loadPairing().then((p) => {
@@ -205,6 +211,7 @@ function AppInner() {
     // recebe daqui o que abrir. Ver o comentário em ScreenHeader.tsx: ela saiu da barra
     // de abas porque gaveta não é destino de navegação.
     <AjustesProvider abrir={() => setSettingsModalVisible(true)}>
+    <SobreposicaoContext.Provider value={sobreposicao}>
     <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}>
       {/* Só o fundo entra no alvo de desfoque. Incluir as telas faria cada card de
           vidro tentar desfocar uma árvore que o contém. */}
@@ -265,7 +272,7 @@ function AppInner() {
       />
       {/* Sai de cena enquanto o usuário digita: com o teclado aberto sobra pouca
           altura, e a barra empurraria a caixa de texto pra fora da vista. */}
-      {!keyboard.visible && (
+      {!keyboard.visible && sobreposicoes === 0 && (
         <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
       <StatusBar style="auto" />
@@ -278,6 +285,7 @@ function AppInner() {
         <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />
       </GlassModal>
     </View>
+    </SobreposicaoContext.Provider>
     </AjustesProvider>
   );
 }
