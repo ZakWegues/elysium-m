@@ -5,16 +5,35 @@ import { openAuthedWebSocket, streamUrl } from './ws';
 
 type StreamResult = { transcript?: string; reply: string };
 
+/**
+ * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
+ * não só o pedaço. Quem desenha a bolha só substitui o texto; não precisa concatenar.
+ */
+export type OnChunk = (parcial: string) => void;
+
 type Pending = {
   resolve: (result: StreamResult) => void;
   reject: (err: Error) => void;
   transcript?: string;
+  parcial: string;
+  onChunk?: OnChunk;
+  onTranscript?: (texto: string) => void;
   timeout: ReturnType<typeof setTimeout>;
 };
 
+/**
+ * 🔴 Timeout de INATIVIDADE, não total. O `llama3.1:8b` recarrega em ~18 s a frio e
+ * depois escreve por vários segundos; um teto fixo de 20 s matava respostas boas no meio.
+ * Cada pedaço que chega rearma o relógio — só um PC que parou de responder estoura.
+ */
+const INATIVIDADE_MS = 45000;
+
 export type VoiceConnection = {
   ready: Promise<void>;
-  sendAudio(audioUri: string): Promise<StreamResult>;
+  /** Manda o áudio gravado; o PC transcreve (`onTranscript`, antes dos pedaços) e responde. */
+  sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult>;
+  /** Manda texto pelo mesmo WebSocket — é o caminho que recebe a resposta em pedaços. */
+  sendText(text: string, onChunk?: OnChunk): Promise<StreamResult>;
   close(): void;
 };
 
@@ -30,6 +49,14 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
     pending = null;
     clearTimeout(p.timeout);
     fn(p);
+  }
+
+  function rearmar(p: Pending) {
+    clearTimeout(p.timeout);
+    p.timeout = setTimeout(() => {
+      console.error('[voice-ws] PC parou de responder');
+      settlePending((x) => x.reject(new Error('Falha: o PC parou de responder no meio')));
+    }, INATIVIDADE_MS);
   }
 
   const ready = new Promise<void>((resolve, reject) => {
@@ -53,12 +80,21 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
       return;
     }
 
-    console.log('[voice-ws] frame recebido', data.type);
-
+    // Telemetria também chega por aqui, a cada 5 s; só os tipos abaixo interessam.
     if (data.type === 'transcript') {
-      if (pending) pending.transcript = data.text;
+      if (pending) {
+        pending.transcript = data.text;
+        rearmar(pending);
+        if (data.text) pending.onTranscript?.(data.text);
+      }
+    } else if (data.type === 'chunk') {
+      if (pending) {
+        pending.parcial += data.text ?? '';
+        rearmar(pending);
+        pending.onChunk?.(pending.parcial);
+      }
     } else if (data.type === 'reply') {
-      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? '' }));
+      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial }));
     } else if (data.type === 'error') {
       console.error('[voice-ws] servidor retornou erro', data.error);
       settlePending((p) => p.reject(new Error(`Falha do servidor: ${data.error ?? 'erro sem mensagem'}`)));
@@ -76,19 +112,23 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
     onClosed?.();
   };
 
-  function sendAudio(audioUri: string): Promise<StreamResult> {
+  function abrirPedido(
+    resolve: Pending['resolve'], reject: Pending['reject'],
+    onChunk?: OnChunk, onTranscript?: (texto: string) => void,
+  ): Pending | null {
+    if (pending) {
+      reject(new Error('Falha: já existe um envio em andamento nesta conexão'));
+      return null;
+    }
+    const p: Pending = { resolve, reject, parcial: '', onChunk, onTranscript, timeout: setTimeout(() => {}, 0) };
+    pending = p;
+    rearmar(p);
+    return p;
+  }
+
+  function sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult> {
     return new Promise((resolve, reject) => {
-      if (pending) {
-        reject(new Error('Falha: já existe um envio de áudio em andamento nesta conexão'));
-        return;
-      }
-
-      const timeout = setTimeout(() => {
-        console.error('[voice-ws] timeout esperando reply/error');
-        settlePending((p) => p.reject(new Error('Falha: tempo esgotado esperando resposta')));
-      }, 20000);
-
-      pending = { resolve, reject, timeout };
+      if (!abrirPedido(resolve, reject, onChunk, onTranscript)) return;
 
       (async () => {
         let bytes: Uint8Array;
@@ -114,10 +154,21 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
     });
   }
 
+  function sendText(text: string, onChunk?: OnChunk): Promise<StreamResult> {
+    return new Promise((resolve, reject) => {
+      if (!abrirPedido(resolve, reject, onChunk)) return;
+      try {
+        ws.send(JSON.stringify({ type: 'command', text }));
+      } catch (err) {
+        settlePending((p) => p.reject(new Error(`Falha ao enviar pro servidor: ${errMessage(err)}`)));
+      }
+    });
+  }
+
   function close() {
     settlePending((p) => p.reject(new Error('Falha: conexão encerrada antes da resposta')));
     ws.close();
   }
 
-  return { ready, sendAudio, close };
+  return { ready, sendAudio, sendText, close };
 }

@@ -54,6 +54,8 @@ export default function ChatScreen({
   ]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  /** Id da bolha que está sendo escrita em pedaços; `null` fora de um stream. */
+  const [escrevendoId, setEscrevendoId] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [micStatus, setMicStatus] = useState<MicStatus>('checking');
@@ -214,6 +216,31 @@ export default function ChatScreen({
     Speech.speak(reply, { language: 'pt-BR' });
   }
 
+  /**
+   * A resposta chega em pedaços pelo WebSocket (bloco 59). O primeiro pedaço cria a bolha
+   * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
+   * uma função que recebe o texto acumulado.
+   */
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string) => void } {
+    const id = `reply-${Date.now()}`;
+    let criada = false;
+    const onChunk = (parcial: string) => {
+      if (!criada) {
+        criada = true;
+        setEscrevendoId(id);
+        setMessages((prev) => [...prev, { id, from: 'reply', text: parcial, ts: Date.now() }]);
+        return;
+      }
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
+    };
+    const fechar = (texto: string) => {
+      setEscrevendoId(null);
+      if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto } : m)));
+      else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now() }]);
+    };
+    return { onChunk, fechar };
+  }
+
   async function handleSend(texto?: string) {
     const text = (texto ?? draft).trim();
     if (!text || sending) return;
@@ -222,11 +249,28 @@ export default function ChatScreen({
     setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
 
+    const bolha = bolhaEmPedacos();
     try {
-      const reply = await sendCommand(pairing, text);
-      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply, ts: Date.now() }]);
+      // WebSocket primeiro: é o único caminho que traz a resposta em pedaços. Se ele não
+      // abrir (PC de pé mas WS bloqueado, por exemplo), o HTTP de sempre continua valendo
+      // — resposta inteira de uma vez, como antes do bloco 59.
+      let reply: string;
+      try {
+        // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
+        // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
+        const conn = await Promise.race([
+          ensureVoiceConnection(),
+          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('WebSocket demorou a abrir')), 5000)),
+        ]);
+        reply = (await conn.sendText(text, bolha.onChunk)).reply;
+      } catch (wsErr) {
+        console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
+        reply = await sendCommand(pairing, text);
+      }
+      bolha.fechar(reply);
       speakReply(reply);
     } catch (err) {
+      setEscrevendoId(null);
       if (err instanceof AuthError) {
         Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
         onUnpair();
@@ -351,13 +395,16 @@ export default function ChatScreen({
 
     try {
       const conn = await ensureVoiceConnection();
-      const { transcript, reply } = await conn.sendAudio(uri);
-      if (transcript) {
+      const bolha = bolhaEmPedacos();
+      // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
+      // certa — antes da resposta que vai começar a ser escrita logo depois.
+      const { reply } = await conn.sendAudio(uri, bolha.onChunk, (transcript) => {
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
-      }
-      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: reply, ts: Date.now() }]);
+      });
+      bolha.fechar(reply);
       speakReply(reply);
     } catch (err) {
+      setEscrevendoId(null);
       pushError(errMessage(err));
     } finally {
       setSending(false);
@@ -417,7 +464,7 @@ export default function ChatScreen({
         }}
       />
 
-      {sending && <BolhaPensando />}
+      {sending && !escrevendoId && <BolhaPensando />}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {starters.length > 0 && messages.length <= 1 && !sending && (
