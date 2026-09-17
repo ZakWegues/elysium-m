@@ -64,7 +64,7 @@ const PAINEIS: {
   { id: 'memoria', titulo: 'Memória', icone: 'bookmark', resumo: 'O que ele lembra' },
   { id: 'monitor', titulo: 'Monitor', icone: 'activity', resumo: 'CPU, RAM e discos' },
   { id: 'processos', titulo: 'Processos', icone: 'cpu', resumo: 'Encerrar à força' },
-  { id: 'programas', titulo: 'Programas', icone: 'grid', resumo: 'Abrir e fechar' },
+  { id: 'programas', titulo: 'Programas', icone: 'grid', resumo: 'Abertos, abrir e fechar' },
   { id: 'energia', titulo: 'Energia', icone: 'power', resumo: 'Bloquear, desligar' },
   { id: 'transferencia', titulo: 'Transferência', icone: 'clipboard', resumo: 'Colar entre os dois' },
   { id: 'spotify', titulo: 'Spotify', icone: 'music', resumo: 'Player completo', cor: '#1db954' },
@@ -253,6 +253,21 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
     }
   }
 
+  /** Salva um PNG na Área de Trabalho do PC — o espelho não guarda nada. */
+  const [printando, setPrintando] = useState(false);
+  async function tirarPrint() {
+    setPrintando(true);
+    try {
+      const r = await callRpc(pairing, 'screen.screenshot', {}, { timeoutMs: 20000 });
+      haptica.sucesso();
+      Alert.alert('Print', r.message);
+    } catch (err) {
+      onError(err, 'Falha ao tirar o print');
+    } finally {
+      setPrintando(false);
+    }
+  }
+
   const aspect = frame ? frame.width / Math.max(1, frame.height) : 16 / 9;
 
   return (
@@ -287,6 +302,17 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
         >
           <Feather name="refresh-cw" size={14} color={palette.primary} />
           <Text variant="caption" color={palette.primary}>Atualizar</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={tirarPrint}
+          disabled={printando}
+          style={[styles.pill, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
+        >
+          {printando
+            ? <ActivityIndicator size="small" color={palette.primary} />
+            : <Feather name="camera" size={14} color={palette.primary} />}
+          <Text variant="caption" color={palette.primary}>Print</Text>
         </Pressable>
 
         <Pressable
@@ -731,9 +757,13 @@ function PainelProcessos({ pairing, onError }: { pairing: Pairing; onError: Erro
 
 // ── Programas ─────────────────────────────────────────────────────────────────
 
+/** Sem o `#2` dos contadores de desempenho e sem `.exe`, para casar catálogo com processo. */
+const normalizarApp = (x: string) => x.toLowerCase().replace(/#\d+$/, '').replace(/\.exe$/, '').replace(/[^a-z0-9]/g, '');
+
 function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
   const [apps, setApps] = useState<AppEntry[]>([]);
+  const [abertos, setAbertos] = useState<AppEntry[] | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
@@ -751,6 +781,30 @@ function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: Erro
   }, [pairing, onError]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Segunda fase, como no desktop: o catálogo é instantâneo, `apps.running` dispara um
+  // PowerShell. Cruzar os dois é o que dá "abertos agora" — só o catálogo não sabe o que
+  // está de pé, e um processo fora do catálogo não teria como ser reaberto depois.
+  useEffect(() => {
+    if (apps.length === 0) return;
+    let vivo = true;
+    (async () => {
+      try {
+        const r = await callRpc(pairing, 'apps.running', {}, { timeoutMs: 20000 });
+        const rodando = new Set(r.apps.map(a => normalizarApp(a.name)));
+        const vistos = new Set<string>();
+        const lista = apps.filter(a => {
+          const exe = normalizarApp(a.command.split(/[\\/]/).pop()?.split(/\s+/)[0] ?? '');
+          const bate = rodando.has(normalizarApp(a.key)) || (exe && rodando.has(exe));
+          if (!bate || vistos.has(a.command)) return false;
+          vistos.add(a.command);
+          return true;
+        });
+        if (vivo) setAbertos(lista);
+      } catch { if (vivo) setAbertos([]); }
+    })();
+    return () => { vivo = false; };
+  }, [apps, pairing]);
 
   async function open(app: AppEntry) {
     setBusyKey(app.key);
@@ -794,6 +848,34 @@ function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: Erro
           style={{ flex: 1, color: palette.text, paddingVertical: 0 }}
         />
       </View>
+      {!loading && (
+        <View style={{ gap: tokens.spacing.sm }}>
+          <Text variant="label" color={palette.textMuted}>Abertos agora</Text>
+          {abertos === null ? (
+            <View style={styles.linhaAoVivo}>
+              <ActivityIndicator size="small" color={palette.primary} />
+              <Text variant="caption" color={palette.textMuted}>Procurando o que está aberto…</Text>
+            </View>
+          ) : abertos.length === 0 ? (
+            <Text variant="caption" color={palette.textMuted}>Nenhum programa conhecido aberto.</Text>
+          ) : (
+            <View style={styles.grid}>
+              {abertos.map(a => (
+                <View key={a.command} style={[styles.chipAberto, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}>
+                  <Text variant="caption" color={palette.primary}>{a.key}</Text>
+                  {busyKey === a.key
+                    ? <ActivityIndicator size="small" color={palette.primary} />
+                    : (
+                      <Pressable onPress={() => close(a)} hitSlop={8}>
+                        <Feather name="x" size={14} color={palette.error} />
+                      </Pressable>
+                    )}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
       <Dica texto="Toque no nome para abrir · X fecha à força" />
       {loading && <ActivityIndicator color={palette.primary} />}
       {!loading && visiveis.length === 0 && <Vazio icone="grid" texto="Nenhum programa com esse nome." />}
@@ -975,6 +1057,7 @@ const styles = StyleSheet.create({
   powerTile: { flexGrow: 1, minWidth: '45%', alignItems: 'center', gap: 6, paddingVertical: 16 },
   input: { flex: 1, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
   sendBtn: { width: 46, alignItems: 'center', justifyContent: 'center' },
+  chipAberto: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, paddingLeft: 12, paddingRight: 10 },
   campoBusca: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 9,

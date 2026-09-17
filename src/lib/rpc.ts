@@ -18,6 +18,7 @@ export type RpcMethod =
   | 'system.disks'
   | 'system.killProcess'
   | 'apps.list'
+  | 'apps.running'
   | 'apps.open'
   | 'apps.close'
   | 'clipboard.get'
@@ -27,6 +28,7 @@ export type RpcMethod =
   | 'volume.set'
   | 'screen.list'
   | 'screen.capture'
+  | 'screen.screenshot'
   | 'input.ping'
   | 'input.move'
   | 'input.click'
@@ -170,6 +172,8 @@ export type DiskEntry = {
 };
 
 export type AppEntry = { key: string; command: string };
+/** Processo com janela principal — o que "aberto" significa para quem olha a tela. */
+export type RunningApp = { name: string; pid: number; title: string };
 
 export type PresetEntry = {
   name: string;
@@ -211,6 +215,7 @@ export type RpcResults = {
   'system.disks': { disks: DiskEntry[] };
   'system.killProcess': { ok: true };
   'apps.list': { apps: AppEntry[] };
+  'apps.running': { apps: RunningApp[] };
   'apps.open': { ok: true; message: string };
   'apps.close': { ok: true; message: string };
   'clipboard.get': { text: string };
@@ -220,6 +225,7 @@ export type RpcResults = {
   'volume.set': { ok: true; message: string };
   'screen.list': { screens: ScreenInfo[] };
   'screen.capture': CapturedFrame;
+  'screen.screenshot': { ok: true; message: string };
   'input.ping': { ok: true };
   'input.move': { ok: true };
   'input.click': { ok: true };
