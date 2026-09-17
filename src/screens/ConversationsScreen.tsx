@@ -9,6 +9,8 @@ import { callRpc } from '../lib/rpc';
 import { Pairing } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Card, ScreenHeader, Text } from '../components/ui';
+import Animated from 'react-native-reanimated';
+import { LAYOUT, ENTRA, SAI } from '../lib/motion';
 
 function relativeTime(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -109,7 +111,7 @@ export default function ConversationsScreen({
           </View>
         }
       />
-      <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}>
+      <Animated.ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}>
         <Button title="+ Nova conversa" onPress={onNew} />
 
         <Text variant="caption" color={offline ? palette.error : palette.textMuted}>
@@ -119,51 +121,55 @@ export default function ConversationsScreen({
         </Text>
 
         {!loading && sessions.length === 0 && (
-          <Card style={styles.center}>
-            <Text variant="body" color={palette.textMuted}>
-              Nenhuma conversa salva ainda.
-            </Text>
-          </Card>
+          <Animated.View layout={LAYOUT} entering={ENTRA} exiting={SAI}>
+            <Card glass style={styles.center}>
+              <Text variant="body" color={palette.textMuted}>
+                Nenhuma conversa salva ainda.
+              </Text>
+            </Card>
+          </Animated.View>
         )}
 
         {sessions.map((session) => (
-          <Card key={session.id} style={styles.row}>
-            {renomeando === session.id ? (
-              <TextInput
-                value={rascunho}
-                onChangeText={setRascunho}
-                onBlur={() => confirmarRenome(session)}
-                onSubmitEditing={() => confirmarRenome(session)}
-                autoFocus
-                maxLength={60}
-                style={{ flex: 1, color: palette.text, fontSize: 14, paddingVertical: 0 }}
-              />
-            ) : (
-              <Pressable style={{ flex: 1 }} onPress={() => onSelect(session.id)}>
-                <Text variant="subheading" numberOfLines={1}>
-                  {session.title}
-                </Text>
-                <Text variant="caption" color={palette.textMuted}>
-                  {relativeTime(session.updatedAt)} · {session.messages.length} mensagens
-                </Text>
+          <Animated.View key={session.id} layout={LAYOUT} entering={ENTRA} exiting={SAI}>
+            <Card glass style={styles.row}>
+              {renomeando === session.id ? (
+                <TextInput
+                  value={rascunho}
+                  onChangeText={setRascunho}
+                  onBlur={() => confirmarRenome(session)}
+                  onSubmitEditing={() => confirmarRenome(session)}
+                  autoFocus
+                  maxLength={60}
+                  style={{ flex: 1, color: palette.text, fontSize: 14, paddingVertical: 0 }}
+                />
+              ) : (
+                <Pressable style={{ flex: 1 }} onPress={() => onSelect(session.id)}>
+                  <Text variant="subheading" numberOfLines={1}>
+                    {session.title}
+                  </Text>
+                  <Text variant="caption" color={palette.textMuted}>
+                    {relativeTime(session.updatedAt)} · {session.messages.length} mensagens
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable
+                onPress={() => { setRascunho(session.title); setRenomeando(session.id); }}
+                hitSlop={8}
+                style={{ marginRight: 8 }}
+              >
+                <Feather name="edit-2" size={17} color={palette.textMuted} />
               </Pressable>
-            )}
-            <Pressable
-              onPress={() => { setRascunho(session.title); setRenomeando(session.id); }}
-              hitSlop={8}
-              style={{ marginRight: 8 }}
-            >
-              <Feather name="edit-2" size={17} color={palette.textMuted} />
-            </Pressable>
-            <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={8} style={{ marginRight: 8 }}>
-              <Feather name="star" size={20} color={session.favorite ? '#F5A623' : palette.border} />
-            </Pressable>
-            <Pressable onPress={() => handleDelete(session.id)} hitSlop={8}>
-              <Feather name="trash-2" size={20} color={palette.textMuted} />
-            </Pressable>
-          </Card>
+              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={8} style={{ marginRight: 8 }}>
+                <Feather name="star" size={20} color={session.favorite ? '#F5A623' : palette.border} />
+              </Pressable>
+              <Pressable onPress={() => handleDelete(session.id)} hitSlop={8}>
+                <Feather name="trash-2" size={20} color={palette.textMuted} />
+              </Pressable>
+            </Card>
+          </Animated.View>
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }

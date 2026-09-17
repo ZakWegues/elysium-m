@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Feather from '@expo/vector-icons/Feather';
-import { parsePairingQr, resolveActiveEndpoint, savePairing } from '../lib/pairing';
+import { parsePairingQr, resolveActiveEndpoint, savePairing, UnauthorizedError } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Text } from '../components/ui';
 
@@ -29,7 +29,23 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
     // era o bug: o QR traz o IP da rede local e o do túnel, e a lista começa pelo
     // local — com o celular fora de casa, ou com o caminho local indisponível por
     // qualquer motivo, o pareamento falhava mesmo com o túnel funcionando.
-    const resolved = await resolveActiveEndpoint(pairing);
+    let resolved;
+    try {
+      resolved = await resolveActiveEndpoint(pairing);
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        Alert.alert(
+          'Acesso negado',
+          'O QR code foi reconhecido, mas o token é inválido. Gere um novo QR code no ELYSIUM e tente de novo.'
+        );
+      } else {
+        Alert.alert('Erro interno', 'Ocorreu um erro ao verificar a conexão.');
+      }
+      setBusy(false);
+      setScanned(false);
+      return;
+    }
+
     if (!resolved) {
       Alert.alert(
         'Falha ao conectar',

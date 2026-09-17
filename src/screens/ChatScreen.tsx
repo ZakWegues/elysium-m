@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator, Alert, Animated, FlatList, Pressable, StyleProp,
-  StyleSheet, TextInput, View, ViewStyle,
-} from 'react-native';
+import { ActivityIndicator, Alert, Animated, FlatList, Keyboard, Pressable, StyleProp, StyleSheet, TextInput, View, ViewStyle } from 'react-native';
+import AnimatedReanimated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import * as Speech from 'expo-speech';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -438,25 +436,6 @@ export default function ChatScreen({
         </View>
       )}
 
-      {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
-      {starters.length > 0 && messages.length <= 1 && !sending && (
-        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
-          {starters.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => handleSend(t)}
-              style={[styles.starter, {
-                borderRadius: tokens.radii.full,
-                borderColor: palette.glassBorder,
-                backgroundColor: palette.primarySoft,
-              }]}
-            >
-              <Text variant="caption" numberOfLines={1}>{t}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-
       {/* A barra em si é tinta chapada: ela acompanha a lista, e desfocar uma faixa
           inteira por quadro é o custo que este bloco foi tirar da rolagem. Os BOTÕES é
           que viram vidro de verdade — são três regiões de 44 px, fixas. */}
@@ -497,6 +476,7 @@ export default function ChatScreen({
         <GlassCircle
           size={40}
           ativo={recording}
+          pulsando={recording}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
           disabled={sending || micStatus !== 'ready'}
@@ -538,15 +518,15 @@ export default function ChatScreen({
  * depois da espera, lê como salto — a subida curta dá a direção de onde ela veio.
  */
 function BolhaEntrando({ style, children }: { style: StyleProp<ViewStyle>; children: React.ReactNode }) {
-  const opacidade = useRef(new Animated.Value(0)).current;
-  const y = useRef(new Animated.Value(6)).current;
-  useEffect(() => {
-    Animated.parallel([anima(opacidade, 1, MOV.base), anima(y, 0, MOV.base)]).start();
-  }, []);
   return (
-    <Animated.View style={[style, { opacity: opacidade, transform: [{ translateY: y }] }]}>
+    <AnimatedReanimated.View
+      entering={FadeInDown.withInitialValues({ transform: [{ translateY: 6 }] })
+        .duration(MOV.base)
+        .reduceMotion(ReduceMotion.System)}
+      style={style}
+    >
       {children}
-    </Animated.View>
+    </AnimatedReanimated.View>
   );
 }
 
@@ -568,3 +548,7 @@ const styles = StyleSheet.create({
   },
 
 });
+
+
+
+

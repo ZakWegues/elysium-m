@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { getActiveSessionId, setActiveSessionId } from '../lib/mailboxStore';
-import { MOV, anima } from '../lib/motion';
+import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, Popover, ScreenHeader, Text } from '../components/ui';
 import ChatScreen from './ChatScreen';
@@ -162,14 +163,28 @@ function SwitchModo({
   temNovidade: boolean;
 }) {
   const { palette, tokens } = useTheme();
-  const x = useRef(new Animated.Value(modo === 'ia' ? 0 : 1)).current;
+  // `x` vai de 0 (ia) a 1 (pc).
+  const x = useSharedValue(modo === 'ia' ? 0 : 1);
   const [largura, setLargura] = useState(0);
+
+  // Sincroniza se a prop mudar de fora (ex: share intent do Android mandando abrir a Caixa)
+  useEffect(() => {
+    x.value = withTiming(modo === 'ia' ? 0 : 1, { duration: MOV.base, reduceMotion: ReduceMotion.System });
+  }, [modo, x]);
 
   function trocar(m: 'ia' | 'pc') {
     if (m === modo) return;
     onTroca(m);
-    anima(x, m === 'ia' ? 0 : 1, MOV.base).start();
+    // a mola viaja no useEffect acima quando `modo` mudar e re-renderizar
   }
+
+  const polegarStyle = useAnimatedStyle(() => {
+    const w = Math.max(0, largura / 2 - 3);
+    return {
+      width: w,
+      transform: [{ translateX: x.value * w }],
+    };
+  });
 
   return (
     <View
@@ -180,12 +195,7 @@ function SwitchModo({
           próprio, e a troca é um único translate. */}
       <Animated.View
         pointerEvents="none"
-        style={[styles.polegar, {
-          width: Math.max(0, largura / 2 - 3),
-          borderRadius: tokens.radii.full,
-          backgroundColor: palette.surfaceRaised,
-          transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, Math.max(0, largura / 2 - 3)] }) }],
-        }]}
+        style={[styles.polegar, { borderRadius: tokens.radii.full, backgroundColor: palette.surfaceRaised }, polegarStyle]}
       />
       {(['ia', 'pc'] as const).map(m => (
         <Pressable key={m} onPress={() => trocar(m)} style={styles.lado}>
@@ -212,3 +222,5 @@ const styles = StyleSheet.create({
   lado: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6 },
   pontinho: { width: 6, height: 6, borderRadius: 3 },
 });
+
+

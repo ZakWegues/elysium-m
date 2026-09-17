@@ -162,6 +162,20 @@ function AppInner() {
     });
   }, []);
 
+  // 401 na sonda é o único caso em que a rede está boa e o app não tem como se recuperar
+  // sozinho: o token foi regenerado no PC. Antes isso aparecia como "PC fora do ar", que
+  // mandava a pessoa investigar Wi-Fi e túnel à toa (§15, pendência 4). O hook já parou de
+  // sondar; aqui só resta explicar e oferecer o QR.
+  useEffect(() => {
+    if (status !== 'unauthorized') return;
+    Alert.alert(
+      'Pareamento inválido',
+      'O PC respondeu, mas recusou o token deste celular. Isso acontece quando o QR é regenerado no ELYSIUM. Leia o QR novo para voltar.',
+      [{ text: 'Ler QR', onPress: handleUnpair }],
+      { cancelable: false },
+    );
+  }, [status, handleUnpair]);
+
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>

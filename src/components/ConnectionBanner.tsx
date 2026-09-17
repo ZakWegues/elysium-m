@@ -1,8 +1,10 @@
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import Animated, { FadeInUp, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useTheme } from '../theme';
-import { Text } from './ui';
+import { GlassFill, Text } from './ui';
 import type { ConnectionStatus } from '../lib/useConnection';
+import { MOV } from '../lib/motion';
 
 /**
  * Faixa fina no topo quando o PC não está respondendo. Fica invisível no caminho
@@ -31,11 +33,14 @@ export function ConnectionBanner({
   if (status === 'online' && queued === 0) return null;
 
   const offline = status === 'offline';
-  const background = offline ? palette.errorSoft : palette.primarySoft;
-  const foreground = offline ? palette.error : palette.primary;
+  const unauthorized = status === 'unauthorized';
+  // Tokens formais da escala glass L2
+  const isError = offline || unauthorized;
+  const foreground = isError ? palette.error : palette.primary;
 
   let label: string;
-  if (scanning) label = `Procurando o PC na rede… ${scanProgress}%`;
+  if (unauthorized) label = 'O PC recusou o token — leia o QR de novo';
+  else if (scanning) label = `Procurando o PC na rede… ${scanProgress}%`;
   else if (offline) {
     // Sem túnel no PC, "fora do ar" é enganoso: o PC pode estar ligado e funcionando,
     // e simplesmente não haver caminho até ele fora de casa. Dizer o motivo real evita
@@ -49,21 +54,24 @@ export function ConnectionBanner({
   else label = `Reenviando ${queued} comando${queued > 1 ? 's' : ''}…`;
 
   return (
-    <View
+    <Animated.View
+      entering={FadeInUp.withInitialValues({ transform: [{ translateY: -8 }] }).duration(MOV.base).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOut.duration(MOV.saida).reduceMotion(ReduceMotion.System)}
       style={[
         styles.bar,
         {
-          backgroundColor: background,
           paddingHorizontal: tokens.spacing.lg,
           paddingVertical: tokens.spacing.sm,
           gap: tokens.spacing.sm,
         },
       ]}
     >
+      <GlassFill intensity={35} tintColor={isError ? palette.errorSoft : palette.glassSurface} edge={false} />
+
       {scanning || status === 'checking' ? (
         <ActivityIndicator size="small" color={foreground} />
       ) : (
-        <Feather name={offline ? 'wifi-off' : 'upload-cloud'} size={14} color={foreground} />
+        <Feather name={unauthorized ? 'key' : offline ? 'wifi-off' : 'upload-cloud'} size={14} color={foreground} />
       )}
 
       <Text variant="caption" color={foreground} style={{ flex: 1 }}>
@@ -80,10 +88,10 @@ export function ConnectionBanner({
           </Pressable>
         </>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center' },
+  bar: { flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
 });

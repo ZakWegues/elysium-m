@@ -1,5 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import { toByteArray } from 'base64-js';
+import { File as FSFile } from 'expo-file-system';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
 import { openAuthedWebSocket, streamUrl } from './ws';
@@ -94,10 +93,10 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
       (async () => {
         let bytes: Uint8Array;
         try {
-          const base64 = await FileSystem.readAsStringAsync(audioUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          bytes = toByteArray(base64);
+          // A API v2 do expo-file-system devolve Uint8Array diretamente, sem
+          // o roundtrip base64 que a legacy exigia. O URI do expo-audio recorder
+          // é um file:// padrão, compatível com o construtor de File.
+          bytes = await new FSFile(audioUri).bytes();
         } catch (err) {
           console.error('[voice-ws] falha lendo o áudio gravado', err);
           settlePending((p) => p.reject(new Error(`Falha ao ler o áudio gravado: ${errMessage(err)}`)));

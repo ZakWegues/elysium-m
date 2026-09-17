@@ -1,8 +1,12 @@
+import React from 'react';
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
 import { useBlurTarget } from './BlurTarget';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /**
  * Preenchimento de vidro: blur real + tinta translúcida + brilho reflexivo na borda.
@@ -112,6 +116,7 @@ export function GlassCircle({
   onPressOut,
   disabled,
   ativo = false,
+  pulsando = false,
   style,
   children,
 }: {
@@ -122,13 +127,33 @@ export function GlassCircle({
   disabled?: boolean;
   /** Aceso: a tinta ganha a cor do tema em vez do branco translúcido. */
   ativo?: boolean;
+  /** Pulsa continuamente entre 1.0 e 1.08 (escala) — feedback visual tátil contínuo. */
+  pulsando?: boolean;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
   const { palette } = useTheme();
 
+  const escala = useSharedValue(1);
+
+  React.useEffect(() => {
+    if (pulsando) {
+      escala.value = withRepeat(
+        withSequence(withSpring(1.08), withSpring(1)),
+        -1, // infinito
+        false
+      );
+    } else {
+      escala.value = withSpring(1);
+    }
+  }, [pulsando, escala]);
+
+  const estiloAnimado = useAnimatedStyle(() => ({
+    transform: [{ scale: escala.value }]
+  }));
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       onPressIn={onPressIn}
       onPressOut={onPressOut}
@@ -147,11 +172,12 @@ export function GlassCircle({
           opacity: disabled ? 0.45 : 1,
         },
         style,
+        estiloAnimado,
       ]}
     >
       {/* Meio-termo: o botão tem ícone, não texto corrido, e sobe menos que os painéis. */}
       <GlassFill intensity={45} edge={false} tintColor={ativo ? palette.primarySoft : undefined} />
       {children}
-    </Pressable>
+    </AnimatedPressable>
   );
 }

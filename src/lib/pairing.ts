@@ -2,6 +2,14 @@ import * as SecureStore from 'expo-secure-store';
 import { fetchWithTimeout, PROBE_TIMEOUT_MS } from './http';
 
 /**
+ * O token foi regenerado no PC, ou mudou, e este pareamento está inválido.
+ * Diferente de "PC offline": o servidor respondeu 401, então a rede está boa.
+ */
+export class UnauthorizedError extends Error {
+  constructor() { super('token inválido ou expirado — repareie o celular'); }
+}
+
+/**
  * O pareamento guarda VÁRIOS endereços do mesmo PC, não um só.
  *
  * Antes era `{ip, port, token}` com o IP congelado no momento do QR. Bastava o
@@ -126,6 +134,9 @@ async function probe(ip: string, port: number, token: string): Promise<string> {
     { headers: { Authorization: `Bearer ${token}` } },
     PROBE_TIMEOUT_MS
   );
+  // 401: o servidor está respondendo mas o token mudou. Isso é diferente de PC offline —
+  // tentar outro endpoint não vai ajudar, e o usuário precisa de outra orientação.
+  if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) throw new Error(`health ${res.status}`);
   return ip;
 }
@@ -137,6 +148,9 @@ async function probe(ip: string, port: number, token: string): Promise<string> {
  * Paralelo em vez de sequencial de propósito: sair de casa significa que o IP da
  * rede local vai dar timeout, e esperar 2,5s por candidato antes de tentar o túnel
  * deixaria a abertura do app lenta sem motivo.
+ *
+ * 🔴 Propaga `UnauthorizedError` imediatamente: se qualquer endpoint responde 401,
+ * é o token que está errado — não adianta tentar os outros.
  */
 export async function resolveActiveEndpoint(pairing: Pairing): Promise<Pairing | null> {
   const others = pairing.endpoints.filter(ip => ip !== pairing.activeIp);
@@ -145,8 +159,11 @@ export async function resolveActiveEndpoint(pairing: Pairing): Promise<Pairing |
   // antes. Sem essa preferência, em casa — onde tanto a rede local quanto o túnel
   // funcionam — o vencedor mudava a cada verificação, e cada troca derrubava e
   // reabria o WebSocket de telemetria num laço sem fim.
+  //
+  // `currentOk` propaga UnauthorizedError: se o endereço atual devolve 401, já
+  // sabemos que o token está inválido e não precisamos tentar os outros.
   const currentOk = probe(pairing.activeIp, pairing.port, pairing.token)
-    .then(() => true, () => false);
+    .then(() => true, (err) => { if (err instanceof UnauthorizedError) throw err; return false; });
 
   // Os outros correm em paralelo, não depois: fora de casa o endereço local vai dar
   // timeout, e esperar por ele antes de tentar o túnel deixaria a abertura do app

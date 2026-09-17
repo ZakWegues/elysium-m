@@ -8,11 +8,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { Pairing, resolveActiveEndpoint, scanSubnet } from './pairing';
+import { Pairing, resolveActiveEndpoint, scanSubnet, UnauthorizedError } from './pairing';
 import { callRpc } from './rpc';
 import { backoffDelay } from './http';
 
-export type ConnectionStatus = 'checking' | 'online' | 'offline';
+export type ConnectionStatus = 'checking' | 'online' | 'offline' | 'unauthorized';
 
 const HEALTHY_POLL_MS = 30000;
 
@@ -21,6 +21,12 @@ export function useConnection(
   onPairingUpdate: (p: Pairing) => void
 ) {
   const [status, setStatus] = useState<ConnectionStatus>('checking');
+  const statusRef = useRef<ConnectionStatus>('checking');
+  // Espelha o status no ref para que closures de loop e timers leiam o valor corrente.
+  const setStatusAndRef = useCallback((s: ConnectionStatus) => {
+    statusRef.current = s;
+    setStatus(s);
+  }, []);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   /** null enquanto nunca conseguimos perguntar ao PC. */
@@ -32,27 +38,6 @@ export function useConnection(
   // Evita que o efeito reinicie a cada novo objeto de pairing devolvido pela sonda.
   const pairingRef = useRef<Pairing | null>(pairing);
   pairingRef.current = pairing;
-
-  const check = useCallback(async (): Promise<boolean> => {
-    const current = pairingRef.current;
-    if (!current) return false;
-
-    setStatus(prev => (prev === 'online' ? prev : 'checking'));
-    const resolved = await resolveActiveEndpoint(current);
-
-    if (resolved) {
-      const refreshed = await refreshEndpoints(resolved);
-      if (refreshed !== resolved || resolved.activeIp !== current.activeIp) {
-        onPairingUpdate(refreshed);
-      }
-      setStatus('online');
-      attemptRef.current = 0;
-      return true;
-    }
-
-    setStatus('offline');
-    return false;
-  }, [onPairingUpdate]);
 
   /**
    * Reaprende os endereços do PC enquanto há conexão.
@@ -80,6 +65,40 @@ export function useConnection(
     }
   }, []);
 
+  const check = useCallback(async (): Promise<boolean> => {
+    const current = pairingRef.current;
+    if (!current) return false;
+
+    // Não pisca 'checking' se a última sonda teve sucesso — já existe feedback no app.
+    if (statusRef.current !== 'online') setStatusAndRef('checking');
+    try {
+      const resolved = await resolveActiveEndpoint(current);
+
+      if (resolved) {
+        const refreshed = await refreshEndpoints(resolved);
+        if (refreshed !== resolved || resolved.activeIp !== current.activeIp) {
+          onPairingUpdate(refreshed);
+        }
+        setStatusAndRef('online');
+        attemptRef.current = 0;
+        return true;
+      }
+
+      setStatusAndRef('offline');
+      return false;
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        // O token foi regenerado no PC. Não é "offline" — é "token inválido".
+        // O loop de polling para aqui; o App.tsx apresenta o Alert de despareamento.
+        setStatusAndRef('unauthorized');
+        return false;
+      }
+      // Outro erro inesperado: tratar como offline.
+      setStatusAndRef('offline');
+      return false;
+    }
+  }, [onPairingUpdate, refreshEndpoints, setStatusAndRef]);
+
   useEffect(() => {
     if (!pairing) return;
     stoppedRef.current = false;
@@ -90,7 +109,10 @@ export function useConnection(
       if (stoppedRef.current) return;
 
       // PC no ar: sonda espaçada. Fora do ar: backoff, sem martelar a rede.
+      // Token inválido: não reagenda — só o reparear resolve isso.
       attemptRef.current = ok ? 0 : attemptRef.current + 1;
+      const currentStatus = statusRef.current;
+      if (currentStatus === 'unauthorized') return;
       const delay = ok ? HEALTHY_POLL_MS : backoffDelay(attemptRef.current, 30000);
       timerRef.current = setTimeout(loop, delay);
     }
