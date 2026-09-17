@@ -5,6 +5,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, type SharedValue }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import { CURVA_UI, MOV, tempo } from '../lib/motion';
+import { haptica } from '../lib/haptica';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
@@ -117,7 +118,7 @@ export function TabBar({
 
   const navegar = useCallback((i: number) => {
     const alvo = TABS[i];
-    if (alvo && alvo.screen !== active) onNavigate(alvo.screen);
+    if (alvo && alvo.screen !== active) { haptica.tique(); onNavigate(alvo.screen); }
   }, [active, onNavigate]);
 
   const pan = useMemo(
@@ -195,7 +196,7 @@ export function TabBar({
               indice={i}
               progresso={progresso}
               badge={badges?.[tab.screen] ?? 0}
-              onPress={() => onNavigate(tab.screen)}
+              onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
             />
           ))}
         </View>

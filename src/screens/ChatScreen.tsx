@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, FlatList, Keyboard, Pressable, StyleProp, StyleSheet, TextInput, View, ViewStyle } from 'react-native';
-import AnimatedReanimated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import { Alert, FlatList, Pressable, StyleProp, StyleSheet, TextInput, View, ViewStyle } from 'react-native';
+import AnimatedReanimated, {
+  FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
+} from 'react-native-reanimated';
 import * as Speech from 'expo-speech';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -14,10 +16,11 @@ import { enqueueCommand } from '../lib/commandQueue';
 import { openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
+import { haptica } from '../lib/haptica';
 import { MAILBOX_MAX_ATTACHMENT_BYTES, sendMessage } from '../lib/mailbox';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
-import { MOV, anima } from '../lib/motion';
+import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 
@@ -319,11 +322,15 @@ export default function ChatScreen({
       return;
     }
 
+    // O dedo já está no botão e o olho na tela: a vibração é o "pode falar" que não
+    // exige olhar para o mic.
+    haptica.medio();
     setRecording(true);
   }
 
   async function handleRecordStop() {
     if (!recording) return;
+    haptica.leve();
     setRecording(false);
 
     try {
@@ -410,12 +417,7 @@ export default function ChatScreen({
         }}
       />
 
-      {sending && (
-        <View style={[styles.sendingRow, { paddingHorizontal: tokens.spacing.lg }]}>
-          <ActivityIndicator size="small" color={palette.primary} />
-          <Text variant="caption">Pensando...</Text>
-        </View>
-      )}
+      {sending && <BolhaPensando />}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {starters.length > 0 && messages.length <= 1 && !sending && (
@@ -530,9 +532,66 @@ function BolhaEntrando({ style, children }: { style: StyleProp<ViewStyle>; child
   );
 }
 
+/**
+ * "Digitando…" de app de mensagem: três pontos que sobem em sequência, numa bolha do
+ * lado da resposta. Substitui o spinner com "Pensando..." solto no rodapé, que ficava
+ * fora da conversa e não dizia de onde a resposta ia sair.
+ *
+ * Depois de 6 s a bolha explica a demora: o `llama3.1:8b` recarrega em ~18 s a frio
+ * (§22, bloco 41), e sem uma palavra na tela esse intervalo parece o app travado.
+ */
+function BolhaPensando() {
+  const { palette, tokens } = useTheme();
+  const [demorando, setDemorando] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDemorando(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <View style={{ paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm }}>
+      <AnimatedReanimated.View
+        entering={FadeInDown.duration(MOV.base).reduceMotion(ReduceMotion.System)}
+        style={[
+          styles.pensando,
+          {
+            borderRadius: tokens.radii.lg,
+            backgroundColor: palette.surfaceRaised,
+            borderColor: palette.border,
+            paddingHorizontal: tokens.spacing.md,
+          },
+        ]}
+      >
+        {[0, 1, 2].map(i => <Ponto key={i} atraso={i * 160} cor={palette.textMuted} />)}
+        {demorando && (
+          <Text variant="caption" color={palette.textMuted} style={{ marginLeft: 6 }}>
+            acordando o cérebro…
+          </Text>
+        )}
+      </AnimatedReanimated.View>
+    </View>
+  );
+}
+
+function Ponto({ atraso, cor }: { atraso: number; cor: string }) {
+  const y = useSharedValue(0);
+  useEffect(() => {
+    y.value = withDelay(atraso, withRepeat(
+      withSequence(withTiming(-4, { duration: 260 }), withTiming(0, { duration: 260 }), withTiming(0, { duration: 280 })),
+      -1,
+    ));
+  }, [atraso, y]);
+  const estilo = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  return <AnimatedReanimated.View style={[styles.ponto, { backgroundColor: cor }, estilo]} />;
+}
+
 const styles = StyleSheet.create({
   bubble: { maxWidth: '80%' },
-  sendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
+  pensando: {
+    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5,
+    height: 38, borderWidth: StyleSheet.hairlineWidth,
+  },
+  ponto: { width: 7, height: 7, borderRadius: 4 },
   starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, paddingBottom: 10 },
   starter: { paddingVertical: 8, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, maxWidth: '100%' },
   inputRow: {

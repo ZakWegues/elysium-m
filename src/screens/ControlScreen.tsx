@@ -2,23 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 import * as Speech from 'expo-speech';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
 import {
-  callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, MemoryFact, NowPlaying,
+  callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, MemoryFact,
   PowerOperation, ProcessEntry, Reminder, ScreenInfo,
 } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
+import { haptica } from '../lib/haptica';
+import { MOV } from '../lib/motion';
 import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/telemetry';
 import { findMetric } from '../lib/telemetryFormat';
 import { useTheme } from '../theme';
 import TrackpadFullscreen from './TrackpadFullscreen';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
-import { Button, Card, Drawer, MetricBar, ScreenHeader, Text } from '../components/ui';
+import {
+  Button, Card, GlassCircle, GlassModal, MetricBar, ScreenHeader, Text, Toque,
+} from '../components/ui';
 
 /**
  * Cadência do espelhamento. Medido no PC do Zak: cada captura leva ~640 ms, e esse
@@ -33,11 +38,41 @@ const MIRROR_QUALITY = 60;
 type ErrorHandler = (err: unknown, context: string) => void;
 
 /**
- * Guia única de controle do PC.
+ * Os painéis da aba PC. Cada um abre numa gaveta de vidro (`GlassModal`) por cima da
+ * tela, a partir de um azulejo na grade.
  *
- * O espelho da tela fica aparente logo ao entrar, sem precisar abrir nada. Todo o
- * resto (trackpad, monitor, processos, apps, energia, transferência, mídia) mora em
- * gavetas recolhidas, que só carregam dados quando abertas.
+ * 🔴 POR QUE AZULEJOS, E NÃO GAVETAS EMPILHADAS. Até o bloco 55 esta tela era o espelho
+ * mais OITO `Drawer` recolhíveis um embaixo do outro. Oito cabeçalhos iguais em coluna
+ * leem como lista de configuração, não como painel de controle — e para chegar em
+ * "Energia" era preciso rolar por todos os outros fechados. Uma grade de 2 colunas põe as
+ * oito funções na mesma dobra, com ícone grande e um resumo do que há lá dentro. Abrir um
+ * painel não empurra os outros: ele sobe por cima e volta com o botão físico de voltar.
+ */
+type PainelId =
+  | 'lembretes' | 'memoria' | 'monitor' | 'processos'
+  | 'programas' | 'energia' | 'transferencia';
+
+const PAINEIS: {
+  id: PainelId | 'spotify';
+  titulo: string;
+  icone: keyof typeof Feather.glyphMap;
+  resumo: string;
+  /** Cor do ícone quando não é a primária — só o Spotify, que tem marca própria. */
+  cor?: string;
+}[] = [
+  { id: 'lembretes', titulo: 'Lembretes', icone: 'bell', resumo: 'Ver e cancelar' },
+  { id: 'memoria', titulo: 'Memória', icone: 'bookmark', resumo: 'O que ele lembra' },
+  { id: 'monitor', titulo: 'Monitor', icone: 'activity', resumo: 'CPU, RAM e discos' },
+  { id: 'processos', titulo: 'Processos', icone: 'cpu', resumo: 'Encerrar à força' },
+  { id: 'programas', titulo: 'Programas', icone: 'grid', resumo: 'Abrir e fechar' },
+  { id: 'energia', titulo: 'Energia', icone: 'power', resumo: 'Bloquear, desligar' },
+  { id: 'transferencia', titulo: 'Transferência', icone: 'clipboard', resumo: 'Colar entre os dois' },
+  { id: 'spotify', titulo: 'Spotify', icone: 'music', resumo: 'Player completo', cor: '#1db954' },
+];
+
+/**
+ * Guia única de controle do PC: espelho no topo, teclas de mídia logo abaixo (a ação
+ * mais frequente de um controle remoto merece ficar sem toque extra) e a grade de painéis.
  */
 export default function ControlScreen({
   pairing,
@@ -49,6 +84,7 @@ export default function ControlScreen({
   const { palette, tokens } = useTheme();
   const [trackpadOpen, setTrackpadOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
+  const [painel, setPainel] = useState<PainelId | null>(null);
 
   const handleError = useCallback<ErrorHandler>((err, context) => {
     if (err instanceof AuthError) {
@@ -56,12 +92,16 @@ export default function ControlScreen({
       onUnpair();
       return;
     }
+    haptica.erro();
     Alert.alert(context, errMessage(err));
   }, [onUnpair]);
 
+  const fecharPainel = useCallback(() => setPainel(null), []);
+  const tituloPainel = PAINEIS.find(p => p.id === painel)?.titulo;
+
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader title="Controle do PC" />
+      <ScreenHeader title="PC" />
 
       <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
         <MirrorPanel pairing={pairing} onError={handleError} />
@@ -69,38 +109,45 @@ export default function ControlScreen({
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}
         <SpotifyBar pairing={pairing} onOpen={() => setPlayerOpen(true)} />
 
-        <Pressable onPress={() => setTrackpadOpen(true)}>
-          <Card glass style={styles.trackpadRow}>
-            <Feather name="move" size={18} color={palette.primary} />
+        <BarraMidia pairing={pairing} onError={handleError} />
+
+        <Toque onPress={() => setTrackpadOpen(true)} haptico="medio">
+          <Card glass style={styles.linhaHero}>
+            <View style={[styles.iconeHero, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
+              <Feather name="move" size={20} color={palette.primary} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text variant="label">Trackpad e teclado</Text>
-              <Text variant="caption" color={palette.textMuted}>
-                Abre em tela cheia
-              </Text>
+              <Text variant="caption" color={palette.textMuted}>Mouse, rolagem e digitação em tela cheia</Text>
             </View>
             <Feather name="maximize-2" size={18} color={palette.textMuted} />
           </Card>
-        </Pressable>
+        </Toque>
 
-        <RemindersDrawer pairing={pairing} onError={handleError} />
-        <MemoryDrawer pairing={pairing} onError={handleError} />
-        <MonitorDrawer pairing={pairing} />
-        <ProcessesDrawer pairing={pairing} onError={handleError} />
-        <AppsDrawer pairing={pairing} onError={handleError} />
-        <PowerDrawer pairing={pairing} onError={handleError} />
-        <ClipboardDrawer pairing={pairing} onError={handleError} />
-        <Pressable onPress={() => setPlayerOpen(true)}>
-          <Card glass style={styles.trackpadRow}>
-            <Feather name="music" size={18} color="#1db954" />
-            <View style={{ flex: 1 }}>
-              <Text variant="label">Spotify</Text>
-              <Text variant="caption" color={palette.textMuted}>Player completo</Text>
-            </View>
-            <Feather name="maximize-2" size={18} color={palette.textMuted} />
-          </Card>
-        </Pressable>
-
-        <MediaDrawer pairing={pairing} onError={handleError} />
+        <View style={styles.grade}>
+          {PAINEIS.map((p, i) => (
+            <Animated.View
+              key={p.id}
+              style={styles.celula}
+              // Escalonado em 30 ms por azulejo: a grade "assenta" em vez de piscar
+              // inteira. 8 × 30 = 240 ms no último, dentro do teto de 300 do bloco 24.
+              entering={FadeInDown.delay(i * 30).duration(MOV.base).reduceMotion(ReduceMotion.System)}
+            >
+              <Toque
+                onPress={() => (p.id === 'spotify' ? setPlayerOpen(true) : setPainel(p.id))}
+                style={{ flex: 1 }}
+              >
+                <Card glass style={styles.azulejo}>
+                  <View style={[styles.iconeAzulejo, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
+                    <Feather name={p.icone} size={20} color={p.cor ?? palette.primary} />
+                  </View>
+                  <Text variant="label" numberOfLines={1}>{p.titulo}</Text>
+                  <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{p.resumo}</Text>
+                </Card>
+              </Toque>
+            </Animated.View>
+          ))}
+        </View>
       </ScrollView>
 
       <TrackpadFullscreen
@@ -115,6 +162,19 @@ export default function ControlScreen({
         visible={playerOpen}
         onClose={() => setPlayerOpen(false)}
       />
+
+      {/* Um só GlassModal para todos os painéis: o conteúdo é decidido pelo id. O corpo
+          monta quando a gaveta abre e desmonta ao fechar — é o que faz cada painel
+          carregar os dados dele só quando alguém pede, como as gavetas faziam. */}
+      <GlassModal visible={painel !== null} onClose={fecharPainel} title={tituloPainel}>
+        {painel === 'lembretes' && <PainelLembretes pairing={pairing} onError={handleError} />}
+        {painel === 'memoria' && <PainelMemoria pairing={pairing} onError={handleError} />}
+        {painel === 'monitor' && <PainelMonitor pairing={pairing} />}
+        {painel === 'processos' && <PainelProcessos pairing={pairing} onError={handleError} />}
+        {painel === 'programas' && <PainelProgramas pairing={pairing} onError={handleError} />}
+        {painel === 'energia' && <PainelEnergia pairing={pairing} onError={handleError} />}
+        {painel === 'transferencia' && <PainelTransferencia pairing={pairing} onError={handleError} />}
+      </GlassModal>
     </View>
   );
 }
@@ -184,6 +244,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
     try {
       const res = await callRpc(pairing, 'vision.screen', {}, { timeoutMs: 90000 });
       setAnswer(res.answer);
+      haptica.sucesso();
       Speech.speak(res.answer, { language: 'pt-BR' });
     } catch (err) {
       onError(err, 'Falha ao interpretar a tela');
@@ -277,6 +338,64 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
   );
 }
 
+// ── Teclas de mídia e volume ──────────────────────────────────────────────────
+
+const TECLAS_MIDIA: { op: MediaOperation; icone: keyof typeof Feather.glyphMap; rotulo: string }[] = [
+  { op: 'previous', icone: 'skip-back', rotulo: 'Anterior' },
+  { op: 'play', icone: 'play', rotulo: 'Tocar' },
+  { op: 'pause', icone: 'pause', rotulo: 'Pausar' },
+  { op: 'skip', icone: 'skip-forward', rotulo: 'Próxima' },
+];
+
+/**
+ * Sempre à vista, sem gaveta: é o que mais se aperta num controle remoto. Funciona com
+ * qualquer player — são as teclas de mídia do Windows, não o Spotify (que tem a barra
+ * dele logo acima quando está tocando).
+ */
+function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
+
+  async function media(op: MediaOperation) {
+    try {
+      await callRpc(pairing, 'media.control', { operation: op });
+    } catch (err) {
+      onError(err, 'Falha no controle de mídia');
+    }
+  }
+
+  async function volume(level: 'up' | 'down' | 'mute') {
+    try {
+      await callRpc(pairing, 'volume.set', { level });
+    } catch (err) {
+      onError(err, 'Falha ao ajustar o volume');
+    }
+  }
+
+  return (
+    <Card glass style={[styles.barraMidia, { paddingVertical: tokens.spacing.sm, paddingHorizontal: tokens.spacing.md }]}>
+      <View style={styles.grupoMidia}>
+        {TECLAS_MIDIA.map(t => (
+          <GlassCircle key={t.op} size={38} onPress={() => { haptica.leve(); media(t.op); }}>
+            <Feather name={t.icone} size={17} color={palette.primary} />
+          </GlassCircle>
+        ))}
+      </View>
+      <View style={[styles.divisor, { backgroundColor: palette.glassBorder }]} />
+      <View style={styles.grupoMidia}>
+        <GlassCircle size={38} onPress={() => { haptica.leve(); volume('mute'); }}>
+          <Feather name="volume-x" size={16} color={palette.textMuted} />
+        </GlassCircle>
+        <GlassCircle size={38} onPress={() => { haptica.leve(); volume('down'); }}>
+          <Feather name="volume-1" size={16} color={palette.primary} />
+        </GlassCircle>
+        <GlassCircle size={38} onPress={() => { haptica.leve(); volume('up'); }}>
+          <Feather name="volume-2" size={16} color={palette.primary} />
+        </GlassCircle>
+      </View>
+    </Card>
+  );
+}
+
 // ── Lembretes ─────────────────────────────────────────────────────────────────
 
 function formatDue(dueAt: number): string {
@@ -286,10 +405,10 @@ function formatDue(dueAt: number): string {
   return hoje ? `hoje às ${hora}` : `${d.toLocaleDateString('pt-BR')} às ${hora}`;
 }
 
-function RemindersDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+function PainelLembretes({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -303,9 +422,12 @@ function RemindersDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
     }
   }, [pairing, onError]);
 
+  useEffect(() => { load(); }, [load]);
+
   async function cancel(reminder: Reminder) {
     try {
       await callRpc(pairing, 'reminders.cancel', { id: reminder.id });
+      haptica.medio();
       setReminders(prev => prev.filter(r => r.id !== reminder.id));
     } catch (err) {
       onError(err, 'Falha ao cancelar');
@@ -313,21 +435,10 @@ function RemindersDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
   }
 
   return (
-    <Drawer
-      title="Lembretes"
-      icon="bell"
-      subtitle="Criar por voz é mais rápido: “me lembra daqui a 10 minutos de…”"
-      onOpen={load}
-      right={
-        <Pressable onPress={load} hitSlop={8}>
-          <Feather name="refresh-cw" size={16} color={palette.textMuted} />
-        </Pressable>
-      }
-    >
+    <View style={{ gap: tokens.spacing.md }}>
+      <Dica texto="Criar por voz é mais rápido: “me lembra daqui a 10 minutos de…”" />
       {loading && <ActivityIndicator color={palette.primary} />}
-      {!loading && reminders.length === 0 && (
-        <Text variant="caption" color={palette.textMuted}>Nenhum lembrete agendado.</Text>
-      )}
+      {!loading && reminders.length === 0 && <Vazio icone="bell-off" texto="Nenhum lembrete agendado." />}
       {reminders.map(r => (
         <View key={r.id} style={styles.procRow}>
           <View style={{ flex: 1 }}>
@@ -341,20 +452,20 @@ function RemindersDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
           </Pressable>
         </View>
       ))}
-      <Text variant="caption" color={palette.textMuted} style={{ marginTop: tokens.spacing.xs }}>
+      <Text variant="caption" color={palette.textMuted}>
         Quando disparar, o PC fala e manda uma notificação para o celular — mesmo fora de casa.
       </Text>
-    </Drawer>
+    </View>
   );
 }
 
 // ── Memória ───────────────────────────────────────────────────────────────────
 
-function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
   const [facts, setFacts] = useState<MemoryFact[]>([]);
   const [draft, setDraft] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -368,13 +479,15 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
     }
   }, [pairing, onError]);
 
+  useEffect(() => { load(); }, [load]);
+
   async function add() {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
     try {
       const res = await callRpc(pairing, 'memory.add', { text });
-      if (res.created) setFacts(prev => [...prev, res.fact]);
+      if (res.created) { haptica.sucesso(); setFacts(prev => [...prev, res.fact]); }
     } catch (err) {
       onError(err, 'Falha ao guardar');
     }
@@ -383,6 +496,7 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
   async function remove(fact: MemoryFact) {
     try {
       await callRpc(pairing, 'memory.remove', { id: fact.id });
+      haptica.medio();
       setFacts(prev => prev.filter(f => f.id !== fact.id));
     } catch (err) {
       onError(err, 'Falha ao esquecer');
@@ -390,16 +504,10 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
   }
 
   return (
-    <Drawer
-      title="Memória"
-      icon="bookmark"
-      subtitle="O que o ELYSIUM lembra sobre você"
-      onOpen={load}
-    >
+    <View style={{ gap: tokens.spacing.md }}>
+      <Dica texto="Fatos curtos que entram em toda conversa. Até 20, de 200 letras cada." />
       {loading && <ActivityIndicator color={palette.primary} />}
-      {!loading && facts.length === 0 && (
-        <Text variant="caption" color={palette.textMuted}>Nada guardado ainda.</Text>
-      )}
+      {!loading && facts.length === 0 && <Vazio icone="bookmark" texto="Nada guardado ainda." />}
       {facts.map(f => (
         <View key={f.id} style={styles.procRow}>
           <Text variant="body" style={{ flex: 1 }}>{f.text}</Text>
@@ -416,6 +524,7 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
           placeholder="Guardar um fato…"
           placeholderTextColor={palette.textMuted}
           onSubmitEditing={add}
+          maxLength={200}
           style={[
             styles.input,
             {
@@ -433,57 +542,56 @@ function MemoryDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHa
           <Feather name="plus" size={18} color={palette.onPrimary} />
         </Pressable>
       </View>
-    </Drawer>
+    </View>
   );
 }
 
 // ── Monitor ───────────────────────────────────────────────────────────────────
 
 /**
- * Monitor do PC.
- *
- * O broadcast de telemetria só traz CPU, RAM e bateria — que num desktop é null. Na
- * prática eram DUAS barras num card com 16px de padding e 16px de espaçamento: um card
- * alto e quase vazio. Discos e processos vêm por RPC sob demanda e preenchem o mesmo
- * lugar, em vez de morarem numa gaveta separada mais abaixo.
+ * O broadcast de telemetria só traz CPU, RAM e bateria — que num desktop é null. Discos
+ * e processos vêm por RPC ao abrir o painel e preenchem o mesmo lugar.
  */
-function MonitorDrawer({ pairing }: { pairing: Pairing }) {
+function PainelMonitor({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TelemetryFrame | null>(null);
-  const [mounted, setMounted] = useState(false);
   const [discos, setDiscos] = useState<DiskEntry[]>([]);
   const [pesados, setPesados] = useState<ProcessEntry[]>([]);
 
-  useEffect(() => {
-    if (!mounted) return;
-    return openTelemetryStream(pairing, setSnapshot, setStatus);
-  }, [mounted, pairing.activeIp, pairing.port, pairing.token]);
+  useEffect(
+    () => openTelemetryStream(pairing, setSnapshot, setStatus),
+    [pairing.activeIp, pairing.port, pairing.token],
+  );
 
-  // Discos e processos não vêm no broadcast; são lidos uma vez ao abrir a gaveta. Ficar
-  // consultando com a gaveta fechada gastaria uma chamada de PowerShell no PC por nada.
   useEffect(() => {
-    if (!mounted) return;
+    let vivo = true;
     (async () => {
-      try { setDiscos((await callRpc(pairing, 'system.disks')).disks); } catch { /* segue */ }
+      try {
+        const d = (await callRpc(pairing, 'system.disks')).disks;
+        if (vivo) setDiscos(d);
+      } catch { /* segue */ }
       try {
         const r = await callRpc(pairing, 'system.processes');
-        setPesados(r.processes.slice().sort((a, b) => (b.cpu ?? 0) - (a.cpu ?? 0)).slice(0, 5));
+        if (vivo) setPesados(r.processes.slice().sort((a, b) => (b.cpu ?? 0) - (a.cpu ?? 0)).slice(0, 5));
       } catch { /* segue */ }
     })();
-  }, [mounted, pairing]);
+    return () => { vivo = false; };
+  }, [pairing]);
 
   const known = snapshot
     ? Object.entries(snapshot).filter(([k, v]) => findMetric(k) && typeof v === 'number')
     : [];
 
   return (
-    <Drawer
-      title="Monitor"
-      icon="activity"
-      subtitle={status === 'open' ? 'Ao vivo' : 'Desconectado'}
-      onOpen={() => setMounted(true)}
-    >
+    <View style={{ gap: tokens.spacing.md }}>
+      <View style={styles.linhaAoVivo}>
+        <View style={[styles.ponto, { backgroundColor: status === 'open' ? palette.success : palette.textMuted }]} />
+        <Text variant="caption" color={palette.textMuted}>
+          {status === 'open' ? 'Ao vivo · a cada 5 s' : 'Conectando…'}
+        </Text>
+      </View>
+
       {known.length === 0 ? (
         <Text variant="caption" color={palette.textMuted}>Esperando o primeiro broadcast…</Text>
       ) : (
@@ -523,17 +631,18 @@ function MonitorDrawer({ pairing }: { pairing: Pairing }) {
           ))}
         </View>
       )}
-    </Drawer>
+    </View>
   );
 }
 
 // ── Processos ─────────────────────────────────────────────────────────────────
 
-function ProcessesDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
-  const { palette } = useTheme();
+function PainelProcessos({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
   const [processes, setProcesses] = useState<ProcessEntry[]>([]);
   const [disks, setDisks] = useState<DiskEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -551,7 +660,10 @@ function ProcessesDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
     }
   }, [pairing, onError]);
 
+  useEffect(() => { load(); }, [load]);
+
   async function kill(proc: ProcessEntry) {
+    haptica.aviso();
     const confirmed = await confirmDestructive(
       `Encerrar ${proc.name}?`,
       `O processo ${proc.name} (PID ${proc.pid}) será encerrado à força. Trabalho não salvo se perde.`
@@ -559,23 +671,34 @@ function ProcessesDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
     if (confirmed !== 'confirmed') return;
     try {
       await callRpc(pairing, 'system.killProcess', { pid: proc.pid }, { confirmed: true });
+      haptica.sucesso();
       setProcesses(prev => prev.filter(p => p.pid !== proc.pid));
     } catch (err) {
       onError(err, 'Falha ao encerrar processo');
     }
   }
 
+  const filtro = busca.trim().toLowerCase();
+  const visiveis = filtro ? processes.filter(p => p.name.toLowerCase().includes(filtro)) : processes;
+
   return (
-    <Drawer
-      title="Processos e discos"
-      icon="cpu"
-      onOpen={load}
-      right={
+    <View style={{ gap: tokens.spacing.md }}>
+      <View style={styles.procRow}>
+        <View style={[styles.campoBusca, { borderRadius: tokens.radii.md, borderColor: palette.border, backgroundColor: palette.surface }]}>
+          <Feather name="search" size={15} color={palette.textMuted} />
+          <TextInput
+            value={busca}
+            onChangeText={setBusca}
+            placeholder="Filtrar por nome…"
+            placeholderTextColor={palette.textMuted}
+            style={{ flex: 1, color: palette.text, paddingVertical: 0 }}
+          />
+        </View>
         <Pressable onPress={load} hitSlop={8}>
-          <Feather name="refresh-cw" size={16} color={palette.textMuted} />
+          <Feather name="refresh-cw" size={18} color={palette.textMuted} />
         </Pressable>
-      }
-    >
+      </View>
+
       {loading && <ActivityIndicator color={palette.primary} />}
 
       {disks.map(d => (
@@ -588,7 +711,8 @@ function ProcessesDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
         />
       ))}
 
-      {processes.map(proc => (
+      {!loading && visiveis.length === 0 && <Vazio icone="cpu" texto={filtro ? 'Nada com esse nome.' : 'Nenhum processo reportado.'} />}
+      {visiveis.map(proc => (
         <View key={proc.pid} style={styles.procRow}>
           <View style={{ flex: 1 }}>
             <Text variant="body">{proc.name}</Text>
@@ -601,17 +725,18 @@ function ProcessesDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
           </Pressable>
         </View>
       ))}
-    </Drawer>
+    </View>
   );
 }
 
-// ── Apps ──────────────────────────────────────────────────────────────────────
+// ── Programas ─────────────────────────────────────────────────────────────────
 
-function AppsDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
-  const { palette } = useTheme();
+function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -625,10 +750,13 @@ function AppsDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
     }
   }, [pairing, onError]);
 
+  useEffect(() => { load(); }, [load]);
+
   async function open(app: AppEntry) {
     setBusyKey(app.key);
     try {
       await callRpc(pairing, 'apps.open', { name: app.key }, { timeoutMs: 15000 });
+      haptica.sucesso();
     } catch (err) {
       onError(err, `Falha ao abrir ${app.key}`);
     } finally {
@@ -637,11 +765,13 @@ function AppsDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
   }
 
   async function close(app: AppEntry) {
+    haptica.aviso();
     const confirmed = await confirmDestructive(`Fechar ${app.key}?`, 'O programa será encerrado à força no PC.');
     if (confirmed !== 'confirmed') return;
     setBusyKey(app.key);
     try {
       await callRpc(pairing, 'apps.close', { name: app.key }, { confirmed: true, timeoutMs: 15000 });
+      haptica.sucesso();
     } catch (err) {
       onError(err, `Falha ao fechar ${app.key}`);
     } finally {
@@ -649,14 +779,29 @@ function AppsDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
     }
   }
 
+  const filtro = busca.trim().toLowerCase();
+  const visiveis = filtro ? apps.filter(a => a.key.toLowerCase().includes(filtro)) : apps;
+
   return (
-    <Drawer title="Programas" icon="grid" subtitle="Toque abre · X fecha" onOpen={load}>
+    <View style={{ gap: tokens.spacing.md }}>
+      <View style={[styles.campoBusca, { borderRadius: tokens.radii.md, borderColor: palette.border, backgroundColor: palette.surface }]}>
+        <Feather name="search" size={15} color={palette.textMuted} />
+        <TextInput
+          value={busca}
+          onChangeText={setBusca}
+          placeholder="Buscar programa…"
+          placeholderTextColor={palette.textMuted}
+          style={{ flex: 1, color: palette.text, paddingVertical: 0 }}
+        />
+      </View>
+      <Dica texto="Toque no nome para abrir · X fecha à força" />
       {loading && <ActivityIndicator color={palette.primary} />}
-      {apps.map(app => (
+      {!loading && visiveis.length === 0 && <Vazio icone="grid" texto="Nenhum programa com esse nome." />}
+      {visiveis.map(app => (
         <View key={app.key} style={styles.procRow}>
           <Pressable style={{ flex: 1 }} onPress={() => open(app)} disabled={busyKey === app.key}>
             <Text variant="body">{app.key}</Text>
-            <Text variant="caption" color={palette.textMuted}>{app.command}</Text>
+            <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{app.command}</Text>
           </Pressable>
           {busyKey === app.key ? (
             <ActivityIndicator size="small" color={palette.primary} />
@@ -667,7 +812,7 @@ function AppsDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
           )}
         </View>
       ))}
-    </Drawer>
+    </View>
   );
 }
 
@@ -680,14 +825,16 @@ const POWER_BUTTONS: { op: PowerOperation; label: string; icon: keyof typeof Fea
   { op: 'shutdown', label: 'Desligar', icon: 'power', warn: 'O PC desliga em 30 segundos. Trabalho não salvo se perde.' },
 ];
 
-function PowerDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+function PainelEnergia({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
 
   async function power(op: PowerOperation, label: string, warn: string) {
+    haptica.aviso();
     const confirmed = await confirmDestructive(`${label} o PC?`, warn);
     if (confirmed !== 'confirmed') return;
     try {
       const res = await callRpc(pairing, 'power.control', { operation: op }, { confirmed: true });
+      haptica.sucesso();
       Alert.alert('ELYSIUM-M', res.message);
     } catch (err) {
       onError(err, `Falha ao ${label.toLowerCase()}`);
@@ -695,33 +842,38 @@ function PowerDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
   }
 
   return (
-    <Drawer title="Energia" icon="power">
+    <View style={{ gap: tokens.spacing.md }}>
       <View style={styles.grid}>
-        {POWER_BUTTONS.map(b => (
-          <Pressable
-            key={b.op}
-            onPress={() => power(b.op, b.label, b.warn)}
-            style={[styles.powerTile, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}
-          >
-            <Feather name={b.icon} size={20} color={b.op === 'shutdown' ? palette.error : palette.primary} />
-            <Text variant="caption" color={b.op === 'shutdown' ? palette.error : palette.primary}>
-              {b.label}
-            </Text>
-          </Pressable>
-        ))}
+        {POWER_BUTTONS.map(b => {
+          const perigo = b.op === 'shutdown' || b.op === 'restart';
+          return (
+            <Toque
+              key={b.op}
+              haptico={null}
+              onPress={() => power(b.op, b.label, b.warn)}
+              style={[styles.powerTile, { borderRadius: tokens.radii.md, backgroundColor: perigo ? palette.errorSoft : palette.primarySoft }]}
+            >
+              <Feather name={b.icon} size={22} color={perigo ? palette.error : palette.primary} />
+              <Text variant="label" color={perigo ? palette.error : palette.primary}>
+                {b.label}
+              </Text>
+            </Toque>
+          );
+        })}
       </View>
+      <Dica texto="Agendar para mais tarde fica no card Energia da Início." />
       <Button
         variant="ghost"
         title="Cancelar desligamento agendado"
         onPress={() => power('cancel', 'Cancelar', 'O desligamento agendado será abortado.')}
       />
-    </Drawer>
+    </View>
   );
 }
 
 // ── Área de transferência ─────────────────────────────────────────────────────
 
-function ClipboardDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+function PainelTransferencia({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
   const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -732,6 +884,7 @@ function ClipboardDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
       const res = await callRpc(pairing, 'clipboard.get');
       setText(res.text);
       if (res.text) await Clipboard.setStringAsync(res.text);
+      haptica.sucesso();
     } catch (err) {
       onError(err, 'Falha ao ler a área de transferência do PC');
     } finally {
@@ -749,6 +902,7 @@ function ClipboardDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
       }
       await callRpc(pairing, 'clipboard.set', { text: value });
       setText(value);
+      haptica.sucesso();
       Alert.alert('Pronto', 'Colado na área de transferência do PC.');
     } catch (err) {
       onError(err, 'Falha ao enviar para o PC');
@@ -758,88 +912,46 @@ function ClipboardDrawer({ pairing, onError }: { pairing: Pairing; onError: Erro
   }
 
   return (
-    <Drawer title="Área de transferência" icon="clipboard">
+    <View style={{ gap: tokens.spacing.md }}>
+      <Dica texto="Puxar copia o que está no PC para o celular; mandar faz o inverso." />
       {text !== null && (
-        <Text variant="caption" color={palette.textMuted} numberOfLines={4}>
-          {text || '(vazio)'}
-        </Text>
+        <Card style={{ padding: tokens.spacing.md }}>
+          <Text variant="caption" color={palette.textMuted} numberOfLines={6}>
+            {text || '(vazio)'}
+          </Text>
+        </Card>
       )}
       <View style={{ flexDirection: 'row', gap: tokens.spacing.sm }}>
         <View style={{ flex: 1 }}>
           <Button variant="secondary" title="Puxar do PC" onPress={pull} loading={busy} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button variant="secondary" title="Mandar pro PC" onPress={push} loading={busy} />
+          <Button variant="primary" title="Mandar pro PC" onPress={push} loading={busy} />
         </View>
       </View>
-    </Drawer>
+    </View>
   );
 }
 
-// ── Mídia e volume ────────────────────────────────────────────────────────────
+// ── Peças comuns dos painéis ──────────────────────────────────────────────────
 
-const MEDIA_BUTTONS: { op: MediaOperation; icon: keyof typeof Feather.glyphMap }[] = [
-  { op: 'previous', icon: 'skip-back' },
-  { op: 'play', icon: 'play' },
-  { op: 'pause', icon: 'pause' },
-  { op: 'skip', icon: 'skip-forward' },
-];
+/** Uma linha de orientação no topo do painel — o que a gaveta antiga punha no subtítulo. */
+function Dica({ texto }: { texto: string }) {
+  const { palette } = useTheme();
+  return <Text variant="caption" color={palette.textMuted}>{texto}</Text>;
+}
 
 /**
- * Só as teclas de mídia e o volume do Windows. O Spotify tem lugar próprio: a barra
- * no topo desta tela, que abre o player em tela cheia.
+ * Estado vazio com ícone, no lugar de uma linha cinza perdida: uma lista vazia ainda
+ * precisa parecer uma tela terminada, não uma tela que falhou em carregar.
  */
-function MediaDrawer({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+function Vazio({ icone, texto }: { icone: keyof typeof Feather.glyphMap; texto: string }) {
   const { palette, tokens } = useTheme();
-
-  async function media(op: MediaOperation) {
-    try {
-      await callRpc(pairing, 'media.control', { operation: op });
-    } catch (err) {
-      onError(err, 'Falha no controle de mídia');
-    }
-  }
-
-  async function volume(level: number | 'mute') {
-    try {
-      await callRpc(pairing, 'volume.set', { level });
-    } catch (err) {
-      onError(err, 'Falha ao ajustar o volume');
-    }
-  }
-
   return (
-    <Drawer title="Mídia e volume" icon="sliders" subtitle="Funciona com qualquer player">
-      <View style={[styles.grid, { justifyContent: 'space-around' }]}>
-        {MEDIA_BUTTONS.map(b => (
-          <Pressable
-            key={b.op}
-            onPress={() => media(b.op)}
-            style={[styles.mediaTile, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
-          >
-            <Feather name={b.icon} size={20} color={palette.primary} />
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.grid}>
-        {[0, 25, 50, 75, 100].map(level => (
-          <Pressable
-            key={level}
-            onPress={() => volume(level)}
-            style={[styles.volTile, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
-          >
-            <Text variant="caption" color={palette.primary}>{level}%</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          onPress={() => volume('mute')}
-          style={[styles.volTile, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
-        >
-          <Feather name="volume-x" size={16} color={palette.primary} />
-        </Pressable>
-      </View>
-    </Drawer>
+    <View style={[styles.vazio, { paddingVertical: tokens.spacing.xl }]}>
+      <Feather name={icone} size={26} color={palette.textMuted} />
+      <Text variant="caption" color={palette.textMuted}>{texto}</Text>
+    </View>
   );
 }
 
@@ -847,12 +959,27 @@ const styles = StyleSheet.create({
   centerCard: { alignItems: 'center', paddingVertical: 40 },
   toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
-  trackpadRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  linhaHero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconeHero: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  // Duas colunas: `gap` de 12 entre elas e cada célula com 48% cabem em qualquer largura
+  // sem cálculo, e o card de meia largura da Início usa a mesma proporção.
+  grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  celula: { width: '48%', flexGrow: 1 },
+  azulejo: { gap: 4, minHeight: 112, justifyContent: 'flex-end', flex: 1 },
+  iconeAzulejo: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  barraMidia: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  grupoMidia: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  divisor: { width: 1, height: 22 },
   procRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  powerTile: { flexGrow: 1, minWidth: '45%', alignItems: 'center', gap: 4, paddingVertical: 14 },
-  mediaTile: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  volTile: { flexGrow: 1, minWidth: 56, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  powerTile: { flexGrow: 1, minWidth: '45%', alignItems: 'center', gap: 6, paddingVertical: 16 },
   input: { flex: 1, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
   sendBtn: { width: 46, alignItems: 'center', justifyContent: 'center' },
+  campoBusca: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 9,
+  },
+  linhaAoVivo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ponto: { width: 7, height: 7, borderRadius: 4 },
+  vazio: { alignItems: 'center', gap: 8 },
 });
