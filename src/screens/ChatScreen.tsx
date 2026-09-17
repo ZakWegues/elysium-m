@@ -236,7 +236,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string) => void } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string) => void; comecou: () => boolean } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     const onChunk = (parcial: string) => {
@@ -253,7 +253,7 @@ export default function ChatScreen({
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now() }]);
     };
-    return { onChunk, fechar };
+    return { onChunk, fechar, comecou: () => criada };
   }
 
   async function handleSend(texto?: string) {
@@ -279,6 +279,9 @@ export default function ChatScreen({
         ]);
         reply = (await conn.sendText(text, bolha.onChunk)).reply;
       } catch (wsErr) {
+        // Só cai no HTTP se o PC não chegou a responder NADA: com pedaços já na tela o
+        // comando já rodou lá, e mandar de novo abriria o programa duas vezes.
+        if (bolha.comecou()) throw wsErr;
         console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
         reply = await sendCommand(pairing, text);
       }
