@@ -59,7 +59,6 @@ function pontuar(consulta: string, alvo: string): number | null {
   return 5 + buracos * 2 + ultimo * 0.01;
 }
 
-const normalizar = (x: string) => x.toLowerCase().replace(/#\d+$/, '').replace(/\.exe$/, '').replace(/[^a-z0-9]/g, '');
 
 export default function BuscaPanel({
   pairing, visible, onClose, onNavigate, onOpenConversation, onPerguntar, onAbrirPlayer,
@@ -108,13 +107,13 @@ export default function BuscaPanel({
         { grupo: 'nav', icone: 'message-circle', texto: 'Chat com a IA', executar: () => onNavigate('chat') },
         { grupo: 'nav', icone: 'monitor', texto: 'Controle do PC', executar: () => onNavigate('control') },
         { grupo: 'nav', icone: 'music', texto: 'Player do Spotify', executar: onAbrirPlayer },
-        { grupo: 'acao', icone: 'camera', texto: 'Tirar print no PC', sub: 'PNG na Área de Trabalho', executar: rpc('screen.screenshot') },
-        { grupo: 'acao', icone: 'lock', texto: 'Bloquear a tela', executar: destrutivo('Bloquear o PC?', 'A tela do PC será bloqueada.', 'power.control', { operation: 'lock' }) },
+        { grupo: 'acao', icone: 'camera', texto: 'Tirar print no PC', sub: 'PNG na Área de Trabalho', chaves: ['screenshot', 'captura de tela'], executar: rpc('screen.screenshot') },
+        { grupo: 'acao', icone: 'lock', texto: 'Bloquear a tela', chaves: ['lock', 'travar'], executar: destrutivo('Bloquear o PC?', 'A tela do PC será bloqueada.', 'power.control', { operation: 'lock' }) },
         { grupo: 'acao', icone: 'moon', texto: 'Suspender o PC', executar: destrutivo('Suspender o PC?', 'O PC vai suspender.', 'power.control', { operation: 'sleep' }) },
         { grupo: 'acao', icone: 'rotate-cw', texto: 'Reiniciar o PC', perigo: true, executar: destrutivo('Reiniciar o PC?', 'O PC reinicia em 30 segundos. Trabalho não salvo se perde.', 'power.control', { operation: 'restart' }) },
         { grupo: 'acao', icone: 'power', texto: 'Desligar o PC', perigo: true, executar: destrutivo('Desligar o PC?', 'O PC desliga em 30 segundos. Trabalho não salvo se perde.', 'power.control', { operation: 'shutdown' }) },
         { grupo: 'acao', icone: 'x-circle', texto: 'Cancelar desligamento agendado', executar: destrutivo('Cancelar?', 'O desligamento agendado será abortado.', 'power.control', { operation: 'cancel' }) },
-        { grupo: 'acao', icone: 'volume-x', texto: 'Mudo', executar: rpc('volume.set', { level: 'mute' }, 'Mudo.') },
+        { grupo: 'acao', icone: 'volume-x', texto: 'Mudo', chaves: ['volume mudo', 'silenciar', 'mute'], executar: rpc('volume.set', { level: 'mute' }, 'Mudo.') },
         { grupo: 'acao', icone: 'volume-2', texto: 'Aumentar o volume', executar: rpc('volume.set', { level: 'up' }, 'Volume +') },
         { grupo: 'acao', icone: 'volume-1', texto: 'Diminuir o volume', executar: rpc('volume.set', { level: 'down' }, 'Volume −') },
         { grupo: 'acao', icone: 'play', texto: 'Tocar / pausar', executar: rpc('media.control', { operation: 'play' }) },
