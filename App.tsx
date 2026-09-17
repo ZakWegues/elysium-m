@@ -57,6 +57,8 @@ function AppInner() {
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   /** Em qual lado do switch o Chat abre — o compartilhamento do Android força o lado do PC. */
   const [modoChat, setModoChat] = useState<'ia' | 'pc'>('ia');
+  /** Texto que a busca da Início mandou para o chat; o ChatScreen envia ao abrir e limpa. */
+  const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
 
   const [queued, setQueued] = useState(0);
 
@@ -215,6 +217,8 @@ function AppInner() {
             pairing={pairing}
             onNavigate={setScreen}
             onOpenPlayer={() => setPlayerOpen(true)}
+            onOpenConversation={(id) => { setActiveSessionId(id); setModoChat('ia'); setScreen('chat'); }}
+            onPerguntar={(texto) => { setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat'); }}
             onUnpair={handleUnpair}
           />
         )}
@@ -243,6 +247,8 @@ function AppInner() {
             onOpenConversations={() => setScreen('conversations')}
             naoLidos={mailboxUnread}
             modoInicial={modoChat}
+            perguntaPendente={perguntaPendente}
+            onPerguntaEnviada={() => setPerguntaPendente(null)}
           />
         )}
       </TelaAnimada>

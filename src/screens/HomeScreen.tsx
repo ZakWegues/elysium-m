@@ -19,7 +19,9 @@ import { findMetric } from '../lib/telemetryFormat';
 import { ENTRA, LAYOUT, MOV, SAI, tempo } from '../lib/motion';
 import { useTheme } from '../theme';
 import { SpotifyBar } from './SpotifyPlayer';
-import { Card, MetricBar, ScreenHeader, Text } from '../components/ui';
+import { Card, GlassCircle, MetricBar, ScreenHeader, Text } from '../components/ui';
+import { haptica } from '../lib/haptica';
+import BuscaPanel from './BuscaPanel';
 
 /**
  * Tela inicial: um catálogo de cards, não uma tela fixa.
@@ -84,14 +86,20 @@ export default function HomeScreen({
   pairing,
   onNavigate,
   onOpenPlayer,
+  onOpenConversation,
+  onPerguntar,
   onUnpair,
 }: {
   pairing: Pairing;
   onNavigate: (screen: 'chat' | 'control') => void;
   onOpenPlayer: () => void;
+  /** A busca (lupa do cabeçalho) abre conversas salvas e manda perguntas pro chat. */
+  onOpenConversation: (id: string) => void;
+  onPerguntar: (texto: string) => void;
   onUnpair: () => void;
 }) {
   const { palette, tokens } = useTheme();
+  const [buscaAberta, setBuscaAberta] = useState(false);
   const [telemetria, setTelemetria] = useState<TelemetryFrame | null>(null);
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [dados, setDados] = useState<Dados>({
@@ -417,10 +425,13 @@ export default function HomeScreen({
         title="ELYSIUM-M"
         right={
           <View style={styles.linhaStatus}>
+            <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
+              <Feather name="search" size={16} color={palette.textMuted} />
+            </GlassCircle>
             <Pressable
               onPress={() => setEditando(v => !v)}
               hitSlop={10}
-              style={{ marginRight: 10 }}
+              style={{ marginLeft: 6, marginRight: 10 }}
             >
               <Feather name="sliders" size={17} color={editando ? palette.primary : palette.textMuted} />
             </Pressable>
@@ -550,6 +561,16 @@ export default function HomeScreen({
           </Text>
         )}
       </ScrollView>
+
+      <BuscaPanel
+        pairing={pairing}
+        visible={buscaAberta}
+        onClose={() => setBuscaAberta(false)}
+        onNavigate={onNavigate}
+        onOpenConversation={onOpenConversation}
+        onPerguntar={onPerguntar}
+        onAbrirPlayer={onOpenPlayer}
+      />
     </View>
   );
 }

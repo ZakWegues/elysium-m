@@ -33,8 +33,13 @@ export default function ChatScreen({
   onSessionChange,
   onOpenConversations,
   semCabecalho,
+  perguntaPendente,
+  onPerguntaEnviada,
 }: {
   pairing: Pairing;
+  /** Texto que a busca da Início pediu para enviar. Enviado uma vez, ao chegar. */
+  perguntaPendente?: string | null;
+  onPerguntaEnviada?: () => void;
   onUnpair: () => void;
   sessionId: string | null;
   onSessionChange: (id: string) => void;
@@ -215,6 +220,16 @@ export default function ChatScreen({
   function speakReply(reply: string) {
     Speech.speak(reply, { language: 'pt-BR' });
   }
+
+  // Pergunta vinda da busca da Início. Limpa ANTES de enviar: se o envio falhar e o
+  // componente remontar, a pergunta não pode ser disparada de novo sozinha.
+  useEffect(() => {
+    if (!perguntaPendente) return;
+    const texto = perguntaPendente;
+    onPerguntaEnviada?.();
+    handleSend(texto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perguntaPendente]);
 
   /**
    * A resposta chega em pedaços pelo WebSocket (bloco 59). O primeiro pedaço cria a bolha

@@ -33,6 +33,8 @@ export default function ChatHub({
   naoLidos,
   /** Compartilhar do Android cai aqui já no lado dos recados. */
   modoInicial,
+  perguntaPendente,
+  onPerguntaEnviada,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
@@ -41,6 +43,9 @@ export default function ChatHub({
   onOpenConversations: () => void;
   naoLidos?: number;
   modoInicial?: 'ia' | 'pc';
+  /** Texto vindo da busca da Início, para o chat da IA enviar assim que abrir. */
+  perguntaPendente?: string | null;
+  onPerguntaEnviada?: () => void;
 }) {
   const { palette, tokens } = useTheme();
   const [modo, setModo] = useState<'ia' | 'pc'>(modoInicial ?? 'ia');
@@ -127,6 +132,8 @@ export default function ChatHub({
       <View style={{ flex: 1 }}>
         {modo === 'ia' ? (
           <ChatScreen
+            perguntaPendente={perguntaPendente}
+            onPerguntaEnviada={onPerguntaEnviada}
             pairing={pairing}
             onUnpair={onUnpair}
             sessionId={sessionId}
