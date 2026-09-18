@@ -5,6 +5,9 @@ import { registerRootComponent } from 'expo';
 // Define a tarefa de segundo plano no arranque — o TaskManager precisa achá-la quando o
 // Android cria o processo só para rodá-la, sem UI. Ver src/lib/tarefaSegundoPlano.ts.
 import './src/lib/tarefaSegundoPlano';
+// Os widgets do Android (bloco 73): o handler também precisa existir antes do App, porque
+// o Android pode acordar o processo só para redesenhar um widget.
+import './src/widgets/handler';
 
 import App from './App';
 

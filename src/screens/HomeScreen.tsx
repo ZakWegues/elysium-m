@@ -97,6 +97,7 @@ export default function HomeScreen({
   onOpenConversation,
   onPerguntar,
   onUnpair,
+  pedidoBusca,
 }: {
   pairing: Pairing;
   onNavigate: (screen: 'chat' | 'control' | 'rotinas') => void;
@@ -105,9 +106,12 @@ export default function HomeScreen({
   onOpenConversation: (id: string) => void;
   onPerguntar: (texto: string) => void;
   onUnpair: () => void;
+  /** Muda quando um widget pede a lupa (elysium://busca); zero na montagem. */
+  pedidoBusca?: number;
 }) {
   const { palette, tokens } = useTheme();
   const [buscaAberta, setBuscaAberta] = useState(false);
+  useEffect(() => { if (pedidoBusca) setBuscaAberta(true); }, [pedidoBusca]);
   const [telemetria, setTelemetria] = useState<TelemetryFrame | null>(null);
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [dados, setDados] = useState<Dados>({

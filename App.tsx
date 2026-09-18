@@ -29,6 +29,8 @@ import { useShareIntent } from './src/lib/shareIntent';
 import { MOV, tempo } from './src/lib/motion';
 import { ligarSincronizacaoEmPrimeiroPlano, pedirPermissao } from './src/lib/notificacoes';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
+import { useDeepLinks } from './src/lib/deepLinks';
+import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -64,6 +66,8 @@ function AppInner() {
   const [modoChat, setModoChat] = useState<'ia' | 'pc'>('ia');
   /** Texto que a busca da Início mandou para o chat; o ChatScreen envia ao abrir e limpa. */
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
+  /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
+  const [pedidoBusca, setPedidoBusca] = useState(0);
 
   const [queued, setQueued] = useState(0);
   /** Gavetas abertas em qualquer tela. Com uma de pé, a TabBar sai — ver GlassModal.tsx. */
@@ -133,6 +137,8 @@ function AppInner() {
     if (!pairing) return;
     pedirPermissao().catch(() => {});
     registrarTarefa().catch(() => {});
+    // O widget Estado ganha dados frescos toda vez que o app volta ao primeiro plano.
+    atualizarWidgetEstado(pairing).catch(() => {});
     return ligarSincronizacaoEmPrimeiroPlano(pairing);
   }, [pairing]);
 
@@ -175,6 +181,14 @@ function AppInner() {
   }, [refreshMailboxBadge]);
 
   useShareIntent(pairing, handleShared);
+
+  // Deep links dos widgets: elysium://busca, elysium://chat, elysium://pc, elysium://rotinas.
+  useDeepLinks(useCallback((destino) => {
+    if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
+    else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
+    else if (destino === 'pc') setScreen('control');
+    else if (destino === 'rotinas') setScreen('rotinas');
+  }, []));
 
   const handlePaired = useCallback(() => {
     loadPairing().then(setPairing);
@@ -245,6 +259,7 @@ function AppInner() {
             onOpenConversation={(id) => { setActiveSessionId(id); setModoChat('ia'); setScreen('chat'); }}
             onPerguntar={(texto) => { setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat'); }}
             onUnpair={handleUnpair}
+            pedidoBusca={pedidoBusca}
           />
         )}
         {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
