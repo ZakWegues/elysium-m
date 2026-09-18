@@ -7,6 +7,7 @@ import { listSessions } from '../lib/chatHistoryStore';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
+import { ordenarPorConsulta } from '../lib/busca';
 import { useTheme } from '../theme';
 import { GlassModal, Text, Toque } from '../components/ui';
 
@@ -38,26 +39,7 @@ const ROTULO: Record<Grupo, string> = {
 };
 const ORDEM: Grupo[] = ['nav', 'acao', 'preset', 'app', 'lembrete', 'memoria', 'conversa', 'chat'];
 
-const dobrar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-/** Mesma pontuação do desktop: substring primeiro, subsequência PERTO depois. Menor é melhor. */
-function pontuar(consulta: string, alvo: string): number | null {
-  if (!consulta) return 0;
-  const q = dobrar(consulta), t = dobrar(alvo);
-  const direto = t.indexOf(q);
-  if (direto >= 0) return direto === 0 ? 0 : (t[direto - 1] === ' ' ? 1 : 2) + direto * 0.01;
-  let i = 0, primeiro = -1, ultimo = -1, buracos = 0;
-  for (let j = 0; j < t.length && i < q.length; j++) {
-    if (t[j] === q[i]) {
-      if (primeiro < 0) primeiro = j;
-      if (ultimo >= 0 && j !== ultimo + 1) buracos++;
-      ultimo = j; i++;
-    }
-  }
-  if (i < q.length) return null;
-  if (ultimo - primeiro > q.length * 2 + 1) return null;
-  return 5 + buracos * 2 + ultimo * 0.01;
-}
+// A pontuação mora em lib/busca.ts (bloco 77) — a mesma da paleta do desktop, testada.
 
 
 export default function BuscaPanel({
@@ -165,18 +147,7 @@ export default function BuscaPanel({
 
   const visiveis = useMemo(() => {
     const q = consulta.trim();
-    const achados: { it: Item; p: number }[] = [];
-    for (const it of itens) {
-      let melhor: number | null = null;
-      for (const c of [it.texto, ...(it.chaves ?? [])]) {
-        const p = pontuar(q, c);
-        if (p !== null && (melhor === null || p < melhor)) melhor = p;
-      }
-      if (melhor === null) continue;
-      achados.push({ it, p: melhor + ORDEM.indexOf(it.grupo) * 0.001 });
-    }
-    achados.sort((a, b) => a.p - b.p);
-    let lista = achados.map(a => a.it);
+    let lista = ordenarPorConsulta(itens, q, ORDEM);
     if (!q) lista = lista.filter(it => it.grupo === 'nav' || it.grupo === 'acao');
     else lista = lista.slice(0, 30);
     if (q.length >= 2) {

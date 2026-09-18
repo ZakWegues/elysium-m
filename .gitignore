@@ -45,3 +45,4 @@ yarn-error.*
 
 # APK gerado localmente (~100 MB, artefato de build)
 dist-apk/
+.check-export/
