@@ -254,13 +254,16 @@ function comAlfa(hex: string, alfa: number): string {
 function vidro(face: Face, familia: Familia) {
   const noite = familia === 'ely';
   const base = noite ? misturar(face.surface, face.primary, 0.14) : misturar('#FFFFFF', face.primary, 0.10);
+  // 🔴 Bloco 70: a noite quase não tem desfoque (GlassFill limita a 10), então a tinta é
+  // o que segura a leitura — subiu de 0,26/0,42 para 0,62/0,74. O dia baixou um pouco
+  // (0,34 → 0,30) porque ganhou aresta especular e lente, que já dão presença ao card.
   return {
-    glassSurface: comAlfa(base, noite ? 0.26 : 0.34),
-    glassSurfaceStrong: comAlfa(base, noite ? 0.42 : 0.52),
+    glassSurface: comAlfa(base, noite ? 0.62 : 0.30),
+    glassSurfaceStrong: comAlfa(base, noite ? 0.74 : 0.48),
     // Gaveta e painel são quase opacos de propósito: o critério de aceite é texto legível
     // sobre QUALQUER fundo, inclusive sobre uma mancha clara passando por baixo.
-    glassSheet: comAlfa(base, noite ? 0.86 : 0.88),
-    glassPanel: comAlfa(base, noite ? 0.90 : 0.92),
+    glassSheet: comAlfa(base, noite ? 0.94 : 0.88),
+    glassPanel: comAlfa(base, noite ? 0.96 : 0.92),
   };
 }
 

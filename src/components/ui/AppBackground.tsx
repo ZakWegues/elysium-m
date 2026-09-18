@@ -1,20 +1,33 @@
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withRepeat, withTiming, cancelAnimation,
+} from 'react-native-reanimated';
 import { useTheme } from '../../theme';
 
 /**
- * Fundo do app: gradiente suave + duas manchas de cor do tema.
+ * Fundo do app: gradiente suave + manchas de cor do tema, EM MOVIMENTO (bloco 71).
  *
  * Não é decoração à toa — vidro só parece vidro se houver algo variado por baixo pra
  * desfocar. Sobre um fundo chapado, qualquer blur devolve exatamente a mesma cor chapada.
- * Com a tinta do vidro em alfa baixo (este bloco), o fundo passou a ser QUASE TUDO o que
- * se vê através dele: pobre aqui é vidro cinza lá.
  *
- * 🔴 MAIS ELEMENTOS, MENOS MOVIMENTO. O bloco 47 já tinha medido que animar dois
- * gradientes em tela cheia custa quadro no telefone, e os feixes ficaram parados por isso.
- * A resposta a "o fundo está pobre" é densidade, não animação: quatro manchas em vez de
- * duas, dois traços finos de luz e uma constelação de partículas — tudo estático, tudo
- * `pointerEvents="none"`, nada que precise ser recalculado por quadro.
+ * 🔴 A REGRA "MAIS ELEMENTOS, MENOS MOVIMENTO" FOI REVISTA. O bloco 47 mediu que animar
+ * dois GRADIENTES em tela cheia custava quadro — e custava mesmo: gradiente muda a
+ * pintura, e repintar a tela inteira por quadro é caro. O que anima agora é outra coisa:
+ * o `transform` (translate/scale) e a `opacity` de views já pintadas, que o compositor
+ * move sem repintar nada. É a mesma classe de custo do polegar da TabBar. O Zak pediu
+ * ("o fundo está muito parado e muito esquisito, principalmente no mobile"), e o caminho
+ * barato existe:
+ *
+ *   · cada mancha deriva (até ~60 px) e respira (escala e opacidade) num ciclo próprio de
+ *     14–26 s — ciclos que não coincidem é o que tira a cara de loop;
+ *   · uma AURORA: um gradiente cônico grande girando devagar (110 s). Um `rotate`, nada
+ *     mais;
+ *   · tudo roda na thread de UI (`withRepeat` de valores compartilhados) e para de vez com
+ *     "reduzir movimento" (`ReduceMotion.System`).
+ *
+ * Tudo continua `pointerEvents="none"`.
  */
 
 /** Quantas camadas formam cada mancha. Mais que isto não muda o que o olho vê. */
@@ -23,24 +36,42 @@ const CAMADAS = 7;
 /**
  * 🔴 O React Native não tem equivalente ao `filter: blur()`.
  *
- * A versão do desktop desfoca os blobs com `blur(36px)` no CSS. Aqui isso não existe, e a
- * primeira versão deste componente desenhava um `View` redondo e pronto — o que dava um
- * DISCO DE BORDA DURA. No modo claro, a 16% de opacidade, quase não se notava; no escuro,
- * a 26% sobre um fundo quase preto, eram dois círculos chapados atravessando a tela. Era
- * um dos três motivos do modo escuro feio.
- *
  * Sem dependência nova, a saída é somar círculos concêntricos: o de fora é o maior e o mais
  * fraco, o de dentro é o menor e o mais forte. A soma das opacidades cria uma queda suave da
  * borda para o centro — uma gaussiana barata, que é o que o olho lê como desfoque.
  */
-function Mancha({ cor, opacidade, tamanho, style }: {
+function Mancha({ cor, opacidade, tamanho, style, deriva }: {
   cor: string;
   opacidade: number;
   tamanho: number;
   style: object;
+  /** Amplitude (px) e período (ms) do movimento desta mancha. */
+  deriva: { dx: number; dy: number; ms: number; escala: number };
 }) {
+  const t = useSharedValue(0);
+
+  useEffect(() => {
+    // 0 → 1 → 0, para sempre. `reverse: true` evita o salto de volta ao início.
+    t.value = withRepeat(
+      withTiming(1, { duration: deriva.ms, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(t);
+  }, [deriva.ms, t]);
+
+  const estilo = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: t.value * deriva.dx },
+      { translateY: t.value * deriva.dy },
+      { scale: 1 + (deriva.escala - 1) * t.value },
+    ],
+    // Respira ~15% junto com a deriva; a opacidade base já está nas camadas.
+    opacity: 0.86 + 0.14 * t.value,
+  }));
+
   return (
-    <View style={[{ width: tamanho, height: tamanho }, style]} pointerEvents="none">
+    <Animated.View style={[{ width: tamanho, height: tamanho }, style, estilo]} pointerEvents="none">
       {Array.from({ length: CAMADAS }, (_, i) => {
         // A camada 0 é a maior e a mais fraca; a última é a menor e a mais concentrada.
         const fracao = 1 - i / CAMADAS;
@@ -65,7 +96,40 @@ function Mancha({ cor, opacidade, tamanho, style }: {
           />
         );
       })}
-    </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * A aurora: um disco maior que a tela com um gradiente em faixas nas cores do tema,
+ * girando devagar. Como o gradiente é linear (não há cônico no expo-linear-gradient), as
+ * faixas diagonais girando produzem o mesmo efeito de "luz que varre" — e a rotação é o
+ * único valor animado, composto na GPU.
+ */
+function Aurora({ cores, opacidade }: { cores: [string, string, string]; opacidade: number }) {
+  const angulo = useSharedValue(0);
+
+  useEffect(() => {
+    angulo.value = withRepeat(
+      withTiming(360, { duration: 110_000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
+      -1,
+      false,
+    );
+    return () => cancelAnimation(angulo);
+  }, [angulo]);
+
+  const estilo = useAnimatedStyle(() => ({ transform: [{ rotate: `${angulo.value}deg` }] }));
+
+  return (
+    <Animated.View style={[styles.aurora, { opacity: opacidade }, estilo]} pointerEvents="none">
+      <LinearGradient
+        colors={['transparent', cores[0], 'transparent', cores[1], 'transparent', cores[2], 'transparent']}
+        locations={[0, 0.18, 0.36, 0.52, 0.68, 0.84, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+    </Animated.View>
   );
 }
 
@@ -73,39 +137,36 @@ function Mancha({ cor, opacidade, tamanho, style }: {
  * Feixes de luz — o elemento que só a família ELYSIUM tem.
  *
  * É a contrapartida do `#ely-shafts` do `dashboard.html`: duas faixas diagonais bem
- * fracas, como luz entrando de cima. No desktop elas derivam devagar (44 s e 58 s); aqui
- * ficam paradas de propósito, porque animar dois gradientes em tela cheia o tempo todo
- * custa quadro no telefone e o ganho é quase invisível — o valor do elemento está na
- * profundidade que ele dá ao fundo, não no movimento.
- *
- * Não existem na família Vidro Líquido: lá o fundo é claro, e uma faixa de luz sobre
- * claro não lê como luz, lê como mancha de impressão.
+ * fracas, como luz entrando de cima. Deslizam devagar (translateX, 40 s e 56 s).
  */
-function Feixes({ cor }: { cor: string }) {
+function Feixe({ cor, opacidade, left, rot, ms, dx }: { cor: string; opacidade: number; left: `${number}%`; rot: string; ms: number; dx: number }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withRepeat(withTiming(1, { duration: ms, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }), -1, true);
+    return () => cancelAnimation(t);
+  }, [ms, t]);
+  const estilo = useAnimatedStyle(() => ({
+    transform: [{ translateX: t.value * dx }, { rotate: rot }],
+    opacity: opacidade * (0.7 + 0.3 * t.value),
+  }));
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[styles.feixe, { left }, estilo]} pointerEvents="none">
       <LinearGradient
         colors={['transparent', cor, 'transparent']}
         locations={[0.15, 0.5, 0.85]}
         start={{ x: 0.1, y: 0 }}
         end={{ x: 0.9, y: 1 }}
-        style={[styles.feixe, { opacity: 0.06, transform: [{ rotate: '-18deg' }] }]}
+        style={StyleSheet.absoluteFill}
       />
-      <LinearGradient
-        colors={['transparent', cor, 'transparent']}
-        locations={[0.2, 0.5, 0.8]}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={[styles.feixe, { opacity: 0.04, left: '35%', transform: [{ rotate: '-24deg' }] }]}
-      />
-    </View>
+    </Animated.View>
   );
 }
 
 /**
  * Traços de luz: linhas finas e longas, quase invisíveis, atravessando a tela na diagonal.
  * São o que dá DIREÇÃO ao fundo — as manchas dão profundidade, mas não dizem para onde a
- * luz vai. Duas bastam; três já lê como padrão de papel de parede.
+ * luz vai. Duas bastam; três já lê como padrão de papel de parede. Ficam paradas: linha
+ * de 2 px em movimento vira cintilação.
  */
 function Tracos({ cor, forca }: { cor: string; forca: number }) {
   return (
@@ -133,8 +194,8 @@ function Tracos({ cor, forca }: { cor: string; forca: number }) {
  *
  * 🔴 AS POSIÇÕES SÃO UMA CONSTANTE DE MÓDULO, não um `Math.random()` no corpo do
  * componente. Sorteadas na render, elas mudariam de lugar a cada troca de tema ou de
- * orientação — o fundo piscaria, e é exatamente o tipo de movimento involuntário que o
- * bloco 24 proibiu. Percentuais, para acompanharem qualquer tamanho de tela.
+ * orientação — o fundo piscaria. Percentuais, para acompanharem qualquer tamanho de tela.
+ * A camada inteira deriva 18 px num ciclo lento — um movimento só para 15 pontos.
  */
 const PARTICULAS = [
   { x: '12%', y: '14%', d: 3 }, { x: '31%', y: '7%',  d: 2 }, { x: '68%', y: '11%', d: 2 },
@@ -145,8 +206,16 @@ const PARTICULAS = [
 ] as const;
 
 function Particulas({ cor, forca }: { cor: string; forca: number }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withRepeat(withTiming(1, { duration: 38_000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }), -1, true);
+    return () => cancelAnimation(t);
+  }, [t]);
+  const estilo = useAnimatedStyle(() => ({
+    transform: [{ translateX: t.value * 18 }, { translateY: -t.value * 24 }],
+  }));
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, estilo]} pointerEvents="none">
       {PARTICULAS.map((p, i) => (
         <View
           key={i}
@@ -163,7 +232,7 @@ function Particulas({ cor, forca }: { cor: string; forca: number }) {
           }}
         />
       ))}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -182,18 +251,25 @@ export function AppBackground() {
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
-      {/* Mais forte na noite: sobre fundo quase preto, pouca opacidade some. Agora que a
-          mancha tem queda suave, dá para subir sem virar um disco visível. */}
-      <Mancha cor={palette.primary} opacidade={noite ? 0.42 : 0.26} tamanho={420} style={styles.top} />
-      <Mancha cor={palette.accent}  opacidade={noite ? 0.34 : 0.22} tamanho={440} style={styles.bottom} />
-      {/* As duas do meio são as novas, e são mais fracas de propósito: elas existem para o
-          vidro ter variação onde antes só havia gradiente liso — no meio da tela, que é
-          justamente onde ficam os cards. */}
-      <Mancha cor={palette.accent}  opacidade={noite ? 0.22 : 0.15} tamanho={300} style={styles.meioEsq} />
-      <Mancha cor={palette.primary} opacidade={noite ? 0.20 : 0.13} tamanho={260} style={styles.meioDir} />
+      <Aurora cores={[palette.primary, palette.accent, palette.primarySoft]} opacidade={noite ? 0.10 : 0.16} />
+      {/* Mais forte na noite: sobre fundo quase preto, pouca opacidade some. */}
+      <Mancha cor={palette.primary} opacidade={noite ? 0.42 : 0.26} tamanho={420} style={styles.top}
+        deriva={{ dx: -50, dy: 40, ms: 16_000, escala: 1.12 }} />
+      <Mancha cor={palette.accent}  opacidade={noite ? 0.34 : 0.22} tamanho={440} style={styles.bottom}
+        deriva={{ dx: 60, dy: -50, ms: 21_000, escala: 1.08 }} />
+      {/* As duas do meio existem para o vidro ter variação onde ficam os cards. */}
+      <Mancha cor={palette.accent}  opacidade={noite ? 0.22 : 0.15} tamanho={300} style={styles.meioEsq}
+        deriva={{ dx: 45, dy: 30, ms: 14_000, escala: 0.9 }} />
+      <Mancha cor={palette.primary} opacidade={noite ? 0.20 : 0.13} tamanho={260} style={styles.meioDir}
+        deriva={{ dx: -40, dy: -60, ms: 26_000, escala: 1.15 }} />
       <Tracos cor={palette.primary} forca={noite ? 0.05 : 0.07} />
       <Particulas cor={noite ? '#FFFFFF' : palette.primary} forca={noite ? 0.22 : 0.16} />
-      {noite && <Feixes cor={palette.primary} />}
+      {noite && (
+        <>
+          <Feixe cor={palette.primary} opacidade={0.07} left="-5%" rot="-18deg" ms={40_000} dx={70} />
+          <Feixe cor={palette.primary} opacidade={0.045} left="35%" rot="-24deg" ms={56_000} dx={-90} />
+        </>
+      )}
     </View>
   );
 }
@@ -207,5 +283,7 @@ const styles = StyleSheet.create({
   // vista, e 2 px de altura porque acima disso deixa de ser traço e vira faixa.
   traco: { position: 'absolute', left: '-30%', width: '160%', height: 2 },
   // Mais alto que a tela para a diagonal não deixar canto vazio ao girar.
-  feixe: { position: 'absolute', top: '-25%', left: '-5%', width: '55%', height: '150%' },
+  feixe: { position: 'absolute', top: '-25%', width: '55%', height: '150%' },
+  // Disco maior que a diagonal de qualquer telefone (≈ 1000 px), centrado.
+  aurora: { position: 'absolute', width: 1400, height: 1400, borderRadius: 700, top: '50%', left: '50%', marginTop: -700, marginLeft: -700 },
 });

@@ -33,6 +33,25 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  * chapada translúcida, que sobre um fundo com manchas continua lendo como vidro fosco e
  * custa uma view em vez de uma recaptura.
  */
+/**
+ * 🔴 AS DUAS FAMÍLIAS SÃO DUAS LINGUAGENS, E ISTO É ONDE ELAS DIVERGEM (bloco 70).
+ *
+ * O Zak, 18/09: "o tema Liquid Glass do mobile simplesmente não tem Liquid Glass, é só um
+ * blur; e nos temas do ELYSIUM está muito zoado — zere o Liquid Glass e deixe no máximo um
+ * blur extremamente levinho". Então:
+ *
+ * · **ELYSIUM (noite)** — o desfoque cai para no máximo `BLUR_TETO_NOITE` (era 40–100) e a
+ *   tinta sobe: a superfície lê como um painel escuro quase sólido com um leve véu, não
+ *   como vidro. Sem brilho de aresta além do fio de luz da borda.
+ *
+ * · **Vidro Líquido (dia)** — o desfoque sobe e ganha o que faltava para parecer vidro e
+ *   não "blur": uma ARESTA ESPECULAR (fio branco no topo e à esquerda, de onde vem a
+ *   luz), uma LENTE (mancha branca difusa no canto superior esquerdo, como a luz
+ *   refratando na curva) e uma SOMBRA INTERNA no pé (o vidro é mais denso embaixo). Tudo
+ *   é View e LinearGradient — nada por quadro, nada de custo novo.
+ */
+const BLUR_TETO_NOITE = 10;
+
 export function GlassFill({
   intensity = 40,
   strong = false,
@@ -48,14 +67,18 @@ export function GlassFill({
   /** Sobrepõe a tinta da paleta. Usado pela gaveta, que é a exceção de alfa alto. */
   tintColor?: string;
 }) {
-  const { palette } = useTheme();
+  const { palette, familiaResolvida } = useTheme();
   const blurTarget = useBlurTarget();
+  const noite = familiaResolvida === 'ely';
+  // Noite: blur "extremamente levinho". Dia: um pouco mais que antes, para o vidro
+  // parecer espesso (o desfoque é o que dá a sensação de material).
+  const forca = noite ? Math.min(BLUR_TETO_NOITE, Math.round(intensity * 0.25)) : Math.min(100, Math.round(intensity * 1.25));
 
   return (
     <>
-      {blur && (
+      {blur && forca > 0 && (
       <BlurView
-        intensity={intensity}
+        intensity={forca}
         // Tinta clara sobre fundo escuro deixaria o vidro leitoso e clarearia a tela
         // inteira; a paleta diz qual usar.
         tint={palette.blurTint}
@@ -72,21 +95,38 @@ export function GlassFill({
           { backgroundColor: tintColor ?? (strong ? palette.glassSurfaceStrong : palette.glassSurface) },
         ]}
       />
+      {edge && !noite && (
+        <>
+          {/* Brilho difuso na aresta de cima — o que sempre existiu, agora só no dia. */}
+          <LinearGradient colors={palette.glassSheen} locations={[0, 1]} pointerEvents="none" style={styles.sheen} />
+          {/* A lente: luz refratando na curva do canto de onde ela vem. */}
+          <View pointerEvents="none" style={styles.lente} />
+          {/* Sombra interna no pé: o vidro é mais denso embaixo. */}
+          <LinearGradient
+            colors={['rgba(20,24,40,0)', 'rgba(20,24,40,0.07)']}
+            locations={[0, 1]}
+            pointerEvents="none"
+            style={styles.pe}
+          />
+        </>
+      )}
       {edge && (
-        // 🔴 Isto já foi um gradiente branco fixo em `absoluteFill` — ou seja, cobrindo a
-        // superfície INTEIRA de todo card e botão de vidro, apesar do nome "borda". No modo
-        // claro passava despercebido; no escuro deixava o app inteiro leitoso, e era a
-        // causa principal do modo escuro feio.
-        //
-        // Vidro real tem o brilho na ARESTA DE CIMA, onde a luz bate — é assim que o
-        // GlassModal sempre desenhou. A intensidade agora vem da paleta, então o escuro
-        // recebe um quinto do branco do claro.
-        <LinearGradient
-          colors={palette.glassSheen}
-          locations={[0, 1]}
-          pointerEvents="none"
-          style={styles.sheen}
-        />
+        // Aresta especular: um fio de luz no topo e à esquerda. No dia é branco quase
+        // puro; na noite é o único brilho que sobra, bem mais fraco.
+        <>
+          <LinearGradient
+            colors={noite ? ['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.02)'] : ['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.15)']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            pointerEvents="none"
+            style={styles.fioTopo}
+          />
+          <LinearGradient
+            colors={noite ? ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0)'] : ['rgba(255,255,255,0.8)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+            pointerEvents="none"
+            style={styles.fioEsq}
+          />
+        </>
       )}
     </>
   );
@@ -96,6 +136,15 @@ const styles = StyleSheet.create({
   // Altura fixa e não proporcional: o brilho é um reflexo na aresta, e reflexo não cresce
   // junto com o card. Num card alto, uma fração da altura viraria de novo um véu.
   sheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 44 },
+  fioTopo: { position: 'absolute', top: 0, left: 0, right: 0, height: 1.5 },
+  fioEsq: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 1.5 },
+  // Um círculo branco grande e quase transparente, meio para fora do canto: a parte que
+  // fica dentro é a "lente". Sem blur nativo, a suavidade vem do raio e do alfa baixo.
+  lente: {
+    position: 'absolute', top: -70, left: -60, width: 180, height: 140, borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  pe: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 40 },
 });
 
 /**
