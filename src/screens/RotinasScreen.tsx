@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import { MOV } from '../lib/motion';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
@@ -170,8 +172,9 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
             </View>
           </Card>
         )}
-        {rotinas.map(r => (
-          <Card key={r.id} glass style={{ opacity: r.ativa ? 1 : 0.55 }}>
+        {rotinas.map((r, i) => (
+          <Animated.View key={r.id} entering={FadeInDown.delay(i * 30).duration(MOV.base).reduceMotion(ReduceMotion.System)}>
+          <Card glass style={{ opacity: r.ativa ? 1 : 0.55 }}>
             <View style={styles.linha}>
               <View style={{ width: 64 }}>
                 <Text variant="heading" color={palette.primary}>{r.hora}</Text>
@@ -210,6 +213,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
               <Button title="Apagar" variant="ghost" onPress={() => apagar(r)} />
             </View>
           </Card>
+          </Animated.View>
         ))}
 
         {/* Lembretes */}

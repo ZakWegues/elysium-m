@@ -37,7 +37,7 @@
 
 import { AccessibilityInfo, Animated, Easing } from 'react-native';
 import {
-  Easing as EasingUI, FadeIn, FadeOut, LinearTransition, ReduceMotion,
+  Easing as EasingUI, FadeInDown, FadeOut, LinearTransition, ReduceMotion,
   makeMutable, withSpring, withTiming,
 } from 'react-native-reanimated';
 
@@ -188,7 +188,11 @@ export const LAYOUT = LinearTransition
   .easing(SUAVE_UI)
   .reduceMotion(ReduceMotion.System);
 
-/** Entrada de item em lista. */
-export const ENTRA = FadeIn.duration(MOV.base).reduceMotion(ReduceMotion.System);
+/**
+ * Entrada de item em lista: aparece subindo 8 px, como o `mov-entra` do desktop (bloco 74).
+ * O `FadeInDown` nasce com 50 px de deslocamento; aqui é 8 — acima disso lê como "caiu".
+ */
+export const ENTRA = FadeInDown.withInitialValues({ transform: [{ translateY: 8 }] })
+  .duration(MOV.base).easing(SUAVE_UI).reduceMotion(ReduceMotion.System);
 /** Saída — sempre mais rápida que a entrada. */
 export const SAI = FadeOut.duration(MOV.saida).reduceMotion(ReduceMotion.System);

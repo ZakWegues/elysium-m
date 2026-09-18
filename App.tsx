@@ -342,17 +342,22 @@ function AppInner() {
 function TelaAnimada({ chave, children }: { chave: string; children: React.ReactNode }) {
   const opacidade = useSharedValue(1);
   const deslocamento = useSharedValue(0);
+  const escala = useSharedValue(1);
 
   useEffect(() => {
     opacidade.value = 0;
     deslocamento.value = 8;
+    escala.value = 0.985;
     opacidade.value = tempo(1, MOV.base);
     deslocamento.value = tempo(0, MOV.base);
+    // Um toque de escala junto com o deslocamento (bloco 74) — a tela "chega", em vez de
+    // só aparecer. É o mesmo 0,985 → 1 da troca de aba do desktop.
+    escala.value = tempo(1, MOV.base);
   }, [chave]);
 
   const estilo = useAnimatedStyle(() => ({
     opacity: opacidade.value,
-    transform: [{ translateY: deslocamento.value }],
+    transform: [{ translateY: deslocamento.value }, { scale: escala.value }],
   }));
 
   return <Animated.View style={[{ flex: 1 }, estilo]}>{children}</Animated.View>;
