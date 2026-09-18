@@ -93,6 +93,14 @@ export type RpcMethod =
   | 'presets.delete'
   | 'suggestions.list'
   | 'weather.now'
+  | 'rotinas.list'
+  | 'rotinas.save'
+  | 'rotinas.delete'
+  | 'rotinas.toggle'
+  | 'rotinas.run'
+  | 'notify.pending'
+  | 'notify.history'
+  | 'notify.ack'
   | 'chat.starters';
 
 export type RepeatState = 'off' | 'track' | 'context';
@@ -113,6 +121,36 @@ export type NowPlaying = {
 };
 
 export type MemoryFact = { id: string; text: string; createdAt: number };
+
+/** Uma rotina do PC (elysium/src/services/rotinas.ts, bloco 68). */
+export type Rotina = {
+  id: string;
+  nome: string;
+  texto: string;
+  /** "HH:MM" local do PC. */
+  hora: string;
+  /** 0 = domingo … 6 = sábado; vazio = todos os dias. */
+  dias: number[];
+  entregar: ('pc' | 'celular')[];
+  falar: boolean;
+  ativa: boolean;
+  criadaEm: number;
+  ultimaExecucao?: number;
+  ultimoResultado?: string;
+  /** Próximo disparo em epoch ms, calculado pelo PC. */
+  proxima: number | null;
+};
+
+/** Uma entrega da fila do PC para este celular (rotina executada, lembrete disparado). */
+export type Entrega = {
+  id: string;
+  tipo: 'rotina' | 'lembrete' | 'aviso';
+  titulo: string;
+  corpo: string;
+  em: number;
+  entregueEm?: number;
+  ref?: string;
+};
 
 export type Reminder = {
   id: string;
@@ -284,6 +322,14 @@ export type RpcResults = {
   'chat.starters': { starters: string[] };
   /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
   'weather.now': Clima | null;
+  'rotinas.list': { rotinas: Rotina[] };
+  'rotinas.save': { rotina: Rotina };
+  'rotinas.delete': { deleted: boolean };
+  'rotinas.toggle': { rotina: Rotina };
+  'rotinas.run': { resultado: string };
+  'notify.pending': { entregas: Entrega[] };
+  'notify.history': { entregas: Entrega[] };
+  'notify.ack': { acked: number };
   'pairing.endpoints': {
     endpoints: string[];
     /** Existe caminho de fora da rede de casa (Tailscale/ZeroTier no PC). */

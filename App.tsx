@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatHub from './src/screens/ChatHub';
 import ControlScreen from './src/screens/ControlScreen';
+import RotinasScreen from './src/screens/RotinasScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import SpotifyPlayer from './src/screens/SpotifyPlayer';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -26,6 +27,8 @@ import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
 import { useShareIntent } from './src/lib/shareIntent';
 import { MOV, tempo } from './src/lib/motion';
+import { ligarSincronizacaoEmPrimeiroPlano, pedirPermissao } from './src/lib/notificacoes';
+import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -123,6 +126,15 @@ function AppInner() {
     if (status !== 'online' || !pairing) return;
     syncChats(pairing);
   }, [status, pairing]);
+
+  // Notificações locais (bloco 72): permissão uma vez, a tarefa de segundo plano
+  // registrada, e a sincronização de primeiro plano (ao voltar ao app e a cada 60 s).
+  useEffect(() => {
+    if (!pairing) return;
+    pedirPermissao().catch(() => {});
+    registrarTarefa().catch(() => {});
+    return ligarSincronizacaoEmPrimeiroPlano(pairing);
+  }, [pairing]);
 
   const refreshMailboxBadge = useCallback(async () => {
     if (!pairing) return;
@@ -236,6 +248,7 @@ function AppInner() {
           />
         )}
         {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
+        {screen === 'rotinas' && <RotinasScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'conversations' && (
           <ConversationsScreen
             pairing={pairing}

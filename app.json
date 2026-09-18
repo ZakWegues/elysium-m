@@ -87,7 +87,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "extra": {
       "eas": {

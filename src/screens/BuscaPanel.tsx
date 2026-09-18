@@ -66,7 +66,7 @@ export default function BuscaPanel({
   pairing: Pairing;
   visible: boolean;
   onClose: () => void;
-  onNavigate: (screen: 'chat' | 'control') => void;
+  onNavigate: (screen: 'chat' | 'control' | 'rotinas') => void;
   onOpenConversation: (id: string) => void;
   /** Manda o texto para o chat da IA, como se tivesse sido digitado lá. */
   onPerguntar: (texto: string) => void;
@@ -106,6 +106,7 @@ export default function BuscaPanel({
       const base: Item[] = [
         { grupo: 'nav', icone: 'message-circle', texto: 'Chat com a IA', executar: () => onNavigate('chat') },
         { grupo: 'nav', icone: 'monitor', texto: 'Controle do PC', executar: () => onNavigate('control') },
+        { grupo: 'nav', icone: 'calendar', texto: 'Rotinas e lembretes', chaves: ['automações', 'agendar'], executar: () => onNavigate('rotinas') },
         { grupo: 'nav', icone: 'music', texto: 'Player do Spotify', executar: onAbrirPlayer },
         { grupo: 'acao', icone: 'camera', texto: 'Tirar print no PC', sub: 'PNG na Área de Trabalho', chaves: ['screenshot', 'captura de tela'], executar: rpc('screen.screenshot') },
         { grupo: 'acao', icone: 'lock', texto: 'Bloquear a tela', chaves: ['lock', 'travar'], executar: destrutivo('Bloquear o PC?', 'A tela do PC será bloqueada.', 'power.control', { operation: 'lock' }) },

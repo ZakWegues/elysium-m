@@ -99,7 +99,7 @@ export default function HomeScreen({
   onUnpair,
 }: {
   pairing: Pairing;
-  onNavigate: (screen: 'chat' | 'control') => void;
+  onNavigate: (screen: 'chat' | 'control' | 'rotinas') => void;
   onOpenPlayer: () => void;
   /** A busca (lupa do cabeçalho) abre conversas salvas e manda perguntas pro chat. */
   onOpenConversation: (id: string) => void;

@@ -10,7 +10,7 @@ import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
 /** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
-export type Screen = 'home' | 'chat' | 'control' | 'conversations';
+export type Screen = 'home' | 'chat' | 'control' | 'rotinas' | 'conversations';
 
 /**
  * Só destinos de verdade.
@@ -34,6 +34,9 @@ const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap
   // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
   // gavetas. Antes eram duas abas separadas, Sistema e Remoto.
   { screen: 'control', label: 'PC', icon: 'monitor' },
+  // O que acontece sozinho, na hora certa: rotinas, lembretes e o que o PC entregou a
+  // este aparelho (bloco 72). Mesma aba do desktop (bloco 68).
+  { screen: 'rotinas', label: 'Rotinas', icon: 'calendar' },
 ];
 
 const MAX_INDICE = TABS.length - 1;

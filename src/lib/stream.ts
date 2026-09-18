@@ -2,6 +2,8 @@ import { File as FSFile } from 'expo-file-system';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
 import { openAuthedWebSocket, streamUrl } from './ws';
+import { receberEntrega } from './notificacoes';
+import type { Entrega } from './rpc';
 
 type StreamResult = { transcript?: string; reply: string };
 
@@ -71,7 +73,7 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
   });
 
   ws.onmessage = (event) => {
-    let data: { type?: string; text?: string; reply?: string; error?: string };
+    let data: { type?: string; text?: string; reply?: string; error?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -95,6 +97,12 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
       }
     } else if (data.type === 'reply') {
       settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial }));
+    } else if (data.type === 'notify') {
+      // Uma entrega na hora (rotina executada, lembrete): vira notificação local e é
+      // confirmada ao PC. Bloco 72.
+      if (data.id && data.titulo) {
+        receberEntrega({ id: data.id, tipo: data.tipo ?? 'aviso', titulo: data.titulo, corpo: data.corpo ?? '', em: data.em ?? Date.now(), ref: data.ref }, pairing).catch(() => {});
+      }
     } else if (data.type === 'error') {
       console.error('[voice-ws] servidor retornou erro', data.error);
       settlePending((p) => p.reject(new Error(`Falha do servidor: ${data.error ?? 'erro sem mensagem'}`)));
