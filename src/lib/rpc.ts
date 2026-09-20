@@ -137,8 +137,14 @@ export type Rotina = {
   criadaEm: number;
   ultimaExecucao?: number;
   ultimoResultado?: string;
-  /** Próximo disparo em epoch ms, calculado pelo PC. */
+  /** Próximo disparo em epoch ms, calculado pelo PC. `null` em rotina por evento. */
   proxima: number | null;
+  /** Gatilho por evento (bloco 79). Ausente = por hora. */
+  gatilho?: { tipo: 'hora' } | { tipo: 'evento'; evento: string; app?: string; minutos?: number; limite?: number; cada?: number };
+  /** Condição em português avaliada pelo cérebro antes de rodar. */
+  condicao?: string;
+  /** "às 07:30" ou "quando o Chrome abrir" — pronto para a tela. */
+  quando?: string;
 };
 
 /** Uma entrega da fila do PC para este celular (rotina executada, lembrete disparado). */
@@ -322,7 +328,7 @@ export type RpcResults = {
   'chat.starters': { starters: string[] };
   /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
   'weather.now': Clima | null;
-  'rotinas.list': { rotinas: Rotina[] };
+  'rotinas.list': { rotinas: Rotina[]; eventos?: { id: string; rotulo: string }[] };
   'rotinas.save': { rotina: Rotina };
   'rotinas.delete': { deleted: boolean };
   'rotinas.toggle': { rotina: Rotina };

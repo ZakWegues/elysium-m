@@ -49,6 +49,7 @@ function quando(epoch: number): string {
 export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
   const { palette, tokens } = useTheme();
   const [rotinas, setRotinas] = useState<Rotina[]>([]);
+  const [eventos, setEventos] = useState<{ id: string; rotulo: string }[]>([]);
   const [lembretes, setLembretes] = useState<Reminder[]>([]);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -75,6 +76,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
         callRpc(pairing, 'notify.history'),
       ]);
       setRotinas(r.rotinas);
+      if (r.eventos?.length) setEventos(r.eventos);
       setLembretes(l.reminders.filter(x => !x.firedAt));
       setEntregas(e.entregas);
     } catch (err) {
@@ -177,13 +179,18 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
           <Card glass style={{ opacity: r.ativa ? 1 : 0.55 }}>
             <View style={styles.linha}>
               <View style={{ width: 64 }}>
-                <Text variant="heading" color={palette.primary}>{r.hora}</Text>
-                <Text variant="caption" color={palette.textMuted}>{r.ativa && r.proxima ? quando(r.proxima) : 'pausada'}</Text>
+                {r.gatilho?.tipo === 'evento'
+                  ? <Feather name="zap" size={26} color={palette.primary} />
+                  : <Text variant="heading" color={palette.primary}>{r.hora}</Text>}
+                <Text variant="caption" color={palette.textMuted}>
+                  {!r.ativa ? 'pausada' : r.gatilho?.tipo === 'evento' ? (r.quando ?? 'por evento') : r.proxima ? quando(r.proxima) : ''}
+                </Text>
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="label">{r.nome}</Text>
                 <Text variant="caption" color={palette.textMuted} numberOfLines={1}>“{r.texto}”</Text>
-                <View style={styles.dias}>
+                {!!r.condicao && <Text variant="caption" color={palette.textMuted} numberOfLines={1}>só {r.condicao}</Text>}
+                {r.gatilho?.tipo !== 'evento' && <View style={styles.dias}>
                   {DIAS_CURTOS.map((d, i) => {
                     const on = !r.dias.length || r.dias.includes(i);
                     return (
@@ -197,7 +204,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
                     {r.entregar.includes('celular') && <Feather name="smartphone" size={12} color={palette.textMuted} />}
                     {r.falar && <Feather name="mic" size={12} color={palette.textMuted} />}
                   </View>
-                </View>
+                </View>}
               </View>
               <Switch value={r.ativa} onValueChange={(v) => alternar(r, v)} trackColor={{ true: palette.primary }} />
             </View>
@@ -257,6 +264,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
         {editando && (
           <FormRotina
             base={editando}
+            eventos={eventos}
             onCancelar={() => setEditando(null)}
             onSalvar={async (dados) => {
               try {
@@ -273,8 +281,9 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
   );
 }
 
-function FormRotina({ base, onSalvar, onCancelar }: {
+function FormRotina({ base, eventos, onSalvar, onCancelar }: {
   base: Partial<Rotina>;
+  eventos: { id: string; rotulo: string }[];
   onSalvar: (dados: Record<string, unknown>) => Promise<void>;
   onCancelar: () => void;
 }) {
@@ -287,8 +296,17 @@ function FormRotina({ base, onSalvar, onCancelar }: {
   const [celular, setCelular] = useState((base.entregar ?? ['pc', 'celular']).includes('celular'));
   const [falar, setFalar] = useState(Boolean(base.falar));
   const [salvando, setSalvando] = useState(false);
+  // Gatilho por evento (bloco 79): substitui hora e dias.
+  const g0 = base.gatilho?.tipo === 'evento' ? base.gatilho : null;
+  const [porEvento, setPorEvento] = useState(Boolean(g0));
+  const [evento, setEvento] = useState(g0?.evento ?? eventos[0]?.id ?? 'celular.conectou');
+  const [app, setApp] = useState(g0?.app ?? '');
+  const [minutos, setMinutos] = useState(String(g0?.minutos ?? 30));
+  const [limite, setLimite] = useState(String(g0?.limite ?? 90));
+  const [cada, setCada] = useState(String(g0?.cada ?? 60));
+  const [condicao, setCondicao] = useState(base.condicao ?? '');
 
-  const horaOk = /^\d{1,2}:\d{2}$/.test(hora.trim());
+  const horaOk = porEvento || /^\d{1,2}:\d{2}$/.test(hora.trim());
   const campo = { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text };
 
   return (
@@ -310,10 +328,46 @@ function FormRotina({ base, onSalvar, onCancelar }: {
         </View>
       </View>
       <View>
+        <Text variant="label">Quando</Text>
+        <View style={[styles.chips, { marginTop: 8 }]}>
+          {[['hora', 'Numa hora'], ['evento', 'Num evento']].map(([id, rotulo]) => (
+            <Toque key={id} onPress={() => setPorEvento(id === 'evento')} style={[styles.chip, { backgroundColor: (id === 'evento') === porEvento ? palette.primarySoft : palette.surface }]}>
+              <Text variant="caption" color={(id === 'evento') === porEvento ? palette.primary : palette.textMuted}>{rotulo}</Text>
+            </Toque>
+          ))}
+        </View>
+      </View>
+      {porEvento && (
+        <View style={{ gap: 10 }}>
+          <Text variant="label">Evento</Text>
+          <View style={styles.chips}>
+            {eventos.map(e => (
+              <Toque key={e.id} onPress={() => setEvento(e.id)} style={[styles.chip, { backgroundColor: evento === e.id ? palette.primarySoft : palette.surface }]}>
+                <Text variant="caption" color={evento === e.id ? palette.primary : palette.textMuted}>{e.rotulo}</Text>
+              </Toque>
+            ))}
+          </View>
+          {/^app\./.test(evento) && (
+            <View><Text variant="label">Qual programa (vazio = qualquer)</Text>
+              <TextInput value={app} onChangeText={setApp} placeholder="Ex.: chrome" placeholderTextColor={palette.textMuted} style={[styles.campo, campo]} /></View>
+          )}
+          {evento === 'pc.ocioso' && (
+            <View><Text variant="label">Minutos parado</Text>
+              <TextInput value={minutos} onChangeText={setMinutos} keyboardType="number-pad" placeholderTextColor={palette.textMuted} style={[styles.campo, campo, { width: 110 }]} /></View>
+          )}
+          {/\.alta$/.test(evento) && (
+            <View><Text variant="label">Acima de (%)</Text>
+              <TextInput value={limite} onChangeText={setLimite} keyboardType="number-pad" placeholderTextColor={palette.textMuted} style={[styles.campo, campo, { width: 110 }]} /></View>
+          )}
+          <View><Text variant="label">Intervalo mínimo entre disparos (min)</Text>
+            <TextInput value={cada} onChangeText={setCada} keyboardType="number-pad" placeholderTextColor={palette.textMuted} style={[styles.campo, campo, { width: 110 }]} /></View>
+        </View>
+      )}
+      {!porEvento && <View>
         <Text variant="label">Hora (HH:MM)</Text>
         <TextInput value={hora} onChangeText={setHora} placeholder="08:00" keyboardType="numbers-and-punctuation" placeholderTextColor={palette.textMuted} style={[styles.campo, campo, { width: 110 }, !horaOk && { borderColor: palette.error }]} />
-      </View>
-      <View>
+      </View>}
+      {!porEvento && <View>
         <Text variant="label">Dias</Text>
         <Text variant="caption" color={palette.textMuted}>Nenhum marcado = todos os dias.</Text>
         <View style={[styles.dias, { marginTop: 8, gap: 6 }]}>
@@ -327,6 +381,11 @@ function FormRotina({ base, onSalvar, onCancelar }: {
             );
           })}
         </View>
+      </View>}
+      <View>
+        <Text variant="label">Só se…</Text>
+        <Text variant="caption" color={palette.textMuted}>Condição em português; o PC olha antes de rodar. Vazio = sempre.</Text>
+        <TextInput value={condicao} onChangeText={setCondicao} placeholder="Ex.: se o Spotify estiver aberto" placeholderTextColor={palette.textMuted} style={[styles.campo, campo]} />
       </View>
       <View style={{ gap: 6 }}>
         <Text variant="label">Entregar</Text>
@@ -342,7 +401,12 @@ function FormRotina({ base, onSalvar, onCancelar }: {
           onPress={async () => {
             setSalvando(true);
             const entregar = [pc ? 'pc' : null, celular ? 'celular' : null].filter(Boolean);
-            await onSalvar({ id: base.id, nome: nome.trim(), texto: texto.trim(), hora: hora.trim(), dias, entregar: entregar.length ? entregar : ['pc'], falar });
+            await onSalvar({
+              id: base.id, nome: nome.trim(), texto: texto.trim(), hora: porEvento ? '00:00' : hora.trim(), dias: porEvento ? [] : dias,
+              entregar: entregar.length ? entregar : ['pc'], falar,
+              condicao: condicao.trim() || undefined,
+              gatilho: porEvento ? { tipo: 'evento', evento, app: app.trim() || undefined, minutos: Number(minutos) || undefined, limite: Number(limite) || undefined, cada: cada === '' ? undefined : Number(cada) } : undefined,
+            });
             setSalvando(false);
           }}
         />
