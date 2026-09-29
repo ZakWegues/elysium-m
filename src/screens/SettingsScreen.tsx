@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
+import * as Clipboard from 'expo-clipboard';
+import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
+import { MOV } from '../lib/motion';
+import { haptica } from '../lib/haptica';
+import { definirNotificacoesAtivas, notificacoesAtivas, pedirPermissao } from '../lib/notificacoes';
 import { Pairing } from '../lib/pairing';
 import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
-import { Button, Card, Text } from '../components/ui';
+import { Button, Card, Text, Toque } from '../components/ui';
 import { falar, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
 
 /**
@@ -22,9 +29,72 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
   { value: 'auto', label: 'Seguir o aparelho', icon: 'smartphone', nota: 'Vidro no modo claro, ELYSIUM no escuro' },
 ];
 
-export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
-  const { name, palette, tokens, familia, familiaResolvida, setTheme, setFamilia } = useTheme();
+/**
+ * Ajustes em azulejos (bloco 91) — o mesmo desenho que o desktop ganhou no bloco 65. Era
+ * uma lista corrida: estilo, cor, voz, notificações e "Sobre" um embaixo do outro, e
+ * "Desparear" no fim de tudo. Agora a gaveta abre num hub; cada azulejo mostra o valor que
+ * está valendo e abre a seção, com uma seta para voltar.
+ */
+type Secao = 'aparencia' | 'voz' | 'avisos' | 'pareamento' | 'sobre';
 
+export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+  const { palette, tokens, familiaResolvida, name } = useTheme();
+  const [secao, setSecao] = useState<Secao | null>(null);
+  const [vozPc, setVozPc] = useState(true);
+  const [avisos, setAvisos] = useState(false);
+  useEffect(() => { vozDoPcLigada().then(setVozPc); notificacoesAtivas().then(setAvisos); }, [secao]);
+
+  const cor = getPalette(name, familiaResolvida);
+  const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
+    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
+    { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
+    { id: 'avisos', titulo: 'Notificações', icone: 'bell', resumo: avisos ? 'Avisando neste celular' : 'Desligadas' },
+    { id: 'pareamento', titulo: 'Pareamento', icone: 'wifi', resumo: `${pairing.activeIp}:${pairing.port}` },
+    { id: 'sobre', titulo: 'Sobre', icone: 'info', resumo: `Versão ${Constants.expoConfig?.version ?? '?'}` },
+  ];
+
+  if (!secao) {
+    return (
+      <View style={styles.hub}>
+        {azulejos.map((a, i) => (
+          <Animated.View key={a.id} style={styles.celula} entering={FadeInDown.delay(i * 30).duration(MOV.base).reduceMotion(ReduceMotion.System)}>
+            <Toque onPress={() => setSecao(a.id)} style={{ flex: 1 }}>
+              <Card glass style={styles.azulejo}>
+                <View style={[styles.iconeAzulejo, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
+                  <Feather name={a.icone} size={19} color={palette.primary} />
+                </View>
+                <Text variant="label" numberOfLines={1}>{a.titulo}</Text>
+                <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{a.resumo}</Text>
+              </Card>
+            </Toque>
+          </Animated.View>
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeIn.duration(MOV.base).reduceMotion(ReduceMotion.System)} style={{ gap: tokens.spacing.lg }}>
+      <Pressable onPress={() => setSecao(null)} hitSlop={10} style={styles.voltar}>
+        <Feather name="chevron-left" size={18} color={palette.primary} />
+        <Text variant="label" color={palette.primary}>{azulejos.find(a => a.id === secao)?.titulo}</Text>
+      </Pressable>
+      {secao === 'aparencia' && <SecaoAparencia />}
+      {secao === 'voz' && <VozSection pairing={pairing} />}
+      {secao === 'avisos' && (
+        <View style={{ gap: tokens.spacing.lg }}>
+          <AvisosLocais />
+          <PushSection pairing={pairing} />
+        </View>
+      )}
+      {secao === 'pareamento' && <SecaoPareamento pairing={pairing} onUnpair={onUnpair} />}
+      {secao === 'sobre' && <SecaoSobre pairing={pairing} />}
+    </Animated.View>
+  );
+}
+
+function SecaoPareamento({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+  const { palette, tokens } = useTheme();
   return (
     <View style={{ gap: tokens.spacing.lg }}>
       <Card glass style={{ gap: tokens.spacing.md, flexDirection: 'row', alignItems: 'center' }}>
@@ -49,7 +119,28 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
           )}
         </View>
       </Card>
+      <View style={{ gap: tokens.spacing.xs }}>
+        <Text variant="subheading">Endereços do PC</Text>
+        <Text variant="caption" color={palette.textMuted}>
+          O app tenta todos e fica no que responde. O do túnel é o que vale fora de casa.
+        </Text>
+        {pairing.endpoints.map(ip => (
+          <View key={ip} style={styles.linhaEndereco}>
+            <Feather name={ip === pairing.activeIp ? 'check-circle' : 'circle'} size={14} color={ip === pairing.activeIp ? palette.success : palette.textMuted} />
+            <Text variant="body" style={{ flex: 1 }}>{ip}</Text>
+            {/^100\./.test(ip) && <Text variant="caption" color={palette.textMuted}>túnel</Text>}
+          </View>
+        ))}
+      </View>
+      <Button title="Desparear" variant="destructive" onPress={onUnpair} />
+    </View>
+  );
+}
 
+function SecaoAparencia() {
+  const { name, palette, tokens, familia, familiaResolvida, setTheme, setFamilia } = useTheme();
+  return (
+    <View style={{ gap: tokens.spacing.lg }}>
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Estilo</Text>
         <Text variant="caption" color={palette.textMuted}>
@@ -129,22 +220,77 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
         </View>
       </View>
 
-      <VozSection pairing={pairing} />
+    </View>
+  );
+}
 
-      <PushSection pairing={pairing} />
-
-      <View style={{ gap: tokens.spacing.sm }}>
-        <Text variant="subheading">Sobre</Text>
-        <Card style={{ gap: tokens.spacing.xs }}>
-          <Text variant="body" color={palette.textMuted}>
-            ELYSIUM-M é o companheiro mobile do assistente de voz ELYSIUM. Chat, voz,
-            telemetria, presets e a caixa de recados falam com o servidor local do seu PC pela
-            mesma rede Wi-Fi.
-          </Text>
-        </Card>
+/** O interruptor que antes morava só na aba Rotinas: avisos locais neste aparelho. */
+function AvisosLocais() {
+  const { palette, tokens } = useTheme();
+  const [ligado, setLigado] = useState(false);
+  useEffect(() => { notificacoesAtivas().then(setLigado); }, []);
+  async function alternar(v: boolean) {
+    if (v && !(await pedirPermissao())) {
+      Alert.alert('Permissão negada', 'Libere as notificações do ELYSIUM-M nas configurações do Android.');
+      return;
+    }
+    await definirNotificacoesAtivas(v);
+    setLigado(v);
+    haptica.leve();
+  }
+  return (
+    <Card glass style={{ gap: tokens.spacing.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
+        <Feather name="smartphone" size={18} color={palette.primary} />
+        <Text variant="body" style={{ flex: 1 }}>Avisar neste celular</Text>
+        <Switch value={ligado} onValueChange={alternar} trackColor={{ true: palette.primary }} />
       </View>
+      <Text variant="caption" color={palette.textMuted}>
+        Rotinas e lembretes do PC viram notificação aqui — pela rede ou pelo túnel, sem nuvem.
+        Lembretes tocam mesmo sem rede (ficam agendados no aparelho).
+      </Text>
+    </Card>
+  );
+}
 
-      <Button title="Desparear" variant="destructive" onPress={onUnpair} />
+/** Versão, atualização pelo ar e um diagnóstico que dá para colar numa conversa. */
+function SecaoSobre({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const [pc, setPc] = useState<string>('…');
+  useEffect(() => {
+    callRpc(pairing, 'pairing.endpoints', {}, { timeoutMs: 5000 })
+      .then(r => setPc(`${r.hostname ?? 'PC'} · ${r.endpoints.length} endereço(s)${r.hasTunnel ? ' · túnel' : ''}`))
+      .catch(() => setPc('fora de alcance'));
+  }, [pairing]);
+  const linhas: [string, string][] = [
+    ['Versão do app', String(Constants.expoConfig?.version ?? '?')],
+    ['Runtime', String(Updates.runtimeVersion ?? '—').slice(0, 12)],
+    ['Canal', String(Updates.channel ?? '—')],
+    ['Atualização', Updates.updateId ? `${Updates.updateId.slice(0, 8)} · ${Updates.createdAt ? Updates.createdAt.toLocaleDateString('pt-BR') : ''}` : 'a do APK'],
+    ['PC', pc],
+    ['Endereço ativo', `${pairing.activeIp}:${pairing.port}`],
+  ];
+  async function copiar() {
+    await Clipboard.setStringAsync(['ELYSIUM-M — diagnóstico', ...linhas.map(([k, v]) => `${k}: ${v}`), `Em: ${new Date().toLocaleString('pt-BR')}`].join('\n'));
+    haptica.sucesso();
+    Alert.alert('Copiado', 'O diagnóstico está na área de transferência.');
+  }
+  return (
+    <View style={{ gap: tokens.spacing.md }}>
+      <Card glass style={{ gap: tokens.spacing.sm }}>
+        {linhas.map(([k, v]) => (
+          <View key={k} style={styles.linhaEndereco}>
+            <Text variant="caption" color={palette.textMuted} style={{ width: 110 }}>{k}</Text>
+            <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>{v}</Text>
+          </View>
+        ))}
+      </Card>
+      <Button title="Copiar diagnóstico" variant="secondary" onPress={copiar} />
+      <Text variant="caption" color={palette.textMuted}>
+        ELYSIUM-M é o companheiro do assistente ELYSIUM do PC. Conversa, voz, controle
+        remoto, rotinas e a caixa de recados falam com o servidor do PC na rede de casa, ou
+        pelo túnel fora dela.
+      </Text>
     </View>
   );
 }
@@ -291,6 +437,12 @@ function PushSection({ pairing }: { pairing: Pairing }) {
 }
 
 const styles = StyleSheet.create({
+  hub: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  celula: { width: '48%' },
+  azulejo: { gap: 6, paddingVertical: 14 },
+  iconeAzulejo: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  voltar: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  linhaEndereco: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   familiaBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 11,
     paddingVertical: 11, paddingHorizontal: 13,
