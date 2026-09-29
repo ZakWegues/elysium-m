@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import * as Application from 'expo-application';
+import AvisoAtualizacao from '../components/AvisoAtualizacao';
+import { versaoInstalada } from '../lib/atualizacao';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
 import * as Updates from 'expo-updates';
-import Constants from 'expo-constants';
 import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { definirNotificacoesAtivas, notificacoesAtivas, pedirPermissao } from '../lib/notificacoes';
@@ -50,7 +52,7 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
     { id: 'avisos', titulo: 'Notificações', icone: 'bell', resumo: avisos ? 'Avisando neste celular' : 'Desligadas' },
     { id: 'pareamento', titulo: 'Pareamento', icone: 'wifi', resumo: `${pairing.activeIp}:${pairing.port}` },
-    { id: 'sobre', titulo: 'Sobre', icone: 'info', resumo: `Versão ${Constants.expoConfig?.version ?? '?'}` },
+    { id: 'sobre', titulo: 'Sobre', icone: 'info', resumo: `Versão ${versaoInstalada()} · atualizações` },
   ];
 
   if (!secao) {
@@ -263,7 +265,8 @@ function SecaoSobre({ pairing }: { pairing: Pairing }) {
       .catch(() => setPc('fora de alcance'));
   }, [pairing]);
   const linhas: [string, string][] = [
-    ['Versão do app', String(Constants.expoConfig?.version ?? '?')],
+    // A versão NATIVA: um OTA traz o app.json novo por cima de um APK velho (bloco 95).
+    ['Versão do app', `${versaoInstalada()} (${Application.nativeBuildVersion ?? '?'})`],
     ['Runtime', String(Updates.runtimeVersion ?? '—').slice(0, 12)],
     ['Canal', String(Updates.channel ?? '—')],
     ['Atualização', Updates.updateId ? `${Updates.updateId.slice(0, 8)} · ${Updates.createdAt ? Updates.createdAt.toLocaleDateString('pt-BR') : ''}` : 'a do APK'],
@@ -282,6 +285,7 @@ function SecaoSobre({ pairing }: { pairing: Pairing }) {
   }
   return (
     <View style={{ gap: tokens.spacing.md }}>
+      <AvisoAtualizacao pairing={pairing} modo="sobre" />
       <Card glass style={{ gap: tokens.spacing.sm }}>
         {linhas.map(([k, v]) => (
           <View key={k} style={styles.linhaEndereco}>

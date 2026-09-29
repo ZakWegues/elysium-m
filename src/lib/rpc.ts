@@ -15,6 +15,7 @@ export class ConfirmationRequiredError extends Error {}
 export type RpcMethod =
   | 'system.telemetry'
   | 'system.diagnostico'
+  | 'update.status'
   | 'system.processes'
   | 'system.disks'
   | 'system.killProcess'
@@ -272,10 +273,27 @@ export type Clima = {
   amanha?: { max: number; min: number; icone: string };
 };
 
+/** Uma versão publicada como release no GitHub e guardada pelo PC (bloco 95). */
+export type PacoteAtualizacao = {
+  versao: string;
+  notas: string;
+  publicadaEm: string;
+  tamanho: number;
+  pronto: boolean;
+  progresso: number;
+};
+
 export type RpcResults = {
   'system.telemetry': Record<string, unknown>;
   /** Bloco 97: o mesmo "copiar diagnóstico" dos Ajustes do PC, sem chave nem token. */
   'system.diagnostico': { texto: string };
+  'update.status': {
+    pc: string;
+    verificadoEm: number | null;
+    erro: string | null;
+    desktop: PacoteAtualizacao | null;
+    celular: PacoteAtualizacao | null;
+  };
   'system.processes': { processes: ProcessEntry[] };
   'system.disks': { disks: DiskEntry[] };
   'system.killProcess': { ok: true };
