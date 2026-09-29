@@ -271,9 +271,14 @@ function SecaoSobre({ pairing }: { pairing: Pairing }) {
     ['Endereço ativo', `${pairing.activeIp}:${pairing.port}`],
   ];
   async function copiar() {
-    await Clipboard.setStringAsync(['ELYSIUM-M — diagnóstico', ...linhas.map(([k, v]) => `${k}: ${v}`), `Em: ${new Date().toLocaleString('pt-BR')}`].join('\n'));
+    const doCelular = ['ELYSIUM-M — diagnóstico', ...linhas.map(([k, v]) => `${k}: ${v}`), `Em: ${new Date().toLocaleString('pt-BR')}`].join('\n');
+    // O do PC vem junto quando ele responde (bloco 97): versão, modelos, log — o que
+    // precisa para entender um problema que atravessa os dois lados.
+    let doPc = '';
+    try { doPc = (await callRpc(pairing, 'system.diagnostico', {}, { timeoutMs: 15000 })).texto; } catch { doPc = '(PC fora de alcance — só o do celular)'; }
+    await Clipboard.setStringAsync(`${doCelular}\n\n${doPc}`);
     haptica.sucesso();
-    Alert.alert('Copiado', 'O diagnóstico está na área de transferência.');
+    Alert.alert('Copiado', 'O diagnóstico do celular e o do PC estão na área de transferência.');
   }
   return (
     <View style={{ gap: tokens.spacing.md }}>

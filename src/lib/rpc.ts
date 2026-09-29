@@ -14,6 +14,7 @@ export class ConfirmationRequiredError extends Error {}
 
 export type RpcMethod =
   | 'system.telemetry'
+  | 'system.diagnostico'
   | 'system.processes'
   | 'system.disks'
   | 'system.killProcess'
@@ -273,6 +274,8 @@ export type Clima = {
 
 export type RpcResults = {
   'system.telemetry': Record<string, unknown>;
+  /** Bloco 97: o mesmo "copiar diagnóstico" dos Ajustes do PC, sem chave nem token. */
+  'system.diagnostico': { texto: string };
   'system.processes': { processes: ProcessEntry[] };
   'system.disks': { disks: DiskEntry[] };
   'system.killProcess': { ok: true };
