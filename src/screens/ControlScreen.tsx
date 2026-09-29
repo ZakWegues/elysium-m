@@ -380,6 +380,13 @@ const TECLAS_MIDIA: { op: MediaOperation; icone: keyof typeof Feather.glyphMap; 
  */
 function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
+  // Leitura real (bloco 86): o número no meio e o mudo que de fato está valendo. PC antigo
+  // sem `volume.get` devolve 404 — aí fica sem número, como antes.
+  const [vol, setVol] = useState<{ nivel: number; mudo: boolean } | null>(null);
+  const lerVolume = useCallback(async () => {
+    try { setVol(await callRpc(pairing, 'volume.get')); } catch { setVol(null); }
+  }, [pairing]);
+  useEffect(() => { lerVolume(); }, [lerVolume]);
 
   async function media(op: MediaOperation) {
     try {
@@ -389,12 +396,13 @@ function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
     }
   }
 
-  async function volume(level: 'up' | 'down' | 'mute') {
+  async function volume(level: 'up' | 'down' | 'mute' | 'unmute') {
     try {
       await callRpc(pairing, 'volume.set', { level });
     } catch (err) {
       onError(err, 'Falha ao ajustar o volume');
     }
+    lerVolume();
   }
 
   return (
@@ -408,12 +416,17 @@ function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
       </View>
       <View style={[styles.divisor, { backgroundColor: palette.glassBorder }]} />
       <View style={styles.grupoMidia}>
-        <GlassCircle size={38} onPress={() => { haptica.leve(); volume('mute'); }}>
-          <Feather name="volume-x" size={16} color={palette.textMuted} />
+        <GlassCircle size={38} onPress={() => { haptica.leve(); volume(vol?.mudo ? 'unmute' : 'mute'); }}>
+          <Feather name="volume-x" size={16} color={vol?.mudo ? palette.error : palette.textMuted} />
         </GlassCircle>
         <GlassCircle size={38} onPress={() => { haptica.leve(); volume('down'); }}>
           <Feather name="volume-1" size={16} color={palette.primary} />
         </GlassCircle>
+        {vol && (
+          <Text variant="caption" color={vol.mudo ? palette.error : palette.textMuted} style={{ minWidth: 34, textAlign: 'center' }}>
+            {vol.mudo ? 'mudo' : `${vol.nivel}%`}
+          </Text>
+        )}
         <GlassCircle size={38} onPress={() => { haptica.leve(); volume('up'); }}>
           <Feather name="volume-2" size={16} color={palette.primary} />
         </GlassCircle>

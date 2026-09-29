@@ -26,6 +26,7 @@ export type RpcMethod =
   | 'power.control'
   | 'media.control'
   | 'volume.set'
+  | 'volume.get'
   | 'screen.list'
   | 'screen.capture'
   | 'screen.screenshot'
@@ -267,6 +268,8 @@ export type RpcResults = {
   'power.control': { ok: true; message: string };
   'media.control': { ok: true; message: string };
   'volume.set': { ok: true; message: string };
+  /** Bloco 86: o volume de verdade do PC (Core Audio), 0–100. */
+  'volume.get': { nivel: number; mudo: boolean };
   'screen.list': { screens: ScreenInfo[] };
   'screen.capture': CapturedFrame;
   'screen.screenshot': { ok: true; message: string };
