@@ -21,7 +21,8 @@ const tag = `v${versao}`;
 const apk = path.join(raiz, "dist-apk", "elysium-m.apk");
 
 function sh(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, { cwd: raiz, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts }).trim();
+  // Com stdio herdado o execFileSync devolve null (a saída foi direto para o terminal).
+  return String(execFileSync(cmd, args, { cwd: raiz, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts }) ?? "").trim();
 }
 function falhar(msg) { console.error(`✗ ${msg}`); process.exit(1); }
 
