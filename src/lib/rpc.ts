@@ -27,6 +27,8 @@ export type RpcMethod =
   | 'media.control'
   | 'volume.set'
   | 'volume.get'
+  | 'window.list'
+  | 'window.control'
   | 'screen.list'
   | 'screen.capture'
   | 'screen.screenshot'
@@ -124,6 +126,17 @@ export type NowPlaying = {
 export type MemoryFact = { id: string; text: string; createdAt: number };
 
 /** Uma rotina do PC (elysium/src/services/rotinas.ts, bloco 68). */
+/** Uma janela aberta no PC (`window.list`, bloco 87). */
+export type Janela = {
+  hwnd: string;
+  pid: number;
+  processo: string;
+  titulo: string;
+  minimizada: boolean;
+  maximizada: boolean;
+  emFoco: boolean;
+};
+
 export type Rotina = {
   id: string;
   nome: string;
@@ -268,6 +281,9 @@ export type RpcResults = {
   'power.control': { ok: true; message: string };
   'media.control': { ok: true; message: string };
   'volume.set': { ok: true; message: string };
+  /** Bloco 87: janela por janela, com o hwnd que as ações usam. */
+  'window.list': { janelas: Janela[] };
+  'window.control': { ok: true; message: string };
   /** Bloco 86: o volume de verdade do PC (Core Audio), 0–100. */
   'volume.get': { nivel: number; mudo: boolean };
   'screen.list': { screens: ScreenInfo[] };

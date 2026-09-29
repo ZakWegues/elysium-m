@@ -11,6 +11,7 @@ import { AuthError } from '../lib/api';
 import {
   callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, MemoryFact,
   PowerOperation, ProcessEntry, Reminder, ScreenInfo,
+  Janela,
 } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
@@ -50,7 +51,7 @@ type ErrorHandler = (err: unknown, context: string) => void;
  */
 type PainelId =
   | 'lembretes' | 'memoria' | 'monitor' | 'processos'
-  | 'programas' | 'energia' | 'transferencia';
+  | 'programas' | 'janelas' | 'energia' | 'transferencia';
 
 const PAINEIS: {
   id: PainelId | 'spotify';
@@ -65,6 +66,7 @@ const PAINEIS: {
   { id: 'monitor', titulo: 'Monitor', icone: 'activity', resumo: 'CPU, RAM e discos' },
   { id: 'processos', titulo: 'Processos', icone: 'cpu', resumo: 'Encerrar à força' },
   { id: 'programas', titulo: 'Programas', icone: 'grid', resumo: 'Abertos, abrir e fechar' },
+  { id: 'janelas', titulo: 'Janelas', icone: 'layers', resumo: 'Focar, minimizar, só esta' },
   { id: 'energia', titulo: 'Energia', icone: 'power', resumo: 'Bloquear, desligar' },
   { id: 'transferencia', titulo: 'Transferência', icone: 'clipboard', resumo: 'Colar entre os dois' },
   { id: 'spotify', titulo: 'Spotify', icone: 'music', resumo: 'Player completo', cor: '#1db954' },
@@ -172,6 +174,7 @@ export default function ControlScreen({
         {painel === 'monitor' && <PainelMonitor pairing={pairing} />}
         {painel === 'processos' && <PainelProcessos pairing={pairing} onError={handleError} />}
         {painel === 'programas' && <PainelProgramas pairing={pairing} onError={handleError} />}
+        {painel === 'janelas' && <PainelJanelas pairing={pairing} onError={handleError} />}
         {painel === 'energia' && <PainelEnergia pairing={pairing} onError={handleError} />}
         {painel === 'transferencia' && <PainelTransferencia pairing={pairing} onError={handleError} />}
       </GlassModal>
@@ -768,6 +771,77 @@ function PainelProcessos({ pairing, onError }: { pairing: Pairing; onError: Erro
   );
 }
 
+// ── Janelas (bloco 87) ────────────────────────────────────────────────────────
+
+/**
+ * Janela por janela, como a barra de tarefas mostra. "Só esta" é o atalho que um controle
+ * remoto pede: do sofá, deixar só o filme na tela. Fechar é o X da janela (o programa
+ * pergunta se quer salvar), por isso sem biometria — quem força é o painel Processos.
+ */
+function PainelJanelas({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
+  const [janelas, setJanelas] = useState<Janela[] | null>(null);
+  const [ocupada, setOcupada] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setJanelas((await callRpc(pairing, 'window.list', {}, { timeoutMs: 20000 })).janelas); }
+    catch (err) { setJanelas([]); onError(err, 'Falha ao listar janelas'); }
+  }, [pairing, onError]);
+  useEffect(() => { load(); }, [load]);
+
+  async function agir(j: Janela, operacao: 'focar' | 'minimizar' | 'restaurar' | 'fechar' | 'so_esta') {
+    haptica.medio();
+    setOcupada(j.hwnd);
+    try {
+      await callRpc(pairing, 'window.control', { hwnd: j.hwnd, operacao }, { timeoutMs: 20000 });
+      haptica.sucesso();
+    } catch (err) {
+      onError(err, 'Não consegui mexer na janela');
+    } finally {
+      setOcupada(null);
+      setTimeout(load, 400);
+    }
+  }
+
+  if (janelas === null) return <ActivityIndicator color={palette.primary} />;
+  if (!janelas.length) return <Vazio icone="layers" texto="Nenhuma janela aberta." />;
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      {janelas.map(j => (
+        <Card key={j.hwnd} style={{ gap: tokens.spacing.sm, opacity: ocupada === j.hwnd ? 0.5 : 1 }}>
+          <View style={styles.procRow}>
+            <Feather name={j.emFoco ? 'eye' : j.minimizada ? 'minus' : 'monitor'} size={16} color={j.emFoco ? palette.primary : palette.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text variant="body" numberOfLines={1}>{j.titulo}</Text>
+              <Text variant="caption" color={palette.textMuted} numberOfLines={1}>
+                {j.processo}{j.emFoco ? ' · em foco' : j.minimizada ? ' · minimizada' : ''}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.procRow}>
+            {([
+              ['focar', 'eye', 'Focar'],
+              ['so_esta', 'star', 'Só esta'],
+              [j.minimizada ? 'restaurar' : 'minimizar', j.minimizada ? 'maximize-2' : 'minimize-2', j.minimizada ? 'Restaurar' : 'Minimizar'],
+              ['fechar', 'x', 'Fechar'],
+            ] as const).map(([op, icone, rotulo]) => (
+              <Toque key={op} onPress={() => agir(j, op)} style={{ flex: 1 }}>
+                <View style={[styles.botaoJanela, { borderRadius: tokens.radii.md, backgroundColor: op === 'fechar' ? palette.errorSoft : palette.primarySoft }]}>
+                  <Feather name={icone} size={15} color={op === 'fechar' ? palette.error : palette.primary} />
+                  <Text variant="caption" color={op === 'fechar' ? palette.error : palette.primary}>{rotulo}</Text>
+                </View>
+              </Toque>
+            ))}
+          </View>
+        </Card>
+      ))}
+      <Pressable onPress={load} hitSlop={8} style={{ alignSelf: 'center', padding: 6 }}>
+        <Text variant="caption" color={palette.textMuted}>Atualizar a lista</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 // ── Programas ─────────────────────────────────────────────────────────────────
 
 /** Sem o `#2` dos contadores de desempenho e sem `.exe`, para casar catálogo com processo. */
@@ -1066,6 +1140,7 @@ const styles = StyleSheet.create({
   grupoMidia: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   divisor: { width: 1, height: 22 },
   procRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  botaoJanela: { alignItems: 'center', gap: 3, paddingVertical: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   powerTile: { flexGrow: 1, minWidth: '45%', alignItems: 'center', gap: 6, paddingVertical: 16 },
   input: { flex: 1, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
