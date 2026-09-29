@@ -16,6 +16,10 @@ export type RpcMethod =
   | 'system.telemetry'
   | 'system.diagnostico'
   | 'update.status'
+  | 'update.install'
+  | 'storage.info'
+  | 'storage.clean'
+  | 'storage.open'
   | 'system.processes'
   | 'system.disks'
   | 'system.killProcess'
@@ -283,10 +287,24 @@ export type PacoteAtualizacao = {
   progresso: number;
 };
 
+/** O que ocupa o disco do PC (fase 12). */
+export type Armazenamento = {
+  discos: DiskEntry[];
+  downloads: number;
+  temp: number;
+  lixeira: number;
+  grandes: { nome: string; bytes: number; em: number }[];
+  medidoEm: number;
+};
+
 export type RpcResults = {
   'system.telemetry': Record<string, unknown>;
   /** Bloco 97: o mesmo "copiar diagnóstico" dos Ajustes do PC, sem chave nem token. */
   'system.diagnostico': { texto: string };
+  'update.install': { ok: boolean; mensagem: string };
+  'storage.info': Armazenamento;
+  'storage.clean': { liberado: number; message: string };
+  'storage.open': { ok: boolean; message: string };
   'update.status': {
     pc: string;
     verificadoEm: number | null;
@@ -424,6 +442,9 @@ export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
   // tem desfazer. Mesma trava dos outros destrutivos.
   'mailbox.sessions.delete',
   'mailbox.messages.delete',
+  // Esvaziar a Lixeira e limpar temporários não têm desfazer; instalar fecha o app do PC.
+  'storage.clean',
+  'update.install',
 ]);
 
 export type RpcOptions = {

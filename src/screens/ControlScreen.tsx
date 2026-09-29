@@ -11,7 +11,7 @@ import { AuthError } from '../lib/api';
 import {
   callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, MemoryFact,
   PowerOperation, ProcessEntry, Reminder, ScreenInfo,
-  Janela,
+  Janela, Armazenamento,
 } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
@@ -51,7 +51,7 @@ type ErrorHandler = (err: unknown, context: string) => void;
  */
 type PainelId =
   | 'lembretes' | 'memoria' | 'monitor' | 'processos'
-  | 'programas' | 'janelas' | 'energia' | 'transferencia';
+  | 'programas' | 'janelas' | 'energia' | 'transferencia' | 'armazenamento';
 
 const PAINEIS: {
   id: PainelId | 'spotify';
@@ -67,6 +67,7 @@ const PAINEIS: {
   { id: 'processos', titulo: 'Processos', icone: 'cpu', resumo: 'Encerrar à força' },
   { id: 'programas', titulo: 'Programas', icone: 'grid', resumo: 'Abertos, abrir e fechar' },
   { id: 'janelas', titulo: 'Janelas', icone: 'layers', resumo: 'Focar, minimizar, só esta' },
+  { id: 'armazenamento', titulo: 'Armazenamento', icone: 'hard-drive', resumo: 'O que ocupa o disco' },
   { id: 'energia', titulo: 'Energia', icone: 'power', resumo: 'Bloquear, desligar' },
   { id: 'transferencia', titulo: 'Transferência', icone: 'clipboard', resumo: 'Colar entre os dois' },
   { id: 'spotify', titulo: 'Spotify', icone: 'music', resumo: 'Player completo', cor: '#1db954' },
@@ -175,6 +176,7 @@ export default function ControlScreen({
         {painel === 'processos' && <PainelProcessos pairing={pairing} onError={handleError} />}
         {painel === 'programas' && <PainelProgramas pairing={pairing} onError={handleError} />}
         {painel === 'janelas' && <PainelJanelas pairing={pairing} onError={handleError} />}
+        {painel === 'armazenamento' && <PainelArmazenamento pairing={pairing} onError={handleError} />}
         {painel === 'energia' && <PainelEnergia pairing={pairing} onError={handleError} />}
         {painel === 'transferencia' && <PainelTransferencia pairing={pairing} onError={handleError} />}
       </GlassModal>
@@ -837,6 +839,131 @@ function PainelJanelas({ pairing, onError }: { pairing: Pairing; onError: ErrorH
       ))}
       <Pressable onPress={load} hitSlop={8} style={{ alignSelf: 'center', padding: 6 }}>
         <Text variant="caption" color={palette.textMuted}>Atualizar a lista</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Armazenamento (fase 12) ───────────────────────────────────────────────────
+
+function tamanho(b: number): string {
+  if (b >= 1e9) return `${(b / 1e9).toFixed(1).replace('.', ',')} GB`;
+  if (b >= 1e6) return `${Math.round(b / 1e6)} MB`;
+  return `${Math.round(b / 1e3)} kB`;
+}
+
+/**
+ * O mesmo painel da aba PC do desktop: discos, o que dá para liberar sem risco (Lixeira e
+ * temporários antigos, com biometria) e os maiores arquivos de Downloads — que o app não
+ * apaga; o botão abre o Explorer no PC com o arquivo selecionado.
+ */
+function PainelArmazenamento({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+  const { palette, tokens } = useTheme();
+  const [dado, setDado] = useState<Armazenamento | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+
+  const load = useCallback(async (forcar = false) => {
+    try { setDado(await callRpc(pairing, 'storage.info', forcar ? { forcar: true } : {}, { timeoutMs: 70000 })); }
+    catch (err) { onError(err, 'Não consegui medir o disco'); }
+  }, [pairing, onError]);
+  useEffect(() => { load(); }, [load]);
+
+  async function limpar(alvo: 'lixeira' | 'temp') {
+    haptica.aviso();
+    const titulo = alvo === 'lixeira' ? 'Esvaziar a Lixeira do PC?' : 'Limpar os temporários do PC?';
+    const texto = alvo === 'lixeira' ? 'O que está lá some de vez.' : 'Só sai o que tem mais de 2 dias; arquivo em uso fica.';
+    if ((await confirmDestructive(titulo, texto)) !== 'confirmed') return;
+    setOcupado(alvo);
+    try {
+      const r = await callRpc(pairing, 'storage.clean', { alvo }, { confirmed: true, timeoutMs: 150000 });
+      haptica.sucesso();
+      Alert.alert('Pronto', r.message);
+      await load();
+    } catch (err) { onError(err, 'Não consegui limpar'); }
+    finally { setOcupado(null); }
+  }
+
+  async function abrir(alvo: 'downloads' | 'limpeza' | 'arquivo', nome?: string) {
+    haptica.leve();
+    try {
+      const r = await callRpc(pairing, 'storage.open', nome ? { alvo, nome } : { alvo });
+      if (!r.ok) Alert.alert('Armazenamento', r.message);
+    } catch (err) { onError(err, 'Não consegui abrir no PC'); }
+  }
+
+  if (!dado) {
+    return (
+      <View style={{ alignItems: 'center', gap: 8, paddingVertical: 20 }}>
+        <ActivityIndicator color={palette.primary} />
+        <Text variant="caption" color={palette.textMuted}>Medindo o disco do PC… (alguns segundos)</Text>
+      </View>
+    );
+  }
+
+  const linhas: { id: 'lixeira' | 'temp' | 'downloads'; icone: keyof typeof Feather.glyphMap; nome: string; nota: string; bytes: number }[] = [
+    { id: 'lixeira', icone: 'trash-2', nome: 'Lixeira', nota: 'Some de vez ao esvaziar', bytes: dado.lixeira },
+    { id: 'temp', icone: 'rotate-ccw', nome: 'Temporários', nota: 'Só o que tem mais de 2 dias', bytes: dado.temp },
+    { id: 'downloads', icone: 'download', nome: 'Downloads', nota: 'Você decide o que sai', bytes: dado.downloads },
+  ];
+
+  return (
+    <View style={{ gap: tokens.spacing.md }}>
+      <Card style={{ gap: tokens.spacing.sm }}>
+        {dado.discos.map(d => (
+          <View key={d.name} style={{ gap: 4 }}>
+            <View style={styles.procRow}>
+              <Text variant="body" style={{ flex: 1 }}>Disco {d.name}</Text>
+              <Text variant="caption" color={d.usedPct >= 95 ? palette.error : palette.textMuted}>
+                {String(d.freeGB).replace('.', ',')} GB livres de {String(d.totalGB).replace('.', ',')} GB
+              </Text>
+            </View>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: palette.primarySoft, overflow: 'hidden' }}>
+              <View style={{ width: `${Math.min(100, d.usedPct)}%`, height: '100%', backgroundColor: d.usedPct >= 95 ? palette.error : palette.primary }} />
+            </View>
+          </View>
+        ))}
+      </Card>
+      <Text variant="label">O que dá para liberar</Text>
+      {linhas.map(l => (
+        <Card key={l.id} style={[styles.procRow, { opacity: ocupado === l.id ? 0.5 : 1 }]}>
+          <Feather name={l.icone} size={16} color={palette.textMuted} />
+          <View style={{ flex: 1 }}>
+            <Text variant="body">{l.nome}</Text>
+            <Text variant="caption" color={palette.textMuted}>{l.nota}</Text>
+          </View>
+          <Text variant="label">{tamanho(l.bytes)}</Text>
+          <Toque onPress={() => (l.id === 'downloads' ? abrir('downloads') : limpar(l.id))} disabled={!!ocupado || (l.id !== 'downloads' && !l.bytes)}>
+            <View style={[styles.botaoJanela, { borderRadius: tokens.radii.md, backgroundColor: l.id === 'downloads' ? palette.primarySoft : palette.errorSoft, paddingHorizontal: 12 }]}>
+              <Text variant="caption" color={l.id === 'downloads' ? palette.primary : palette.error}>
+                {l.id === 'downloads' ? 'Abrir' : l.id === 'lixeira' ? 'Esvaziar' : 'Limpar'}
+              </Text>
+            </View>
+          </Toque>
+        </Card>
+      ))}
+      {dado.grandes.length > 0 && <Text variant="label">Maiores em Downloads</Text>}
+      {dado.grandes.map(g => {
+        const partes = g.nome.split(/[\\/]/);
+        const base = partes.pop();
+        return (
+          <Card key={g.nome} style={styles.procRow}>
+            <Feather name="file" size={16} color={palette.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text variant="body" numberOfLines={1}>{base}</Text>
+              <Text variant="caption" color={palette.textMuted} numberOfLines={1}>
+                {['Downloads', ...partes].join(' › ')} · {new Date(g.em).toLocaleDateString('pt-BR')}
+              </Text>
+            </View>
+            <Text variant="label">{tamanho(g.bytes)}</Text>
+            <Pressable onPress={() => abrir('arquivo', g.nome)} hitSlop={8} accessibilityLabel="Mostrar no PC">
+              <Feather name="external-link" size={16} color={palette.primary} />
+            </Pressable>
+          </Card>
+        );
+      })}
+      <Button title="Limpeza de Disco do Windows" variant="secondary" onPress={() => abrir('limpeza')} />
+      <Pressable onPress={() => { setDado(null); load(true); }} hitSlop={8} style={{ alignSelf: 'center', padding: 6 }}>
+        <Text variant="caption" color={palette.textMuted}>Medir de novo</Text>
       </Pressable>
     </View>
   );

@@ -17,7 +17,7 @@ import { useTheme } from '../theme';
 import { Card, Esqueleto, GlassCircle, ScreenHeader, Text } from '../components/ui';
 import { haptica } from '../lib/haptica';
 import BuscaPanel from './BuscaPanel';
-import AvisoAtualizacao from '../components/AvisoAtualizacao';
+import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizacao';
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
@@ -430,6 +430,7 @@ export default function HomeScreen({
         )}
 
         {/* Versão nova do app guardada no PC (bloco 95). Some sozinho quando não há. */}
+        {!editando && <NovidadesCelular />}
         {!editando && online && <AvisoAtualizacao pairing={pairing} modo="inicio" />}
 
         {editando && (
