@@ -46,3 +46,7 @@ yarn-error.*
 # APK gerado localmente (~100 MB, artefato de build)
 dist-apk/
 .check-export/
+
+# Firebase (bloco 94): fica só nesta máquina. Não é segredo como a chave de conta de
+# serviço, mas o repositório não precisa dele; baixa de novo no console do Firebase.
+google-services.json
