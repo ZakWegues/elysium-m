@@ -14,7 +14,7 @@ import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/telemetry';
 import { useTheme } from '../theme';
-import { Card, GlassCircle, ScreenHeader, Text } from '../components/ui';
+import { Card, Esqueleto, GlassCircle, ScreenHeader, Text } from '../components/ui';
 import { haptica } from '../lib/haptica';
 import BuscaPanel from './BuscaPanel';
 import { CARDS } from './inicio/cards';
@@ -44,6 +44,7 @@ export default function HomeScreen({
   onOpenPlayer,
   onOpenConversation,
   onPerguntar,
+  onAbrirCaixa,
   onUnpair,
   pedidoBusca,
 }: {
@@ -53,6 +54,7 @@ export default function HomeScreen({
   /** A busca (lupa do cabeçalho) abre conversas salvas e manda perguntas pro chat. */
   onOpenConversation: (id: string) => void;
   onPerguntar: (texto: string) => void;
+  onAbrirCaixa?: () => void;
   onUnpair: () => void;
   /** Muda quando um widget pede a lupa (elysium://busca); zero na montagem. */
   pedidoBusca?: number;
@@ -219,6 +221,9 @@ export default function HomeScreen({
     return [...fx, ...vis.filter(id => !fx.includes(id))];
   }, [ordem, ocultos, fixos]);
 
+  /** A primeira volta do `carregar` terminou: antes disso os cards mostram esqueleto (bloco 92). */
+  const [primeiraLeitura, setPrimeiraLeitura] = useState(false);
+
   // ── busca: só o que os cards visíveis pedem
   const carregar = useCallback(async () => {
     const precisa = new Set(visiveis.flatMap(id => CARDS[id].precisa));
@@ -248,6 +253,7 @@ export default function HomeScreen({
 
     await Promise.all(jobs);
     setDados(prev => ({ ...prev, ...d }));
+    setPrimeiraLeitura(true);
   }, [pairing, visiveis]);
 
   useEffect(() => { carregar(); }, [carregar]);
@@ -518,7 +524,7 @@ export default function HomeScreen({
                         </Alca>
                       )}
                     </View>
-                    {CARDS[id].corpo(ctx)}
+                    {!primeiraLeitura && CARDS[id].precisa.length ? <Esqueleto /> : CARDS[id].corpo(ctx)}
                   </Card>
                 )}
               </CardArrastavel>
@@ -541,6 +547,7 @@ export default function HomeScreen({
         onOpenConversation={onOpenConversation}
         onPerguntar={onPerguntar}
         onAbrirPlayer={onOpenPlayer}
+        onAbrirCaixa={onAbrirCaixa}
       />
     </View>
   );

@@ -4,6 +4,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { listSessions } from '../lib/chatHistoryStore';
+import { loadCache as lerCaixaLocal } from '../lib/mailboxStore';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
@@ -20,7 +21,7 @@ import { GlassModal, Text, Toque } from '../components/ui';
  * RPC ou navega. O último item, "Perguntar ao ELYSIUM", é o que sobra quando nada casa.
  */
 
-type Grupo = 'nav' | 'acao' | 'preset' | 'app' | 'lembrete' | 'memoria' | 'conversa' | 'chat';
+type Grupo = 'nav' | 'acao' | 'preset' | 'app' | 'lembrete' | 'memoria' | 'conversa' | 'recado' | 'chat';
 
 type Item = {
   grupo: Grupo;
@@ -35,15 +36,15 @@ type Item = {
 
 const ROTULO: Record<Grupo, string> = {
   nav: 'Ir para', acao: 'Ações', preset: 'Presets', app: 'Abrir programa',
-  lembrete: 'Lembretes', memoria: 'Memória', conversa: 'Conversas', chat: 'Perguntar',
+  lembrete: 'Lembretes', memoria: 'Memória', conversa: 'Conversas', recado: 'Recados da Caixa', chat: 'Perguntar',
 };
-const ORDEM: Grupo[] = ['nav', 'acao', 'preset', 'app', 'lembrete', 'memoria', 'conversa', 'chat'];
+const ORDEM: Grupo[] = ['nav', 'acao', 'preset', 'app', 'lembrete', 'memoria', 'conversa', 'recado', 'chat'];
 
 // A pontuação mora em lib/busca.ts (bloco 77) — a mesma da paleta do desktop, testada.
 
 
 export default function BuscaPanel({
-  pairing, visible, onClose, onNavigate, onOpenConversation, onPerguntar, onAbrirPlayer,
+  pairing, visible, onClose, onNavigate, onOpenConversation, onPerguntar, onAbrirPlayer, onAbrirCaixa,
 }: {
   pairing: Pairing;
   visible: boolean;
@@ -53,6 +54,8 @@ export default function BuscaPanel({
   /** Manda o texto para o chat da IA, como se tivesse sido digitado lá. */
   onPerguntar: (texto: string) => void;
   onAbrirPlayer: () => void;
+  /** Abre o chat no lado "PC" (a Caixa) — é para onde leva um recado achado na busca. */
+  onAbrirCaixa?: () => void;
 }) {
   const { palette, tokens } = useTheme();
   const [consulta, setConsulta] = useState('');
@@ -136,6 +139,23 @@ export default function BuscaPanel({
           // isso tem que funcionar com o PC desligado.
           const sessoes = await listSessions();
           for (const s of sessoes.slice(0, 30)) lista.push({ grupo: 'conversa', icone: 'message-circle', texto: s.title || 'Conversa', sub: `${s.messages.length} msgs`, executar: () => onOpenConversation(s.id) });
+        },
+        async () => {
+          // Recados da Caixa (bloco 92), também do cache local: o link que você mandou do
+          // PC semana passada tem que ser achável com o PC desligado. Os 200 mais novos.
+          const { messages } = await lerCaixaLocal();
+          const recentes = [...messages].sort((a, b) => b.createdAt - a.createdAt).slice(0, 200);
+          for (const m of recentes) {
+            const texto = (m.text ?? '').trim() || m.attachment?.name || '';
+            if (!texto) continue;
+            const quando = new Date(m.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            lista.push({
+              grupo: 'recado', icone: m.attachment ? 'paperclip' : m.kind === 'link' ? 'link' : 'inbox',
+              texto: texto.replace(/\s+/g, ' ').slice(0, 90),
+              sub: `${m.from === 'pc' ? 'do PC' : 'do celular'} · ${quando}`,
+              executar: () => onAbrirCaixa?.(),
+            });
+          }
         },
       ];
       await Promise.all(fontes.map(f => f().catch(() => {})));

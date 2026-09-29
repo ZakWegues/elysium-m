@@ -259,6 +259,7 @@ function AppInner() {
             onOpenPlayer={() => setPlayerOpen(true)}
             onOpenConversation={(id) => { setActiveSessionId(id); setModoChat('ia'); setScreen('chat'); }}
             onPerguntar={(texto) => { setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat'); }}
+            onAbrirCaixa={() => { setModoChat('pc'); setScreen('chat'); }}
             onUnpair={handleUnpair}
             pedidoBusca={pedidoBusca}
           />
