@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { Clima, DiskEntry, PowerOperation, Reminder, Sugestao } from '../../lib/rpc';
+import { callRpc, Clima, DiskEntry, ItemSaude, PowerOperation, Reminder, Sugestao } from '../../lib/rpc';
+import type { Pairing } from '../../lib/pairing';
+import { confirmDestructive } from '../../lib/confirm';
+import { haptica } from '../../lib/haptica';
 import { TelemetryFrame } from '../../lib/telemetry';
 import { findMetric } from '../../lib/telemetryFormat';
 import { errMessage } from '../../lib/errors';
@@ -44,6 +47,11 @@ export const CARDS: Record<string, DefCard> = {
     corpo: ({ dados }) => <Lista itens={dados.processos.slice(0, 4).map(p => ({
       chave: String(p.pid), icone: 'cpu' as const, texto: p.name, direita: `${Math.round(p.cpu ?? 0)}%`,
     }))} vazio="Sem leitura de processos." />,
+  },
+  // Fase 12: o que está quebrado no PC, com o conserto de um clique — o mesmo card do desktop.
+  saude: {
+    titulo: 'Saúde do ELYSIUM', icone: 'heart', precisa: ['saude'],
+    corpo: ({ dados, pairing, navegar, recarregar }) => <Saude itens={dados.saude} pairing={pairing} navegar={navegar} recarregar={recarregar} />,
   },
   discos: {
     titulo: 'Armazenamento', icone: 'hard-drive', precisa: ['discos'],
@@ -213,6 +221,67 @@ function Lista({
         </View>
       ))}
     </>
+  );
+}
+
+function Saude({ itens, pairing, navegar, recarregar }: {
+  itens: ItemSaude[] | null;
+  pairing: Pairing;
+  navegar: (tela: 'chat' | 'control') => void;
+  recarregar: () => void;
+}) {
+  const { palette, tokens } = useTheme();
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  if (!itens) return <Text variant="caption" color={palette.textMuted}>O PC não respondeu (ou ainda não tem esta conferência).</Text>;
+  const ruins = itens.filter(i => i.nivel !== 'ok');
+  const cor = (n: ItemSaude['nivel']) => (n === 'erro' ? palette.error : n === 'aviso' ? '#d99a2b' : '#3fae6a');
+
+  async function consertar(i: ItemSaude) {
+    const c = i.conserto;
+    if (!c) return;
+    if (c.tipo === 'painel') { navegar('control'); return; }
+    haptica.medio();
+    if (c.tipo === 'rpc' && c.valor === 'update.install') {
+      const ok = await confirmDestructive('Atualizar o PC agora?', 'O ELYSIUM do PC fecha por alguns segundos e volta sozinho.');
+      if (ok !== 'confirmed') return;
+    }
+    setOcupado(i.id);
+    try {
+      const r = c.tipo === 'rpc'
+        ? await callRpc(pairing, 'update.install', {}, { confirmed: true })
+        : await callRpc(pairing, 'system.saude.consertar', { item: c.valor }, { timeoutMs: 30000 });
+      haptica.sucesso();
+      Alert.alert(i.titulo, 'message' in r ? r.message : r.mensagem);
+    } catch (e) {
+      haptica.erro();
+      Alert.alert('Não deu certo', errMessage(e));
+    } finally {
+      setOcupado(null);
+      recarregar();
+    }
+  }
+
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="label" color={ruins.length ? '#d99a2b' : palette.text}>
+        {ruins.length ? (ruins.length === 1 ? '1 ponto de atenção' : `${ruins.length} pontos de atenção`) : 'Tudo certo.'}
+      </Text>
+      {(ruins.length ? ruins : itens).map(i => (
+        <View key={i.id} style={[styles.linhaSaude, { opacity: ocupado === i.id ? 0.5 : 1 }]}>
+          <View style={[styles.pontoSaude, { backgroundColor: cor(i.nivel) }]} />
+          <View style={{ flex: 1 }}>
+            <Text variant="body">{i.titulo}</Text>
+            <Text variant="caption" color={palette.textMuted} numberOfLines={2}>{i.detalhe}</Text>
+          </View>
+          {i.conserto && (
+            <Pressable onPress={() => consertar(i)} disabled={!!ocupado} hitSlop={6}
+              style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+              <Text variant="caption" color={palette.primary}>{i.conserto.rotulo}</Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -442,6 +511,9 @@ function faltando(ts: number): string {
 }
 
 const styles = StyleSheet.create({
+  linhaSaude: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pontoSaude: { width: 8, height: 8, borderRadius: 4 },
+  botaoSaude: { paddingHorizontal: 10, paddingVertical: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   bolha: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, maxWidth: '100%' },
   climaLinha: { flexDirection: 'row', alignItems: 'center', gap: 10 },

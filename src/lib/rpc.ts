@@ -18,6 +18,8 @@ export type RpcMethod =
   | 'update.status'
   | 'update.install'
   | 'storage.info'
+  | 'system.saude'
+  | 'system.saude.consertar'
   | 'storage.clean'
   | 'storage.open'
   | 'system.processes'
@@ -297,12 +299,23 @@ export type Armazenamento = {
   medidoEm: number;
 };
 
+/** Um item do card "Saúde do ELYSIUM" (fase 12). */
+export type ItemSaude = {
+  id: string;
+  titulo: string;
+  nivel: 'ok' | 'aviso' | 'erro';
+  detalhe: string;
+  conserto?: { rotulo: string; tipo: 'consertar' | 'painel' | 'rpc'; valor: string };
+};
+
 export type RpcResults = {
   'system.telemetry': Record<string, unknown>;
   /** Bloco 97: o mesmo "copiar diagnóstico" dos Ajustes do PC, sem chave nem token. */
   'system.diagnostico': { texto: string };
   'update.install': { ok: boolean; mensagem: string };
   'storage.info': Armazenamento;
+  'system.saude': { itens: ItemSaude[] };
+  'system.saude.consertar': { message: string };
   'storage.clean': { liberado: number; message: string };
   'storage.open': { ok: boolean; message: string };
   'update.status': {

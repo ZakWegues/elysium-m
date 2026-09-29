@@ -1,6 +1,6 @@
 import type Feather from '@expo/vector-icons/Feather';
 import type { Pairing } from '../../lib/pairing';
-import type { Clima, DiskEntry, PowerOperation, ProcessEntry, Reminder, Sugestao } from '../../lib/rpc';
+import type { Clima, DiskEntry, ItemSaude, PowerOperation, ProcessEntry, Reminder, Sugestao } from '../../lib/rpc';
 import type { TelemetryFrame } from '../../lib/telemetry';
 
 /** Tipos e constantes da Início (bloco 81) — partilhados pela tela, pelos cards e pela busca. */
@@ -25,6 +25,8 @@ export type Dados = {
   processos: ProcessEntry[];
   discos: DiskEntry[];
   transferencia: string;
+  /** `null` = o PC não respondeu (ou é anterior à 1.5.4, sem o método). */
+  saude: ItemSaude[] | null;
 };
 
 export type Ctx = {
@@ -52,4 +54,4 @@ export type DefCard = {
 };
 
 /** Ordem de fábrica. Card fora desta lista existe, mas nasce desligado. */
-export const CARDS_PADRAO = ['sugestoes', 'computador', 'musica', 'lembretes', 'atalhos', 'energia'];
+export const CARDS_PADRAO = ['sugestoes', 'computador', 'saude', 'musica', 'lembretes', 'atalhos', 'energia'];
