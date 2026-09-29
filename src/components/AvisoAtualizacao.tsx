@@ -128,7 +128,10 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
       {cartaoApk}
       <Card glass style={{ gap: tokens.spacing.sm }}>
         {!!situacao && <Text variant="caption" color={palette.textMuted}>{situacao}</Text>}
-        {sit && !apk && (
+        {sit?.baixando && (
+          <Text variant="body">O PC está baixando {sit.baixando.oque}… {Math.round(sit.baixando.progresso * 100)}%. Toque em "Procurar" de novo em instantes.</Text>
+        )}
+        {sit && !apk && !sit.baixando && (
           <Text variant="body">Celular na versão mais nova ({versaoInstalada()}).</Text>
         )}
         {sit && (sit.pcNova ? (

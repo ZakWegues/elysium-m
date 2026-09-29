@@ -44,6 +44,8 @@ export type SituacaoAtualizacao = {
   pcAtual: string;
   /** Versão nova do PC já baixada, esperando o "instalar". */
   pcNova: PacoteAtualizacao | null;
+  /** O PC ainda está baixando algo novo (o APK mais novo ou a versão dele): 0–1. */
+  baixando: { oque: string; progresso: number } | null;
 };
 
 export async function situacaoAtualizacao(pairing: Pairing, verificar = false): Promise<SituacaoAtualizacao> {
@@ -53,6 +55,11 @@ export async function situacaoAtualizacao(pairing: Pairing, verificar = false): 
     apk: cel?.pronto && compararVersoes(cel.versao, versaoInstalada()) > 0 ? cel : null,
     pcAtual: r.pc,
     pcNova: r.desktop?.pronto ? r.desktop : null,
+    // O download no PC corre em segundo plano (bloco 95): "procurar" responde na hora e o
+    // arquivo chega depois. Sem isto a tela diria "versão mais nova" durante o download.
+    baixando: cel && !cel.pronto && compararVersoes(cel.versao, versaoInstalada()) > 0
+      ? { oque: `ELYSIUM-M ${cel.versao}`, progresso: cel.progresso }
+      : r.desktop && !r.desktop.pronto ? { oque: `a versão ${r.desktop.versao} do PC`, progresso: r.desktop.progresso } : null,
   };
 }
 
