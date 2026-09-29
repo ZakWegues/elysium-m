@@ -7,6 +7,7 @@ import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text } from '../components/ui';
+import { falar, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
 
 /**
  * As duas famílias, mais "seguir o aparelho".
@@ -128,6 +129,8 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
         </View>
       </View>
 
+      <VozSection pairing={pairing} />
+
       <PushSection pairing={pairing} />
 
       <View style={{ gap: tokens.spacing.sm }}>
@@ -142,6 +145,39 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
       </View>
 
       <Button title="Desparear" variant="destructive" onPress={onUnpair} />
+    </View>
+  );
+}
+
+/** Voz das respostas: a neural do PC (bloco 85) ou a do aparelho. */
+function VozSection({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const [doPc, setDoPc] = useState(true);
+  useEffect(() => { vozDoPcLigada().then(setDoPc); }, []);
+  const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
+    { valor: true, rotulo: 'Voz do PC', nota: 'A mesma voz neural da caixa de som do PC (escolhida em Ajustes → Voz lá). Sem PC, cai na do celular.', icone: 'monitor' },
+    { valor: false, rotulo: 'Voz do celular', nota: 'A voz do Android. Funciona sem o PC, mas soa mais robótica.', icone: 'smartphone' },
+  ];
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="subheading">Voz das respostas</Text>
+      {opcoes.map(o => {
+        const sel = o.valor === doPc;
+        return (
+          <Pressable
+            key={o.rotulo}
+            onPress={async () => { setDoPc(o.valor); await ligarVozDoPc(o.valor); falar('Assim fica a minha voz.', pairing); }}
+            style={[styles.familiaBtn, { borderRadius: tokens.radii.md, backgroundColor: sel ? palette.primarySoft : 'transparent', borderColor: sel ? palette.primary : palette.border }]}
+          >
+            <Feather name={o.icone} size={17} color={sel ? palette.primary : palette.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text variant="body" color={sel ? palette.primary : palette.text}>{o.rotulo}</Text>
+              <Text variant="caption" color={palette.textMuted}>{o.nota}</Text>
+            </View>
+            {sel && <Feather name="check" size={16} color={palette.primary} />}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

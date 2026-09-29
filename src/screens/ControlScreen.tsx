@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
-import * as Speech from 'expo-speech';
+import { falar } from '../lib/falar';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
@@ -245,7 +245,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
       const res = await callRpc(pairing, 'vision.screen', {}, { timeoutMs: 90000 });
       setAnswer(res.answer);
       haptica.sucesso();
-      Speech.speak(res.answer, { language: 'pt-BR' });
+      falar(res.answer, pairing);
     } catch (err) {
       onError(err, 'Falha ao interpretar a tela');
     } finally {

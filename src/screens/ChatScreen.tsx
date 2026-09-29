@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, StyleProp, StyleSheet, TextInput, View, Vie
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
-import * as Speech from 'expo-speech';
+import { falar } from '../lib/falar';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { fromByteArray } from 'base64-js';
@@ -218,7 +218,8 @@ export default function ChatScreen({
   }, [pairing]);
 
   function speakReply(reply: string) {
-    Speech.speak(reply, { language: 'pt-BR' });
+    // A voz neural do PC quando der; a do aparelho quando não (bloco 85).
+    falar(reply, pairing);
   }
 
   // Pergunta vinda da busca da Início. Limpa ANTES de enviar: se o envio falhar e o
@@ -573,7 +574,7 @@ export default function ChatScreen({
             { id: `me-${ts}`, from: 'me', text: `📷 ${question}`, ts },
             { id: `reply-${ts + 1}`, from: 'reply', text: answer, ts: ts + 1 },
           ]);
-          Speech.speak(answer, { language: 'pt-BR' });
+          falar(answer, pairing);
         }}
       />
     </View>
