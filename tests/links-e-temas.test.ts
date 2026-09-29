@@ -4,11 +4,13 @@ import { parseSharedUrl } from "../src/lib/shareIntent";
 import { getPalette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS } from "../src/theme/palettes";
 
 describe("deep links dos widgets (bloco 73)", () => {
-  it("reconhece os quatro destinos, com ou sem barra", () => {
+  it("reconhece os cinco destinos, com ou sem barra", () => {
     expect(destinoDaUrl("elysium://busca")).toBe("busca");
     expect(destinoDaUrl("elysium://chat/")).toBe("chat");
     expect(destinoDaUrl("elysium://pc")).toBe("pc");
     expect(destinoDaUrl("elysium://rotinas")).toBe("rotinas");
+    // Bloco 90: o widget de Clima abre a Início.
+    expect(destinoDaUrl("elysium://inicio")).toBe("inicio");
   });
 
   it("ignora o que não é destino (o compartilhamento é de outro hook)", () => {

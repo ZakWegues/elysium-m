@@ -3,7 +3,7 @@ import { registerWidgetTaskHandler, requestWidgetUpdate, type WidgetTaskHandlerP
 import { loadPairing, Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { paletaDosWidgets } from './tema';
-import { EstadoPc, WidgetAcoes, WidgetBusca, WidgetEstado } from './widgets';
+import { ClimaWidget, EstadoPc, RotinasWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetRotinas } from './widgets';
 
 /**
  * O handler dos widgets (bloco 73). Roda em segundo plano, sem UI, sempre que o Android
@@ -18,6 +18,8 @@ import { EstadoPc, WidgetAcoes, WidgetBusca, WidgetEstado } from './widgets';
 export const WIDGET_BUSCA = 'Busca';
 export const WIDGET_ACOES = 'Acoes';
 export const WIDGET_ESTADO = 'Estado';
+export const WIDGET_CLIMA = 'Clima';
+export const WIDGET_ROTINAS = 'Rotinas';
 
 function agora(): string {
   return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -42,6 +44,43 @@ async function lerEstado(pairing: Pairing | null): Promise<EstadoPc> {
     };
   } catch {
     return { online: false, quando: agora() };
+  }
+}
+
+async function lerClima(pairing: Pairing | null): Promise<ClimaWidget> {
+  if (!pairing) return { online: false, quando: agora() };
+  try {
+    const cl = await callRpc(pairing, 'weather.now', {}, { timeoutMs: 8000 });
+    if (!cl || typeof (cl as { temperatura?: unknown }).temperatura !== 'number') return { online: false, quando: agora() };
+    return { online: true, cidade: cl.cidade, temperatura: cl.temperatura, descricao: cl.descricao, icone: cl.icone, max: cl.max, min: cl.min, horas: cl.horas, quando: agora() };
+  } catch {
+    return { online: false, quando: agora() };
+  }
+}
+
+function horaCurta(ts: number): string {
+  const d = new Date(ts);
+  const hoje = new Date().toDateString() === d.toDateString();
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return hoje ? hora : `${d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')} ${hora}`;
+}
+
+async function lerRotinas(pairing: Pairing | null): Promise<RotinasWidget> {
+  if (!pairing) return { online: false, total: 0, quando: agora() };
+  try {
+    const { rotinas } = await callRpc(pairing, 'rotinas.list', {}, { timeoutMs: 8000 });
+    const ativas = rotinas.filter(r => r.ativa);
+    const porHora = ativas.filter(r => r.proxima).sort((a, b) => (a.proxima ?? 0) - (b.proxima ?? 0));
+    const ultima = [...rotinas].filter(r => r.ultimaExecucao).sort((a, b) => (b.ultimaExecucao ?? 0) - (a.ultimaExecucao ?? 0))[0];
+    return {
+      online: true,
+      total: ativas.length,
+      proxima: porHora[0] ? { nome: porHora[0].nome, quando: horaCurta(porHora[0].proxima as number) } : undefined,
+      ultima: ultima ? { nome: ultima.nome, resultado: (ultima.ultimoResultado ?? '').slice(0, 140), quando: horaCurta(ultima.ultimaExecucao as number) } : undefined,
+      quando: agora(),
+    };
+  } catch {
+    return { online: false, total: 0, quando: agora() };
   }
 }
 
@@ -91,6 +130,18 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       renderWidget(<WidgetEstado p={p} e={await lerEstado(pairing)} />);
       return;
     }
+
+    case WIDGET_CLIMA: {
+      const pairing = await loadPairing();
+      renderWidget(<WidgetClima p={p} c={await lerClima(pairing)} />);
+      return;
+    }
+
+    case WIDGET_ROTINAS: {
+      const pairing = await loadPairing();
+      renderWidget(<WidgetRotinas p={p} r={await lerRotinas(pairing)} />);
+      return;
+    }
   }
 });
 
@@ -104,6 +155,17 @@ export async function atualizarWidgetEstado(pairing: Pairing | null): Promise<vo
     const e = await lerEstado(pairing);
     await requestWidgetUpdate({ widgetName: WIDGET_ESTADO, renderWidget: () => <WidgetEstado p={p} e={e} /> });
   } catch { /* sem widget na tela, ou lib indisponível (Expo Go) */ }
+  // Clima e Rotinas vão junto (bloco 90): o mesmo "voltei ao app" que atualiza o Estado.
+  try {
+    const p = await paletaDosWidgets();
+    const cl = await lerClima(pairing);
+    await requestWidgetUpdate({ widgetName: WIDGET_CLIMA, renderWidget: () => <WidgetClima p={p} c={cl} /> });
+  } catch { /* idem */ }
+  try {
+    const p = await paletaDosWidgets();
+    const r = await lerRotinas(pairing);
+    await requestWidgetUpdate({ widgetName: WIDGET_ROTINAS, renderWidget: () => <WidgetRotinas p={p} r={r} /> });
+  } catch { /* idem */ }
 }
 
 /** Idem para os outros dois: cor do tema mudou no app → widgets acompanham. */

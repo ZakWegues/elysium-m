@@ -265,6 +265,10 @@ export type Clima = {
   descricao: string;
   icone: string;
   chuvaHoje: boolean;
+  /** Desde o bloco 67 do desktop; opcionais para um PC antigo. */
+  sensacao?: number;
+  horas?: { hora: number; temp: number; icone: string; chuva: boolean }[];
+  amanha?: { max: number; min: number; icone: string };
 };
 
 export type RpcResults = {

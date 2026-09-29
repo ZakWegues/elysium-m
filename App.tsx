@@ -188,6 +188,7 @@ function AppInner() {
     else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
     else if (destino === 'pc') setScreen('control');
     else if (destino === 'rotinas') setScreen('rotinas');
+    else if (destino === 'inicio') setScreen('home');
   }, []));
 
   const handlePaired = useCallback(() => {

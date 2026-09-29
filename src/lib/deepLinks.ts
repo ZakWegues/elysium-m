@@ -3,19 +3,19 @@ import * as Linking from 'expo-linking';
 
 /**
  * Deep links de navegação (bloco 73): `elysium://busca`, `elysium://chat`, `elysium://pc`,
- * `elysium://rotinas`. Quem os dispara são os widgets da tela inicial; o compartilhamento
+ * `elysium://rotinas`, `elysium://inicio` (widget de Clima, bloco 90). Quem os dispara são os widgets da tela inicial; o compartilhamento
  * (`elysium://share?text=`) continua em `shareIntent.ts` e não passa por aqui.
  *
  * Mesma armadilha do compartilhamento: trata o app já aberto (evento) E o app aberto
  * pelo link (URL inicial) — o segundo é o caso real do widget com o app fechado.
  */
-export type Destino = 'busca' | 'chat' | 'pc' | 'rotinas';
+export type Destino = 'busca' | 'chat' | 'pc' | 'rotinas' | 'inicio';
 
 export function destinoDaUrl(url: string): Destino | null {
   try {
     const p = Linking.parse(url);
     const alvo = (p.hostname || p.path || '').replace(/^\/+|\/+$/g, '');
-    if (alvo === 'busca' || alvo === 'chat' || alvo === 'pc' || alvo === 'rotinas') return alvo;
+    if (alvo === 'busca' || alvo === 'chat' || alvo === 'pc' || alvo === 'rotinas' || alvo === 'inicio') return alvo;
     return null;
   } catch {
     return null;
