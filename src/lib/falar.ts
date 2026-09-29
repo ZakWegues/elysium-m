@@ -16,6 +16,9 @@ import { fetchWithTimeout } from './http';
  *
  * Baixa para um arquivo em vez de dar a URL ao player: assim o prazo é nosso, e uma falha
  * vira fallback em vez de um player mudo esperando para sempre.
+ *
+ * A promessa só resolve quando a fala TERMINA (bloco 89): a conversa mão livre precisa
+ * saber a hora de voltar a ouvir — antes disso o microfone gravaria a própria resposta.
  */
 
 const CHAVE = 'elysium_voz_do_pc_v1';
@@ -23,6 +26,8 @@ const PRAZO_MS = 8000;
 
 let player: AudioPlayer | null = null;
 let preferencia: boolean | null = null;
+/** Resolve a fala em curso quando alguém interrompe — ninguém fica esperando para sempre. */
+let terminarAtual: (() => void) | null = null;
 
 export async function vozDoPcLigada(): Promise<boolean> {
   if (preferencia === null) {
@@ -40,6 +45,14 @@ export function pararDeFalar(): void {
   Speech.stop();
   try { player?.pause(); player?.remove(); } catch { /* já liberado */ }
   player = null;
+  const t = terminarAtual;
+  terminarAtual = null;
+  t?.();
+}
+
+/** Teto de segurança: o evento de fim pode não vir (player liberado por fora, áudio mudo). */
+function tetoDaFala(texto: string): number {
+  return Math.min(120_000, 6000 + texto.length * 90);
 }
 
 export async function falar(texto: string, pairing: Pairing | null): Promise<void> {
@@ -54,20 +67,41 @@ export async function falar(texto: string, pairing: Pairing | null): Promise<voi
       const bytes = new Uint8Array(await res.arrayBuffer());
       const arquivo = new File(Paths.cache, `fala-${Date.now()}.mp3`);
       arquivo.write(bytes);
-      player = createAudioPlayer(arquivo.uri);
-      const este = player;
-      este.addListener('playbackStatusUpdate', (s) => {
-        if (s.didJustFinish) {
+      const este = createAudioPlayer(arquivo.uri);
+      player = este;
+      await new Promise<void>((resolver) => {
+        let feito = false;
+        const terminar = () => {
+          if (feito) return;
+          feito = true;
+          clearTimeout(teto);
           try { este.remove(); } catch { /* já liberado */ }
           if (player === este) player = null;
           try { arquivo.delete(); } catch { /* o sistema limpa o cache */ }
-        }
+          if (terminarAtual === terminar) terminarAtual = null;
+          resolver();
+        };
+        const teto = setTimeout(terminar, tetoDaFala(t));
+        terminarAtual = terminar;
+        este.addListener('playbackStatusUpdate', (s) => { if (s.didJustFinish) terminar(); });
+        este.play();
       });
-      este.play();
       return;
     } catch {
       // Cai na voz do aparelho logo abaixo.
     }
   }
-  Speech.speak(t, { language: 'pt-BR' });
+  await new Promise<void>((resolver) => {
+    let feito = false;
+    const terminar = () => {
+      if (feito) return;
+      feito = true;
+      clearTimeout(teto);
+      if (terminarAtual === terminar) terminarAtual = null;
+      resolver();
+    };
+    const teto = setTimeout(terminar, tetoDaFala(t));
+    terminarAtual = terminar;
+    Speech.speak(t, { language: 'pt-BR', onDone: terminar, onStopped: terminar, onError: terminar });
+  });
 }

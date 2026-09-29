@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, StyleProp, StyleSheet, TextInput, View, Vie
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
-import { falar } from '../lib/falar';
+import { falar, pararDeFalar } from '../lib/falar';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { fromByteArray } from 'base64-js';
@@ -64,7 +64,13 @@ export default function ChatScreen({
   const [recording, setRecording] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [micStatus, setMicStatus] = useState<MicStatus>('checking');
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // Medição de nível ligada: é o que a conversa mão livre usa para saber quando a pessoa
+  // parou de falar (bloco 89). No aperta-e-fala não muda nada.
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  /** Conversa mão livre (bloco 89): grava → responde → volta a ouvir, sem tocar na tela. */
+  const [maoLivre, setMaoLivre] = useState(false);
+  const [faseMaoLivre, setFaseMaoLivre] = useState<'ouvindo' | 'pensando' | 'falando' | null>(null);
+  const maoLivreRef = useRef(false);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
   const listRef = useRef<FlatList<StoredMessage>>(null);
   // Começa SEMPRE em null, mesmo recebendo um sessionId. Inicializar com a prop fazia a
@@ -408,27 +414,112 @@ export default function ChatScreen({
       pushError('Falha ao ler o áudio gravado: uri vazia após stop()');
       return;
     }
+    const r = await enviarAudio(uri);
+    if (r) speakReply(r.reply);
+  }
 
+  /** Manda um áudio gravado e escreve a resposta em pedaços. Devolve null se falhou. */
+  async function enviarAudio(uri: string): Promise<{ reply: string; transcricao: string } | null> {
     setSending(true);
     setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)', ts: Date.now() }]);
-
+    let transcricao = '';
     try {
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
       const { reply } = await conn.sendAudio(uri, bolha.onChunk, (transcript) => {
+        transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
       bolha.fechar(reply);
-      speakReply(reply);
+      return { reply, transcricao };
     } catch (err) {
       setEscrevendoId(null);
       pushError(errMessage(err));
+      return null;
     } finally {
       setSending(false);
     }
   }
+
+  // ── Mão livre (bloco 89) ──────────────────────────────────────────────────
+  // Nível em dBFS do expo-audio: fala perto do celular fica entre −30 e −10; um quarto
+  // silencioso, abaixo de −50. Os dois limiares com folga entre si evitam que um ruído no
+  // meio do caminho fique alternando "falou"/"calou".
+  const LIMIAR_FALA_DB = -38;
+  const LIMIAR_SILENCIO_DB = -46;
+  const SILENCIO_PARA_FECHAR_MS = 1300;
+  const ESPERA_SEM_FALA_MS = 20_000;
+  const TETO_GRAVACAO_MS = 30_000;
+  // Só frases de encerrar, nunca "para" sozinho: "para a música" é um pedido, não um tchau.
+  const FRASES_DE_PARAR = /^\W*(chega|pode parar|tchau|at[eé] mais|obrigad[oa],? (é|e) s[oó]|encerrar|desliga (a )?m[aã]o livre)(?=\W|$)/i;
+
+  /** Grava até a pessoa falar e calar. `null` = ninguém falou em 20 s (ou mão livre desligou). */
+  async function gravarAteSilencio(): Promise<string | null> {
+    await recorder.prepareToRecordAsync();
+    recorder.record();
+    const inicio = Date.now();
+    let falou = false;
+    let ultimaVoz = 0;
+    try {
+      while (maoLivreRef.current) {
+        await new Promise((r) => setTimeout(r, 120));
+        const nivel = recorder.getStatus().metering ?? -160;
+        const agora = Date.now();
+        if (nivel > LIMIAR_FALA_DB) { falou = true; ultimaVoz = agora; }
+        else if (falou && nivel > LIMIAR_SILENCIO_DB) ultimaVoz = agora;
+        if (falou && agora - ultimaVoz > SILENCIO_PARA_FECHAR_MS) break;
+        if (!falou && agora - inicio > ESPERA_SEM_FALA_MS) break;
+        if (agora - inicio > TETO_GRAVACAO_MS) break;
+      }
+    } finally {
+      try { await recorder.stop(); } catch { /* já parado */ }
+    }
+    return falou && maoLivreRef.current ? recorder.uri : null;
+  }
+
+  async function cicloMaoLivre() {
+    while (maoLivreRef.current) {
+      setFaseMaoLivre('ouvindo');
+      haptica.leve();
+      let uri: string | null = null;
+      try { uri = await gravarAteSilencio(); }
+      catch (err) { pushError(`Mão livre: ${errMessage(err)}`); break; }
+      if (!maoLivreRef.current) break;
+      if (!uri) { pushError('Ninguém falou em 20 s — mão livre desligada.'); break; }
+      setFaseMaoLivre('pensando');
+      const r = await enviarAudio(uri);
+      if (!r || !maoLivreRef.current) break;
+      if (FRASES_DE_PARAR.test(r.transcricao.trim())) break;
+      setFaseMaoLivre('falando');
+      await falar(r.reply, pairing);
+    }
+    maoLivreRef.current = false;
+    setMaoLivre(false);
+    setFaseMaoLivre(null);
+  }
+
+  function alternarMaoLivre() {
+    if (maoLivreRef.current) {
+      maoLivreRef.current = false;
+      pararDeFalar();
+      haptica.leve();
+      return;
+    }
+    if (micStatus !== 'ready') {
+      Alert.alert('Microfone indisponível', 'Permissão de microfone não foi concedida.');
+      return;
+    }
+    maoLivreRef.current = true;
+    setMaoLivre(true);
+    haptica.medio();
+    cicloMaoLivre();
+  }
+
+  // Sair da tela (ou trocar de conversa) desliga a mão livre: microfone aberto sem ninguém
+  // olhando para a tela é exatamente o que ninguém quer.
+  useEffect(() => () => { maoLivreRef.current = false; pararDeFalar(); }, []);
 
   return (
     // O espaço do teclado é reservado uma vez só, na raiz do app (App.tsx). Aqui havia
@@ -504,6 +595,18 @@ export default function ChatScreen({
         </View>
       )}
 
+      {maoLivre && (
+        <View style={[styles.faixaMaoLivre, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
+          <Feather name={faseMaoLivre === 'falando' ? 'volume-2' : faseMaoLivre === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />
+          <Text variant="caption" color={palette.primary} style={{ flex: 1 }}>
+            {faseMaoLivre === 'falando' ? 'Respondendo…' : faseMaoLivre === 'pensando' ? 'Pensando…' : 'Mão livre — pode falar. Diga "chega" para parar.'}
+          </Text>
+          <Pressable onPress={alternarMaoLivre} hitSlop={10}>
+            <Feather name="x" size={16} color={palette.primary} />
+          </Pressable>
+        </View>
+      )}
+
       {/* A barra em si é tinta chapada: ela acompanha a lista, e desfocar uma faixa
           inteira por quadro é o custo que este bloco foi tirar da rolagem. Os BOTÕES é
           que viram vidro de verdade — são três regiões de 44 px, fixas. */}
@@ -547,7 +650,7 @@ export default function ChatScreen({
           pulsando={recording}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
-          disabled={sending || micStatus !== 'ready'}
+          disabled={sending || micStatus !== 'ready' || maoLivre}
         >
           <Feather
             name="mic"
@@ -555,9 +658,17 @@ export default function ChatScreen({
             color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
           />
         </GlassCircle>
-        <GlassCircle size={40} ativo onPress={() => handleSend()} disabled={sending}>
-          <Feather name="arrow-up" size={20} color={palette.primary} />
-        </GlassCircle>
+        {/* Com o campo vazio, o botão de enviar vira o da conversa mão livre (bloco 89):
+            não há o que enviar, e o gesto "falar sem segurar" mora perto do microfone. */}
+        {draft.trim() || sending ? (
+          <GlassCircle size={40} ativo onPress={() => handleSend()} disabled={sending}>
+            <Feather name="arrow-up" size={20} color={palette.primary} />
+          </GlassCircle>
+        ) : (
+          <GlassCircle size={40} ativo={maoLivre} pulsando={maoLivre && faseMaoLivre === 'ouvindo'} onPress={alternarMaoLivre} disabled={micStatus !== 'ready'}>
+            <Feather name="headphones" size={19} color={maoLivre ? palette.error : palette.primary} />
+          </GlassCircle>
+        )}
         </View>
       </View>
 
@@ -652,6 +763,11 @@ function Ponto({ atraso, cor }: { atraso: number; cor: string }) {
 }
 
 const styles = StyleSheet.create({
+  faixaMaoLivre: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 12, marginBottom: 8, paddingVertical: 8, paddingHorizontal: 12,
+    borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
+  },
   bubble: { maxWidth: '80%' },
   pensando: {
     alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5,
