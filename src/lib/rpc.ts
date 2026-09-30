@@ -436,6 +436,8 @@ export type RpcResults = {
     hasTunnel: boolean;
     hostname: string;
     port: number;
+    /** Como o dono quer ser chamado (config do PC, fase 13); vazio em PC antigo. */
+    nome?: string;
   };
 };
 

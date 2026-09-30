@@ -21,6 +21,9 @@ import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizac
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
+
+/** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
+const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
 /**
  * Tela inicial: um catálogo de cards, não uma tela fixa.
  *
@@ -262,6 +265,20 @@ export default function HomeScreen({
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  // O nome da saudação vem da config do PC (fase 13): dado pessoal fica nos dados do app,
+  // nunca no código. Guardado no aparelho para a saudação funcionar sem rede.
+  const [nome, setNome] = useState('');
+  useEffect(() => {
+    AsyncStorage.getItem(CHAVE_NOME).then((n) => { if (n) setNome(n); }).catch(() => {});
+    callRpc(pairing, 'pairing.endpoints', {}, { timeoutMs: 5000 })
+      .then((r) => {
+        const n = (r.nome ?? '').trim();
+        setNome(n);
+        AsyncStorage.setItem(CHAVE_NOME, n).catch(() => {});
+      })
+      .catch(() => { /* sem PC: fica o guardado */ });
+  }, [pairing]);
+
   function tratarErro(err: unknown, contexto: string) {
     if (err instanceof AuthError) {
       Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
@@ -392,7 +409,7 @@ export default function HomeScreen({
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
-        title={`${saudacao()}, Zak`}
+        title={nome ? `${saudacao()}, ${nome}` : saudacao()}
         right={
           <View style={styles.linhaStatus}>
             <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
