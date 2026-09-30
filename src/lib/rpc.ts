@@ -21,6 +21,9 @@ export type RpcMethod =
   | 'system.saude'
   | 'foco.status'
   | 'diag.registrar'
+  | 'memory.sugestoes'
+  | 'memory.aceitar'
+  | 'memory.recusar'
   | 'foco.start'
   | 'foco.stop'
   | 'system.saude.consertar'
@@ -332,6 +335,9 @@ export type RpcResults = {
   'system.saude': { itens: ItemSaude[] };
   'foco.status': EstadoFoco;
   'diag.registrar': { registradas: number };
+  'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
+  'memory.aceitar': { fact: MemoryFact };
+  'memory.recusar': { recusada: boolean };
   'foco.start': EstadoFoco;
   'foco.stop': EstadoFoco;
   'system.saude.consertar': { message: string };

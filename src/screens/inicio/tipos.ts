@@ -29,6 +29,8 @@ export type Dados = {
   saude: ItemSaude[] | null;
   /** `null` = PC anterior à 1.5.6 (sem modo foco) ou fora de alcance. */
   foco: EstadoFoco | null;
+  /** Sugestões de memória (fase 13); `null` = PC anterior à 1.6.2. */
+  aprendi: { id: string; text: string }[] | null;
 };
 
 export type Ctx = {
@@ -56,4 +58,4 @@ export type DefCard = {
 };
 
 /** Ordem de fábrica. Card fora desta lista existe, mas nasce desligado. */
-export const CARDS_PADRAO = ['sugestoes', 'computador', 'saude', 'musica', 'lembretes', 'atalhos', 'energia'];
+export const CARDS_PADRAO = ['sugestoes', 'computador', 'saude', 'aprendi', 'musica', 'lembretes', 'atalhos', 'energia'];

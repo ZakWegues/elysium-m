@@ -48,6 +48,11 @@ export const CARDS: Record<string, DefCard> = {
       chave: String(p.pid), icone: 'cpu' as const, texto: p.name, direita: `${Math.round(p.cpu ?? 0)}%`,
     }))} vazio="Sem leitura de processos." />,
   },
+  // Memória que aprende (fase 13): o que o PC percebeu nas conversas, para guardar ou não.
+  aprendi: {
+    titulo: 'Aprendi isto', icone: 'bookmark', precisa: ['aprendi'],
+    corpo: ({ dados, pairing, recarregar }) => <Aprendi lista={dados.aprendi} pairing={pairing} recarregar={recarregar} />,
+  },
   // Modo foco do PC (fase 12): começar de longe, ver quanto falta, parar.
   foco: {
     titulo: 'Modo foco', icone: 'eye', precisa: ['foco'],
@@ -226,6 +231,37 @@ function Lista({
         </View>
       ))}
     </>
+  );
+}
+
+function Aprendi({ lista, pairing, recarregar }: { lista: { id: string; text: string }[] | null; pairing: Pairing; recarregar: () => void }) {
+  const { palette, tokens } = useTheme();
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  if (!lista) return <Text variant="caption" color={palette.textMuted}>O PC não respondeu (ou é anterior à 1.6.2).</Text>;
+  if (!lista.length) return <Text variant="caption" color={palette.textMuted}>Nada novo. Quando você contar algo sobre você numa conversa, aparece aqui para guardar.</Text>;
+  async function decidir(id: string, guardar: boolean) {
+    haptica.leve();
+    setOcupado(id);
+    try { await callRpc(pairing, guardar ? 'memory.aceitar' : 'memory.recusar', { id }); }
+    catch (e) { Alert.alert('Memória', errMessage(e)); }
+    finally { setOcupado(null); recarregar(); }
+  }
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      {lista.map(s => (
+        <View key={s.id} style={[styles.linhaSaude, { opacity: ocupado === s.id ? 0.5 : 1 }]}>
+          <Text variant="body" style={{ flex: 1 }}>{s.text}</Text>
+          <Pressable onPress={() => decidir(s.id, true)} disabled={!!ocupado} hitSlop={6}
+            style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+            <Feather name="check" size={15} color={palette.primary} />
+          </Pressable>
+          <Pressable onPress={() => decidir(s.id, false)} disabled={!!ocupado} hitSlop={6}
+            style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.errorSoft }]}>
+            <Feather name="x" size={15} color={palette.error} />
+          </Pressable>
+        </View>
+      ))}
+    </View>
   );
 }
 
