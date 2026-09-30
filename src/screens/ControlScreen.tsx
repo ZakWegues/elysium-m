@@ -14,6 +14,7 @@ import {
   Janela, Armazenamento,
 } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
+import SliderVolume from '../components/SliderVolume';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { MOV } from '../lib/motion';
@@ -401,7 +402,7 @@ function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
     }
   }
 
-  async function volume(level: 'up' | 'down' | 'mute' | 'unmute') {
+  async function volume(level: 'up' | 'down' | 'mute' | 'unmute' | number) {
     try {
       await callRpc(pairing, 'volume.set', { level });
     } catch (err) {
@@ -410,32 +411,49 @@ function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
     lerVolume();
   }
 
+  // Durante o arrasto só manda (o slider já limita a um envio a cada 150 ms); a leitura de
+  // volta vem ao soltar — reler a cada envio faria o polegar pular para trás no meio do gesto.
+  async function arrastou(nivel: number, final: boolean) {
+    try { await callRpc(pairing, 'volume.set', { level: nivel }); }
+    catch (err) { if (final) onError(err, 'Falha ao ajustar o volume'); }
+    if (final) lerVolume();
+  }
+
   return (
-    <Card glass style={[styles.barraMidia, { paddingVertical: tokens.spacing.sm, paddingHorizontal: tokens.spacing.md }]}>
-      <View style={styles.grupoMidia}>
-        {TECLAS_MIDIA.map(t => (
-          <GlassCircle key={t.op} size={38} onPress={() => { haptica.leve(); media(t.op); }}>
-            <Feather name={t.icone} size={17} color={palette.primary} />
-          </GlassCircle>
-        ))}
-      </View>
-      <View style={[styles.divisor, { backgroundColor: palette.glassBorder }]} />
-      <View style={styles.grupoMidia}>
+    <Card glass style={{ paddingVertical: tokens.spacing.sm, paddingHorizontal: tokens.spacing.md, gap: tokens.spacing.xs }}>
+      <View style={styles.barraMidia}>
+        <View style={styles.grupoMidia}>
+          {TECLAS_MIDIA.map(t => (
+            <GlassCircle key={t.op} size={38} onPress={() => { haptica.leve(); media(t.op); }}>
+              <Feather name={t.icone} size={17} color={palette.primary} />
+            </GlassCircle>
+          ))}
+        </View>
+        <View style={[styles.divisor, { backgroundColor: palette.glassBorder }]} />
         <GlassCircle size={38} onPress={() => { haptica.leve(); volume(vol?.mudo ? 'unmute' : 'mute'); }}>
           <Feather name="volume-x" size={16} color={vol?.mudo ? palette.error : palette.textMuted} />
         </GlassCircle>
-        <GlassCircle size={38} onPress={() => { haptica.leve(); volume('down'); }}>
-          <Feather name="volume-1" size={16} color={palette.primary} />
-        </GlassCircle>
-        {vol && (
-          <Text variant="caption" color={vol.mudo ? palette.error : palette.textMuted} style={{ minWidth: 34, textAlign: 'center' }}>
+      </View>
+      {/* O slider (fase 12) precisa da leitura real do volume; PC antigo sem `volume.get`
+          fica com os botões de passo, como antes. */}
+      {vol ? (
+        <View style={styles.grupoMidia}>
+          <Feather name="volume-1" size={15} color={palette.textMuted} />
+          <SliderVolume nivel={vol.nivel} mudo={vol.mudo} aoMudar={arrastou} />
+          <Text variant="caption" color={vol.mudo ? palette.error : palette.textMuted} style={{ minWidth: 38, textAlign: 'right' }}>
             {vol.mudo ? 'mudo' : `${vol.nivel}%`}
           </Text>
-        )}
-        <GlassCircle size={38} onPress={() => { haptica.leve(); volume('up'); }}>
-          <Feather name="volume-2" size={16} color={palette.primary} />
-        </GlassCircle>
-      </View>
+        </View>
+      ) : (
+        <View style={[styles.grupoMidia, { justifyContent: 'center' }]}>
+          <GlassCircle size={38} onPress={() => { haptica.leve(); volume('down'); }}>
+            <Feather name="volume-1" size={16} color={palette.primary} />
+          </GlassCircle>
+          <GlassCircle size={38} onPress={() => { haptica.leve(); volume('up'); }}>
+            <Feather name="volume-2" size={16} color={palette.primary} />
+          </GlassCircle>
+        </View>
+      )}
     </Card>
   );
 }
