@@ -6,6 +6,7 @@ import AnimatedReanimated, {
 import { falar, pararDeFalar } from '../lib/falar';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
+import { MotivoParada, resumoRodada } from '../lib/maoLivreDiag';
 import { fromByteArray } from 'base64-js';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
@@ -455,41 +456,55 @@ export default function ChatScreen({
   // Só frases de encerrar, nunca "para" sozinho: "para a música" é um pedido, não um tchau.
   const FRASES_DE_PARAR = /^\W*(chega|pode parar|tchau|at[eé] mais|obrigad[oa],? (é|e) s[oó]|encerrar|desliga (a )?m[aã]o livre)(?=\W|$)/i;
 
-  /** Grava até a pessoa falar e calar. `null` = ninguém falou em 20 s (ou mão livre desligou). */
-  async function gravarAteSilencio(): Promise<string | null> {
+  /**
+   * Grava até a pessoa falar e calar. `uri` null = ninguém falou em 20 s (ou mão livre
+   * desligou). Os níveis e o motivo de parar voltam junto para o diagnóstico (bloco 116).
+   */
+  async function gravarAteSilencio(): Promise<{ uri: string | null; niveis: number[]; inicio: number; primeiraFalaEm: number | null; fim: number; motivo: MotivoParada }> {
     await recorder.prepareToRecordAsync();
     recorder.record();
     const inicio = Date.now();
     let falou = false;
     let ultimaVoz = 0;
+    let primeiraFalaEm: number | null = null;
+    let motivo: MotivoParada = 'desligou';
+    const niveis: number[] = [];
     try {
       while (maoLivreRef.current) {
         await new Promise((r) => setTimeout(r, 120));
         const nivel = recorder.getStatus().metering ?? -160;
+        niveis.push(nivel);
         const agora = Date.now();
-        if (nivel > LIMIAR_FALA_DB) { falou = true; ultimaVoz = agora; }
+        if (nivel > LIMIAR_FALA_DB) { if (!falou) primeiraFalaEm = agora; falou = true; ultimaVoz = agora; }
         else if (falou && nivel > LIMIAR_SILENCIO_DB) ultimaVoz = agora;
-        if (falou && agora - ultimaVoz > SILENCIO_PARA_FECHAR_MS) break;
-        if (!falou && agora - inicio > ESPERA_SEM_FALA_MS) break;
-        if (agora - inicio > TETO_GRAVACAO_MS) break;
+        if (falou && agora - ultimaVoz > SILENCIO_PARA_FECHAR_MS) { motivo = 'silencio'; break; }
+        if (!falou && agora - inicio > ESPERA_SEM_FALA_MS) { motivo = 'sem_fala'; break; }
+        if (agora - inicio > TETO_GRAVACAO_MS) { motivo = 'teto'; break; }
       }
     } finally {
       try { await recorder.stop(); } catch { /* já parado */ }
     }
-    return falou && maoLivreRef.current ? recorder.uri : null;
+    return { uri: falou && maoLivreRef.current ? recorder.uri : null, niveis, inicio, primeiraFalaEm, fim: Date.now(), motivo };
   }
 
   async function cicloMaoLivre() {
+    const linhas: string[] = [];
+    let numero = 0;
     while (maoLivreRef.current) {
       setFaseMaoLivre('ouvindo');
       haptica.leve();
-      let uri: string | null = null;
-      try { uri = await gravarAteSilencio(); }
+      let g: Awaited<ReturnType<typeof gravarAteSilencio>>;
+      try { g = await gravarAteSilencio(); }
       catch (err) { pushError(`Mão livre: ${errMessage(err)}`); break; }
-      if (!maoLivreRef.current) break;
-      if (!uri) { pushError('Ninguém falou em 20 s — mão livre desligada.'); break; }
+      numero++;
+      if (!maoLivreRef.current || !g.uri) {
+        linhas.push(resumoRodada({ numero, ...g, caracteres: null }));
+        if (maoLivreRef.current) pushError('Ninguém falou em 20 s — mão livre desligada.');
+        break;
+      }
       setFaseMaoLivre('pensando');
-      const r = await enviarAudio(uri);
+      const r = await enviarAudio(g.uri);
+      linhas.push(resumoRodada({ numero, ...g, caracteres: r ? r.transcricao.trim().length : null }));
       if (!r || !maoLivreRef.current) break;
       if (FRASES_DE_PARAR.test(r.transcricao.trim())) break;
       setFaseMaoLivre('falando');
@@ -498,6 +513,8 @@ export default function ChatScreen({
     maoLivreRef.current = false;
     setMaoLivre(false);
     setFaseMaoLivre(null);
+    // Para o log do PC (bloco 116). Melhor esforço: sem PC, a calibragem só perde esta conversa.
+    if (linhas.length) callRpc(pairing, 'diag.registrar', { origem: 'mao-livre', linhas }).catch(() => {});
   }
 
   function alternarMaoLivre() {

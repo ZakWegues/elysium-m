@@ -20,6 +20,7 @@ export type RpcMethod =
   | 'storage.info'
   | 'system.saude'
   | 'foco.status'
+  | 'diag.registrar'
   | 'foco.start'
   | 'foco.stop'
   | 'system.saude.consertar'
@@ -330,6 +331,7 @@ export type RpcResults = {
   'storage.info': Armazenamento;
   'system.saude': { itens: ItemSaude[] };
   'foco.status': EstadoFoco;
+  'diag.registrar': { registradas: number };
   'foco.start': EstadoFoco;
   'foco.stop': EstadoFoco;
   'system.saude.consertar': { message: string };
