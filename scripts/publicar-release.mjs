@@ -51,6 +51,18 @@ const head = sh("git", ["rev-parse", "HEAD"]);
 sh("git", ["fetch", "origin", "--quiet"]);
 if (!sh("git", ["branch", "-r", "--contains", head])) falhar("o commit atual não está no GitHub; faça push antes");
 
+// CI verde (bloco 114): a release instala sozinha em todo aparelho — de madrugada, no PC.
+// Um commit cujo check falhou não sai. `--sem-ci` existe para emergência (CI fora do ar).
+if (args.includes("--sem-ci")) {
+  console.warn("! publicando sem conferir o CI (--sem-ci)");
+} else {
+  const runs = JSON.parse(sh("gh", ["run", "list", "--repo", REPO, "--commit", head, "--workflow", "check.yml", "--json", "status,conclusion", "--limit", "1"]) || "[]");
+  if (!runs.length) falhar("o CI ainda não rodou neste commit (gh run list vazio)");
+  if (runs[0].status !== "completed") falhar("o CI deste commit ainda está rodando — espere terminar");
+  if (runs[0].conclusion !== "success") falhar(`o CI deste commit terminou em "${runs[0].conclusion}" — conserte antes de publicar`);
+  console.log("✓ CI verde neste commit");
+}
+
 // O nome do asset leva a versão: é o que aparece no download do celular.
 const copia = path.join(os.tmpdir(), `elysium-m-${versao}.apk`);
 fs.copyFileSync(apk, copia);
