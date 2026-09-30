@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { callRpc, Clima, DiskEntry, ItemSaude, PowerOperation, Reminder, Sugestao } from '../../lib/rpc';
+import { callRpc, Clima, DiskEntry, EstadoFoco, ItemSaude, PowerOperation, Reminder, Sugestao } from '../../lib/rpc';
 import type { Pairing } from '../../lib/pairing';
 import { confirmDestructive } from '../../lib/confirm';
 import { haptica } from '../../lib/haptica';
@@ -47,6 +47,11 @@ export const CARDS: Record<string, DefCard> = {
     corpo: ({ dados }) => <Lista itens={dados.processos.slice(0, 4).map(p => ({
       chave: String(p.pid), icone: 'cpu' as const, texto: p.name, direita: `${Math.round(p.cpu ?? 0)}%`,
     }))} vazio="Sem leitura de processos." />,
+  },
+  // Modo foco do PC (fase 12): começar de longe, ver quanto falta, parar.
+  foco: {
+    titulo: 'Modo foco', icone: 'eye', precisa: ['foco'],
+    corpo: ({ dados, pairing, recarregar }) => <Foco estado={dados.foco} pairing={pairing} recarregar={recarregar} />,
   },
   // Fase 12: o que está quebrado no PC, com o conserto de um clique — o mesmo card do desktop.
   saude: {
@@ -221,6 +226,48 @@ function Lista({
         </View>
       ))}
     </>
+  );
+}
+
+function Foco({ estado, pairing, recarregar }: { estado: EstadoFoco | null; pairing: Pairing; recarregar: () => void }) {
+  const { palette, tokens } = useTheme();
+  const [ocupado, setOcupado] = useState(false);
+  if (!estado) return <Text variant="caption" color={palette.textMuted}>O PC não tem o modo foco (atualize para a 1.5.6) ou não respondeu.</Text>;
+
+  async function agir(fn: () => Promise<unknown>) {
+    haptica.medio();
+    setOcupado(true);
+    try { await fn(); haptica.sucesso(); } catch (e) { haptica.erro(); Alert.alert('Modo foco', errMessage(e)); }
+    finally { setOcupado(false); recarregar(); }
+  }
+
+  if (estado.ativo && estado.ate) {
+    const min = Math.max(0, Math.ceil((estado.ate - Date.now()) / 60000));
+    return (
+      <View style={{ gap: tokens.spacing.sm, opacity: ocupado ? 0.5 : 1 }}>
+        <Text variant="heading" color={palette.primary}>{min} min</Text>
+        <Text variant="caption" color={palette.textMuted}>
+          {estado.fechar ? 'Fechando' : 'Avisando sobre'} {estado.apps.slice(0, 4).join(', ')}{estado.apps.length > 4 ? '…' : ''} · {estado.distracoes === 1 ? '1 distração' : `${estado.distracoes} distrações`}
+        </Text>
+        <Pressable onPress={() => agir(() => callRpc(pairing, 'foco.stop'))} disabled={ocupado}
+          style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.errorSoft, alignSelf: 'flex-start' }]}>
+          <Text variant="caption" color={palette.error}>Parar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: tokens.spacing.sm, opacity: ocupado ? 0.5 : 1 }}>
+      <Text variant="caption" color={palette.textMuted}>Abrir {(estado.listaPadrao ?? estado.apps).slice(0, 3).join(', ')} e afins vira aviso no PC.</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {[25, 50, 90].map(m => (
+          <Pressable key={m} onPress={() => agir(() => callRpc(pairing, 'foco.start', { minutos: m }))} disabled={ocupado}
+            style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+            <Text variant="caption" color={palette.primary}>{m} min</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 

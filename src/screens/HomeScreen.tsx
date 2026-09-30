@@ -67,7 +67,7 @@ export default function HomeScreen({
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [dados, setDados] = useState<Dados>({
     telemetria: null, lembretes: [], sugestoes: [], clima: null,
-    processos: [], discos: [], transferencia: '', saude: null,
+    processos: [], discos: [], transferencia: '', saude: null, foco: null,
   });
   const [ocupado, setOcupado] = useState(false);
   const [ordem, setOrdem] = useState<string[]>(CARDS_PADRAO);
@@ -249,6 +249,7 @@ export default function HomeScreen({
         .slice().sort((a, b) => (b.cpu ?? 0) - (a.cpu ?? 0))));
     if (precisa.has('discos')) jobs.push(puxar('discos', async () =>
       (await callRpc(pairing, 'system.disks')).disks));
+    if (precisa.has('foco')) jobs.push(puxar('foco', async () => await callRpc(pairing, 'foco.status')));
     if (precisa.has('saude')) jobs.push(puxar('saude', async () =>
       (await callRpc(pairing, 'system.saude', {}, { timeoutMs: 15000 })).itens));
     if (precisa.has('transferencia')) jobs.push(puxar('transferencia', async () =>

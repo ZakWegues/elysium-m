@@ -1,6 +1,6 @@
 import type Feather from '@expo/vector-icons/Feather';
 import type { Pairing } from '../../lib/pairing';
-import type { Clima, DiskEntry, ItemSaude, PowerOperation, ProcessEntry, Reminder, Sugestao } from '../../lib/rpc';
+import type { Clima, DiskEntry, EstadoFoco, ItemSaude, PowerOperation, ProcessEntry, Reminder, Sugestao } from '../../lib/rpc';
 import type { TelemetryFrame } from '../../lib/telemetry';
 
 /** Tipos e constantes da Início (bloco 81) — partilhados pela tela, pelos cards e pela busca. */
@@ -27,6 +27,8 @@ export type Dados = {
   transferencia: string;
   /** `null` = o PC não respondeu (ou é anterior à 1.5.4, sem o método). */
   saude: ItemSaude[] | null;
+  /** `null` = PC anterior à 1.5.6 (sem modo foco) ou fora de alcance. */
+  foco: EstadoFoco | null;
 };
 
 export type Ctx = {

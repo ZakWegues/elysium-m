@@ -19,6 +19,9 @@ export type RpcMethod =
   | 'update.install'
   | 'storage.info'
   | 'system.saude'
+  | 'foco.status'
+  | 'foco.start'
+  | 'foco.stop'
   | 'system.saude.consertar'
   | 'storage.clean'
   | 'storage.open'
@@ -308,6 +311,17 @@ export type ItemSaude = {
   conserto?: { rotulo: string; tipo: 'consertar' | 'painel' | 'rpc'; valor: string };
 };
 
+/** Modo foco do PC (fase 12). */
+export type EstadoFoco = {
+  ativo: boolean;
+  ate?: number;
+  minutos?: number;
+  apps: string[];
+  fechar: boolean;
+  distracoes: number;
+  listaPadrao?: string[];
+};
+
 export type RpcResults = {
   'system.telemetry': Record<string, unknown>;
   /** Bloco 97: o mesmo "copiar diagnóstico" dos Ajustes do PC, sem chave nem token. */
@@ -315,6 +329,9 @@ export type RpcResults = {
   'update.install': { ok: boolean; mensagem: string };
   'storage.info': Armazenamento;
   'system.saude': { itens: ItemSaude[] };
+  'foco.status': EstadoFoco;
+  'foco.start': EstadoFoco;
+  'foco.stop': EstadoFoco;
   'system.saude.consertar': { message: string };
   'storage.clean': { liberado: number; message: string };
   'storage.open': { ok: boolean; message: string };
