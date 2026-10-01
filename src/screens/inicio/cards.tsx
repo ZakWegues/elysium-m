@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { callRpc, Clima, DiskEntry, EstadoFoco, ItemSaude, PowerOperation, Reminder, Sugestao } from '../../lib/rpc';
+import { callRpc, Clima, DiskEntry, EstadoFoco, ItemSaude, Lista, PowerOperation, Reminder, Sugestao, TimerPc } from '../../lib/rpc';
 import type { Pairing } from '../../lib/pairing';
 import { confirmDestructive } from '../../lib/confirm';
 import { haptica } from '../../lib/haptica';
@@ -48,6 +48,16 @@ export const CARDS: Record<string, DefCard> = {
     corpo: ({ dados }) => <Lista itens={dados.processos.slice(0, 4).map(p => ({
       chave: String(p.pid), icone: 'cpu' as const, texto: p.name, direita: `${Math.round(p.cpu ?? 0)}%`,
     }))} vazio="Sem leitura de processos." />,
+  },
+  // Listas que o PC também vê (bloco 135): "põe leite na lista" pela voz cai aqui.
+  listas: {
+    titulo: 'Listas', icone: 'list', precisa: ['listas'],
+    corpo: ({ dados, pairing, recarregar }) => <Listas listas={dados.listas} pairing={pairing} recarregar={recarregar} />,
+  },
+  // Timers com nome (bloco 136): correm no PC, avisam aqui quando acabam.
+  timers: {
+    titulo: 'Timers', icone: 'clock', precisa: ['timers'],
+    corpo: ({ dados, pairing, recarregar }) => <Timers estado={dados.timers} pairing={pairing} recarregar={recarregar} />,
   },
   // Resumo do dia (bloco 126): o mesmo texto do "bom dia" do PC, montado sem modelo.
   hoje: {
@@ -237,6 +247,100 @@ function Lista({
         </View>
       ))}
     </>
+  );
+}
+
+function Listas({ listas, pairing, recarregar }: { listas: Lista[] | null; pairing: Pairing; recarregar: () => void }) {
+  const { palette, tokens } = useTheme();
+  const [novo, setNovo] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  if (!listas) return <Text variant="caption" color={palette.textMuted}>O PC não respondeu (ou é anterior à 1.8.0).</Text>;
+  const alvo = listas[0]?.nome ?? 'Compras';
+  async function agir(fn: () => Promise<unknown>) {
+    setOcupado(true);
+    try { await fn(); haptica.leve(); } catch (e) { Alert.alert('Listas', errMessage(e)); }
+    finally { setOcupado(false); recarregar(); }
+  }
+  return (
+    <View style={{ gap: tokens.spacing.sm, opacity: ocupado ? 0.6 : 1 }}>
+      {!listas.length && <Text variant="caption" color={palette.textMuted}>Nenhuma lista ainda. Diga “põe leite na lista do mercado” ou escreva abaixo.</Text>}
+      {listas.slice(0, 2).map(l => (
+        <View key={l.id} style={{ gap: 4 }}>
+          <Text variant="label">{l.nome} <Text variant="caption" color={palette.textMuted}>· {l.itens.filter(i => !i.feito).length} pendente(s)</Text></Text>
+          {[...l.itens].sort((a, b) => Number(a.feito) - Number(b.feito)).slice(0, 10).map(i => (
+            <View key={i.id} style={styles.linhaSaude}>
+              <Pressable hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'listas.toggle', { listaId: l.id, itemId: i.id, feito: !i.feito }))}>
+                <Feather name={i.feito ? 'check-square' : 'square'} size={18} color={i.feito ? palette.success : palette.textMuted} />
+              </Pressable>
+              <Text variant="body" style={{ flex: 1, textDecorationLine: i.feito ? 'line-through' : 'none', opacity: i.feito ? 0.55 : 1 }}>{i.texto}</Text>
+              <Pressable hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'listas.remove', { listaId: l.id, itemId: i.id }))}>
+                <Feather name="x" size={15} color={palette.textMuted} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ))}
+      <View style={[styles.linhaSaude, { borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, paddingHorizontal: 10 }]}>
+        <TextInput
+          value={novo}
+          onChangeText={setNovo}
+          placeholder={`Pôr em ${alvo}… (vírgula separa)`}
+          placeholderTextColor={palette.textMuted}
+          onSubmitEditing={() => { const t = novo.trim(); if (!t) return; setNovo(''); agir(() => callRpc(pairing, 'listas.add', { lista: alvo, texto: t })); }}
+          returnKeyType="done"
+          style={{ flex: 1, color: palette.text, paddingVertical: 8, fontSize: 14 }}
+        />
+        <Feather name="plus" size={17} color={palette.primary} />
+      </View>
+    </View>
+  );
+}
+
+/** "9:41" de uma contagem em ms. */
+function contagem(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), seg = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(seg).padStart(2, '0')}` : `${m}:${String(seg).padStart(2, '0')}`;
+}
+
+function Timers({ estado, pairing, recarregar }: { estado: { lista: TimerPc[]; diferenca: number } | null; pairing: Pairing; recarregar: () => void }) {
+  const { palette, tokens } = useTheme();
+  const [agora, setAgora] = useState(Date.now());
+  const [ocupado, setOcupado] = useState(false);
+  const vivos = (estado?.lista ?? []).filter(t => t.fimEm - (estado?.diferenca ?? 0) > agora);
+  // Relógio de 1 s só enquanto há timer correndo — card parado não acorda a tela.
+  useEffect(() => {
+    if (!vivos.length) return;
+    const id = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [vivos.length]);
+  if (!estado) return <Text variant="caption" color={palette.textMuted}>O PC não respondeu (ou é anterior à 1.8.0).</Text>;
+  async function agir(fn: () => Promise<unknown>) {
+    setOcupado(true);
+    try { await fn(); haptica.leve(); } catch (e) { Alert.alert('Timers', errMessage(e)); }
+    finally { setOcupado(false); recarregar(); }
+  }
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      {vivos.map(t => (
+        <View key={t.id} style={styles.linhaSaude}>
+          <Text variant="subheading" style={{ fontVariant: ['tabular-nums'] }}>{contagem(t.fimEm - estado.diferenca - agora)}</Text>
+          <Text variant="body" color={palette.textMuted} style={{ flex: 1 }} numberOfLines={1}>{t.nome || 'timer'}</Text>
+          <Pressable hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'timers.cancel', { id: t.id }))}>
+            <Feather name="x" size={16} color={palette.textMuted} />
+          </Pressable>
+        </View>
+      ))}
+      {!vivos.length && <Text variant="caption" color={palette.textMuted}>Nenhum correndo. Diga “timer de 10 minutos do miojo” ou toque abaixo.</Text>}
+      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+        {[5, 10, 15, 25].map(m => (
+          <Pressable key={m} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'timers.start', { minutos: m }))}
+            style={[styles.botaoSaude, { paddingHorizontal: 12, borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+            <Text variant="label" color={palette.primary}>{m} min</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 

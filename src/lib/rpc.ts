@@ -24,6 +24,13 @@ export type RpcMethod =
   | 'memory.sugestoes'
   | 'resumo.dia'
   | 'perfil.get'
+  | 'listas.list'
+  | 'listas.add'
+  | 'listas.toggle'
+  | 'listas.remove'
+  | 'timers.list'
+  | 'timers.start'
+  | 'timers.cancel'
   | 'perfil.set'
   | 'memory.aceitar'
   | 'memory.recusar'
@@ -319,6 +326,11 @@ export type ItemSaude = {
 };
 
 /** Modo foco do PC (fase 12). */
+/** Listas que o PC e o celular dividem (bloco 135). */
+export type Lista = { id: string; nome: string; atualizadaEm: number; itens: { id: string; texto: string; feito: boolean; em: number }[] };
+/** Timer com nome que roda no PC (bloco 136). */
+export type TimerPc = { id: string; nome: string; criadoEm: number; fimEm: number; duracaoMs: number };
+
 /** Jeito de responder (bloco 134), guardado na config do PC. */
 export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string };
 
@@ -343,6 +355,13 @@ export type RpcResults = {
   'diag.registrar': { registradas: number };
   'resumo.dia': { texto: string };
   'perfil.get': Perfil;
+  'listas.list': { listas: Lista[] };
+  'listas.add': { lista: Lista; adicionados: string[]; repetidos: string[] };
+  'listas.toggle': { lista: Lista };
+  'listas.remove': { lista: Lista };
+  'timers.list': { timers: TimerPc[]; agora: number };
+  'timers.start': { timer: TimerPc };
+  'timers.cancel': { timer: TimerPc };
   'perfil.set': Perfil;
   'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
   'memory.aceitar': { fact: MemoryFact };

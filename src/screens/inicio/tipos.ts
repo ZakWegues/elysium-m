@@ -1,7 +1,7 @@
 import type Feather from '@expo/vector-icons/Feather';
 import { chavePorPc } from '../../lib/pcAtivo';
 import type { Pairing } from '../../lib/pairing';
-import type { Clima, DiskEntry, EstadoFoco, ItemSaude, PowerOperation, ProcessEntry, Reminder, Sugestao } from '../../lib/rpc';
+import type { Clima, DiskEntry, EstadoFoco, ItemSaude, Lista, PowerOperation, ProcessEntry, Reminder, Sugestao, TimerPc } from '../../lib/rpc';
 import type { TelemetryFrame } from '../../lib/telemetry';
 
 /** Tipos e constantes da Início (bloco 81) — partilhados pela tela, pelos cards e pela busca. */
@@ -34,6 +34,9 @@ export type Dados = {
   aprendi: { id: string; text: string }[] | null;
   /** Resumo do dia (bloco 126); `null` = PC anterior à 1.7.1 ou fora de alcance. */
   hoje: string | null;
+  /** Blocos 135/136; `null` = PC anterior à 1.8.0 ou fora de alcance. */
+  listas: Lista[] | null;
+  timers: { lista: TimerPc[]; diferenca: number } | null;
 };
 
 export type Ctx = {
@@ -61,4 +64,4 @@ export type DefCard = {
 };
 
 /** Ordem de fábrica. Card fora desta lista existe, mas nasce desligado. */
-export const CARDS_PADRAO = ['sugestoes', 'hoje', 'computador', 'saude', 'aprendi', 'musica', 'lembretes', 'atalhos', 'energia'];
+export const CARDS_PADRAO = ['sugestoes', 'hoje', 'listas', 'timers', 'computador', 'saude', 'aprendi', 'musica', 'lembretes', 'atalhos', 'energia'];

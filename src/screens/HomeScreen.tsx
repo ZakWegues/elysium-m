@@ -70,7 +70,7 @@ export default function HomeScreen({
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [dados, setDados] = useState<Dados>({
     telemetria: null, lembretes: [], sugestoes: [], clima: null,
-    processos: [], discos: [], transferencia: '', saude: null, foco: null, aprendi: null, hoje: null,
+    processos: [], discos: [], transferencia: '', saude: null, foco: null, aprendi: null, hoje: null, listas: null, timers: null,
   });
   const [ocupado, setOcupado] = useState(false);
   const [ordem, setOrdem] = useState<string[]>(CARDS_PADRAO);
@@ -263,6 +263,9 @@ export default function HomeScreen({
     if (precisa.has('discos')) jobs.push(puxar('discos', async () =>
       (await callRpc(pairing, 'system.disks')).disks));
     if (precisa.has('foco')) jobs.push(puxar('foco', async () => await callRpc(pairing, 'foco.status')));
+    if (precisa.has('listas')) jobs.push(puxar('listas', async () => (await callRpc(pairing, 'listas.list')).listas));
+    // O relógio do PC pode estar adiantado/atrasado em relação ao celular: guarda a diferença.
+    if (precisa.has('timers')) jobs.push(puxar('timers', async () => { const r = await callRpc(pairing, 'timers.list'); return { lista: r.timers, diferenca: r.agora - Date.now() }; }));
     if (precisa.has('hoje')) jobs.push(puxar('hoje', async () => (await callRpc(pairing, 'resumo.dia', {}, { timeoutMs: 15000 })).texto));
     if (precisa.has('aprendi')) jobs.push(puxar('aprendi', async () => (await callRpc(pairing, 'memory.sugestoes')).sugestoes));
     if (precisa.has('saude')) jobs.push(puxar('saude', async () =>
