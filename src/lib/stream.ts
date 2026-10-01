@@ -5,7 +5,9 @@ import { openAuthedWebSocket, streamUrl } from './ws';
 import { receberEntrega } from './notificacoes';
 import type { Entrega } from './rpc';
 
-type StreamResult = { transcript?: string; reply: string };
+import type { Fonte } from './chatHistoryStore';
+
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[] };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -40,7 +42,12 @@ export type VoiceConnection = {
   close(): void;
 };
 
-export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): VoiceConnection {
+export function openVoiceConnection(
+  pairing: Pairing,
+  onClosed?: () => void,
+  /** Sugestões de próxima pergunta (bloco 132): chegam DEPOIS do reply, fora de pedido. */
+  onSugestoes?: (sugestoes: string[]) => void,
+): VoiceConnection {
   const url = streamUrl(pairing);
   const ws = openAuthedWebSocket(pairing);
 
@@ -74,7 +81,7 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
   });
 
   ws.onmessage = (event) => {
-    let data: { type?: string; text?: string; reply?: string; error?: string } & Partial<Entrega>;
+    let data: { type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[] } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -97,7 +104,9 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial }));
+      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined }));
+    } else if (data.type === 'sugestoes') {
+      if (Array.isArray(data.sugestoes)) onSugestoes?.(data.sugestoes.filter((s): s is string => typeof s === 'string').slice(0, 3));
     } else if (data.type === 'notify') {
       // Uma entrega na hora (rotina executada, lembrete): vira notificação local e é
       // confirmada ao PC. Bloco 72.

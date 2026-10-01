@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleProp, StyleSheet, TextInput, View, ViewStyle } from 'react-native';
+import { Alert, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, View, ViewStyle } from 'react-native';
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
@@ -21,7 +21,7 @@ import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { MAILBOX_MAX_ATTACHMENT_BYTES, sendMessage } from '../lib/mailbox';
 import CameraAsk from './CameraAsk';
-import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
+import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
@@ -65,6 +65,8 @@ export default function ChatScreen({
    * manter em par, e só o PC vê o que você pergunta.
    */
   const [starters, setStarters] = useState<string[]>([]);
+  /** Próximas perguntas sugeridas pelo PC depois da última resposta escrita (bloco 132). */
+  const [sugestoes, setSugestoes] = useState<string[]>([]);
   const [messages, setMessages] = useState<StoredMessage[]>([
     { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() },
   ]);
@@ -192,7 +194,7 @@ export default function ChatScreen({
     if (voiceConnRef.current) return voiceConnRef.current;
     const conn = openVoiceConnection(pairing, () => {
       if (voiceConnRef.current === conn) voiceConnRef.current = null;
-    });
+    }, setSugestoes);
     voiceConnRef.current = conn;
     try {
       await conn.ready;
@@ -254,7 +256,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string) => void; comecou: () => boolean } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[]) => void; comecou: () => boolean } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     const onChunk = (parcial: string) => {
@@ -266,10 +268,11 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string) => {
+    const fechar = (texto: string, fontes?: Fonte[]) => {
       setEscrevendoId(null);
-      if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto } : m)));
-      else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now() }]);
+      const extra = fontes?.length ? { fontes } : {};
+      if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
+      else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
     return { onChunk, fechar, comecou: () => criada };
   }
@@ -279,6 +282,7 @@ export default function ChatScreen({
     if (!text || sending) return;
     setDraft('');
     setStarters([]);   // a fileira só faz sentido enquanto a tela está em branco
+    setSugestoes([]);  // as da resposta anterior já não servem
     // Refazer (bloco 130): a pergunta já está na tela; só a resposta antiga saiu.
     if (!opcoes.refazer) setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
@@ -289,6 +293,7 @@ export default function ChatScreen({
       // abrir (PC de pé mas WS bloqueado, por exemplo), o HTTP de sempre continua valendo
       // — resposta inteira de uma vez, como antes do bloco 59.
       let reply: string;
+      let fontes: Fonte[] | undefined;
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
@@ -297,7 +302,9 @@ export default function ChatScreen({
           new Promise<never>((_, rej) => setTimeout(() => rej(new Error('WebSocket demorou a abrir')), 5000)),
         ]);
         // Bloco 130: digitado = canal "texto" — resposta de chat, com markdown.
-        reply = (await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer })).reply;
+        const r = await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer });
+        reply = r.reply;
+        fontes = r.fontes;
       } catch (wsErr) {
         // Só cai no HTTP se o PC não chegou a responder NADA: com pedaços já na tela o
         // comando já rodou lá, e mandar de novo abriria o programa duas vezes.
@@ -305,7 +312,7 @@ export default function ChatScreen({
         console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
         reply = await sendCommand(pairing, text, 'texto');
       }
-      bolha.fechar(reply);
+      bolha.fechar(reply, fontes);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       speakReply(paraFala(reply));
     } catch (err) {
@@ -683,12 +690,39 @@ export default function ChatScreen({
                   </Text>
                 )}
               </Pressable>
+              {/* Fontes da busca (bloco 131): um toque abre o site. */}
+              {item.fontes?.length ? (
+                <View style={styles.fontes}>
+                  {item.fontes.map((f, i) => (
+                    <Pressable key={f.url} onPress={() => { Linking.openURL(f.url).catch(() => {}); }}
+                      style={[styles.fonte, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>
+                      <Text variant="caption" color={palette.primary}>{i + 1}</Text>
+                      <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{hostDe(f.url)}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
             </BolhaEntrando>
           );
         }}
       />
 
       {sending && !escrevendoId && <BolhaPensando />}
+
+      {/* Próximas perguntas (bloco 132): um toque pergunta. */}
+      {sugestoes.length > 0 && !sending && (
+        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          {sugestoes.map((t) => (
+            <Pressable
+              key={t}
+              onPress={() => { haptica.leve(); handleSend(t); }}
+              style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}
+            >
+              <Text variant="caption" color={palette.text}>{t}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {starters.length > 0 && messages.length <= 1 && !sending && (
@@ -876,7 +910,16 @@ function Ponto({ atraso, cor }: { atraso: number; cor: string }) {
   return <AnimatedReanimated.View style={[styles.ponto, { backgroundColor: cor }, estilo]} />;
 }
 
+/** "economia.uol.com.br" de uma URL, para o chip da fonte. */
+function hostDe(url: string): string {
+  const m = /^https?:\/\/(?:www\.)?([^/]+)/.exec(url);
+  return m ? m[1] : url;
+}
+
 const styles = StyleSheet.create({
+  fontes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  fonte: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, maxWidth: 180 },
+  sugestao: { paddingHorizontal: 11, paddingVertical: 7, borderWidth: StyleSheet.hairlineWidth },
   faixaMaoLivre: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: 12, marginBottom: 8, paddingVertical: 8, paddingHorizontal: 12,

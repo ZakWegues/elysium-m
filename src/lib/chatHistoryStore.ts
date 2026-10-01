@@ -6,7 +6,9 @@ const STORAGE_KEY = () => chavePorPc('elysium_chat_sessions');
 const TOMBSTONE_KEY = () => chavePorPc('elysium_chat_deleted');
 const MAX_NON_FAVORITE_SESSIONS = 5;
 
-export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number };
+export type Fonte = { titulo: string; url: string };
+/** `fontes`: as páginas que a busca na web leu para essa resposta (bloco 131). */
+export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[] };
 
 export type ChatSession = {
   id: string;
