@@ -20,7 +20,7 @@ export async function checkHealth(pairing: Pairing): Promise<boolean> {
   }
 }
 
-export async function sendCommand(pairing: Pairing, text: string): Promise<string> {
+export async function sendCommand(pairing: Pairing, text: string, canal: 'voz' | 'texto' = 'voz'): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl(pairing)}/api/command`,
     {
@@ -29,7 +29,7 @@ export async function sendCommand(pairing: Pairing, text: string): Promise<strin
         'Content-Type': 'application/json',
         Authorization: `Bearer ${pairing.token}`,
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, canal }),
     },
     COMMAND_TIMEOUT_MS
   );

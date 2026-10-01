@@ -18,7 +18,8 @@ export function semAcento(s: string): string {
 }
 
 export function acharPalavra(texto: string): { achou: boolean; resto: string } {
-  const t = semAcento(texto).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  // Já sem acento: só ASCII sobra (e `\p{L}` não é garantido no Hermes).
+  const t = semAcento(texto).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const m = VARIACOES.exec(t);
   if (!m) return { achou: false, resto: '' };
   // O resto vem do texto ORIGINAL (com acento), na mesma posição em palavras: contar as

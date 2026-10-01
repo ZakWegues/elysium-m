@@ -35,7 +35,8 @@ export type VoiceConnection = {
   /** Manda o áudio gravado; o PC transcreve (`onTranscript`, antes dos pedaços) e responde. */
   sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult>;
   /** Manda texto pelo mesmo WebSocket — é o caminho que recebe a resposta em pedaços. */
-  sendText(text: string, onChunk?: OnChunk): Promise<StreamResult>;
+  /** `canal: 'texto'` = digitado (resposta de chat); sem ele, o curto da voz (bloco 130). */
+  sendText(text: string, onChunk?: OnChunk, opcoes?: { canal?: 'voz' | 'texto'; refazer?: boolean }): Promise<StreamResult>;
   close(): void;
 };
 
@@ -162,11 +163,12 @@ export function openVoiceConnection(pairing: Pairing, onClosed?: () => void): Vo
     });
   }
 
-  function sendText(text: string, onChunk?: OnChunk): Promise<StreamResult> {
+  function sendText(text: string, onChunk?: OnChunk, opcoes: { canal?: 'voz' | 'texto'; refazer?: boolean } = {}): Promise<StreamResult> {
     return new Promise((resolve, reject) => {
       if (!abrirPedido(resolve, reject, onChunk)) return;
       try {
-        ws.send(JSON.stringify({ type: 'command', text }));
+        // PC antigo ignora os campos novos: o comando roda igual, só que no curto de sempre.
+        ws.send(JSON.stringify({ type: 'command', text, ...opcoes }));
       } catch (err) {
         settlePending((p) => p.reject(new Error(`Falha ao enviar pro servidor: ${errMessage(err)}`)));
       }

@@ -25,6 +25,9 @@ import { deriveTitle, listSessions, saveSession, StoredMessage } from '../lib/ch
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
+import { Markdown } from '../components/Markdown';
+import { paraFala, textoPuro } from '../lib/markdown';
+import * as Clipboard from 'expo-clipboard';
 
 type MicStatus = 'checking' | 'ready' | 'denied';
 
@@ -271,12 +274,13 @@ export default function ChatScreen({
     return { onChunk, fechar, comecou: () => criada };
   }
 
-  async function handleSend(texto?: string) {
+  async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
     const text = (texto ?? draft).trim();
     if (!text || sending) return;
     setDraft('');
     setStarters([]);   // a fileira só faz sentido enquanto a tela está em branco
-    setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
+    // Refazer (bloco 130): a pergunta já está na tela; só a resposta antiga saiu.
+    if (!opcoes.refazer) setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
 
     const bolha = bolhaEmPedacos();
@@ -292,16 +296,18 @@ export default function ChatScreen({
           ensureVoiceConnection(),
           new Promise<never>((_, rej) => setTimeout(() => rej(new Error('WebSocket demorou a abrir')), 5000)),
         ]);
-        reply = (await conn.sendText(text, bolha.onChunk)).reply;
+        // Bloco 130: digitado = canal "texto" — resposta de chat, com markdown.
+        reply = (await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer })).reply;
       } catch (wsErr) {
         // Só cai no HTTP se o PC não chegou a responder NADA: com pedaços já na tela o
         // comando já rodou lá, e mandar de novo abriria o programa duas vezes.
         if (bolha.comecou()) throw wsErr;
         console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
-        reply = await sendCommand(pairing, text);
+        reply = await sendCommand(pairing, text, 'texto');
       }
       bolha.fechar(reply);
-      speakReply(reply);
+      // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
+      speakReply(paraFala(reply));
     } catch (err) {
       setEscrevendoId(null);
       if (err instanceof AuthError) {
@@ -456,6 +462,27 @@ export default function ChatScreen({
     } finally {
       setSending(false);
     }
+  }
+
+  // ── Ações da bolha (bloco 130): copiar, ouvir, refazer ─────────────────────
+  function acoesDaBolha(item: StoredMessage) {
+    if (item.from === 'error' || item.id === 'welcome') return;
+    haptica.leve();
+    const copiar = { text: 'Copiar', onPress: () => { Clipboard.setStringAsync(item.from === 'reply' ? textoPuro(item.text) : item.text).catch(() => {}); } };
+    if (item.from === 'me') { Alert.alert('Mensagem', undefined, [copiar], { cancelable: true }); return; }
+    const ouvir = { text: 'Ouvir', onPress: () => { falar(textoPuro(item.text), pairing); } };
+    // Refazer só a última resposta, e só se a pergunta dela foi digitada (áudio não tem texto para reenviar).
+    const ultima = [...messages].reverse().find(m => m.from === 'reply');
+    const indice = messages.findIndex(m => m.id === item.id);
+    const pergunta = [...messages.slice(0, indice)].reverse().find(m => m.from === 'me');
+    const podeRefazer = ultima?.id === item.id && pergunta && !pergunta.text.startsWith('🎤') && !pergunta.text.startsWith('📎') && !sending;
+    const botoes = podeRefazer
+      ? [copiar, ouvir, { text: 'Refazer', onPress: () => {
+          setMessages(prev => prev.filter(m => m.id !== item.id));
+          handleSend(pergunta!.text, { refazer: true });
+        } }]
+      : [copiar, ouvir];
+    Alert.alert('Resposta', undefined, botoes, { cancelable: true });
   }
 
   // ── Mão livre (bloco 89) ──────────────────────────────────────────────────
@@ -648,9 +675,14 @@ export default function ChatScreen({
                 },
               ]}
             >
-              <Text variant="body" color={color}>
-                {item.text}
-              </Text>
+              {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações. */}
+              <Pressable onLongPress={() => acoesDaBolha(item)} delayLongPress={350}>
+                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : (
+                  <Text variant="body" color={color}>
+                    {item.text}
+                  </Text>
+                )}
+              </Pressable>
             </BolhaEntrando>
           );
         }}
