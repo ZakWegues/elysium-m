@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { callRpc, Clima, DiskEntry, EstadoFoco, ItemSaude, Lista, PowerOperation, Reminder, Sugestao, TimerPc } from '../../lib/rpc';
+import { callRpc, Clima, DiskEntry, EstadoFoco, ItemSaude, Lista as ListaPc, PowerOperation, Reminder, Sugestao, TimerPc } from '../../lib/rpc';
 import type { Pairing } from '../../lib/pairing';
 import { confirmDestructive } from '../../lib/confirm';
 import { haptica } from '../../lib/haptica';
@@ -250,7 +250,7 @@ function Lista({
   );
 }
 
-function Listas({ listas, pairing, recarregar }: { listas: Lista[] | null; pairing: Pairing; recarregar: () => void }) {
+function Listas({ listas, pairing, recarregar }: { listas: ListaPc[] | null; pairing: Pairing; recarregar: () => void }) {
   const { palette, tokens } = useTheme();
   const [novo, setNovo] = useState('');
   const [ocupado, setOcupado] = useState(false);
