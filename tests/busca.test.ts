@@ -16,7 +16,7 @@ describe("busca — pontuação", () => {
 
   it("subsequência perto casa; espalhada não (o achado do bloco 58)", () => {
     expect(pontuar("lmbr", "lembrete")).not.toBeNull();
-    expect(pontuar("calc", "principal projeto de isaac")).toBeNull();
+    expect(pontuar("calc", "principal projeto do cliente")).toBeNull();
   });
 
   it("consulta vazia casa tudo com zero", () => {
@@ -29,7 +29,7 @@ describe("busca — ordenação", () => {
     { grupo: "conversa", texto: "calculadora de férias" },
     { grupo: "app", texto: "calculadora", chaves: ["calc"] },
     { grupo: "acao", texto: "Bloquear a tela", chaves: ["lock"] },
-    { grupo: "memoria", texto: "o principal projeto de isaac é o elysium" },
+    { grupo: "memoria", texto: "o principal projeto do cliente é o elysium" },
   ];
   const ordem = ["nav", "acao", "preset", "app", "lembrete", "memoria", "conversa"];
 

@@ -25,7 +25,7 @@ export function pontuar(consulta: string, alvo: string): number | null {
   }
   if (i < q.length) return null;
   // Subsequência só vale quando as letras estão PERTO: "lmbr" em "lembrete" sim, "calc"
-  // espalhado por "principal projeto de isaac" não.
+  // espalhado por "principal projeto do cliente" não.
   if (ultimo - primeiro > q.length * 2 + 1) return null;
   return 5 + buracos * 2 + ultimo * 0.01;
 }

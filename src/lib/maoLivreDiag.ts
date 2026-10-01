@@ -2,7 +2,7 @@
  * Números da mão livre (fase 13, bloco 116).
  *
  * Os limiares do bloco 89 (−38 dB para "falou", −46 para "ainda falando", 1,3 s de silêncio
- * para fechar) foram escolhidos sem medir nada no POCO do Zak. Cada rodada vira uma linha
+ * para fechar) foram escolhidos sem medir nada no celular de verdade. Cada rodada vira uma linha
  * curta que vai para o log do PC (`diag.registrar`) — o único log que existe; depois de uma
  * ou duas semanas de uso, dá para ajustar com número.
  *
