@@ -40,7 +40,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  * blur; e nos temas do ELYSIUM está muito zoado — zere o Liquid Glass e deixe no máximo um
  * blur extremamente levinho". Então:
  *
- * · **ELYSIUM (noite)** — o desfoque cai para no máximo `BLUR_TETO_NOITE` (era 40–100) e a
+ * · **ELYSIUM (noite)** — o desfoque cai para `BLUR_NOITE` (era 40–100) e a
  *   tinta sobe: a superfície lê como um painel escuro quase sólido com um leve véu, não
  *   como vidro. Sem brilho de aresta além do fio de luz da borda.
  *
@@ -50,7 +50,13 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  *   refratando na curva) e uma SOMBRA INTERNA no pé (o vidro é mais denso embaixo). Tudo
  *   é View e LinearGradient — nada por quadro, nada de custo novo.
  */
-const BLUR_TETO_NOITE = 10;
+/**
+ * 🔴 Bloco 128 (01/10): o Zak pediu de novo, agora sem meio-termo — "tire totalmente o
+ * liquid glass dos temas ELYSIUM, deixe só um levíssimo blur". O bloco 70 tinha deixado o
+ * fio especular nas arestas, a borda de vidro e o reflexo do modal; tudo isso sai na noite.
+ * Sobra um desfoque fixo e mínimo e a tinta quase sólida da paleta.
+ */
+const BLUR_NOITE = 6;
 
 export function GlassFill({
   intensity = 40,
@@ -72,7 +78,7 @@ export function GlassFill({
   const noite = familiaResolvida === 'ely';
   // Noite: blur "extremamente levinho". Dia: um pouco mais que antes, para o vidro
   // parecer espesso (o desfoque é o que dá a sensação de material).
-  const forca = noite ? Math.min(BLUR_TETO_NOITE, Math.round(intensity * 0.25)) : Math.min(100, Math.round(intensity * 1.25));
+  const forca = noite ? BLUR_NOITE : Math.min(100, Math.round(intensity * 1.25));
 
   return (
     <>
@@ -110,9 +116,8 @@ export function GlassFill({
           />
         </>
       )}
-      {edge && (
-        // Aresta especular: um fio de luz no topo e à esquerda. No dia é branco quase
-        // puro; na noite é o único brilho que sobra, bem mais fraco.
+      {edge && !noite && (
+        // Aresta especular: um fio de luz no topo e à esquerda — só no dia (bloco 128).
         <>
           <LinearGradient
             colors={noite ? ['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.02)'] : ['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.15)']}
@@ -217,7 +222,7 @@ export function GlassCircle({
           justifyContent: 'center',
           overflow: 'hidden',
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: palette.glassBorder,
+          borderColor: palette.familia === 'ely' ? 'transparent' : palette.glassBorder,
           opacity: disabled ? 0.45 : 1,
         },
         style,

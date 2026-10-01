@@ -131,11 +131,13 @@ const neutrosEscuro = {
   error: '#FF6B6B',
   errorSoft: 'rgba(255,107,107,0.16)',
   success: '#4ADE80',
-  glassBorder: 'rgba(255,255,255,0.18)',
+  // Bloco 128: sem borda de vidro na noite — a mesma linha discreta do `border`.
+  glassBorder: 'rgba(255,255,255,0.10)',
   glassBackdrop: 'rgba(0,0,0,0.55)',
   // Um quinto do brilho do modo claro. Branco forte sobre superfície escura não lê como
   // reflexo, lê como sujeira.
-  glassSheen: ['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)'] as const,
+  // Bloco 128: sem reflexo na noite (o modal e o popover desenham este gradiente).
+  glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
   blurTint: 'dark' as const,
 };
 
@@ -258,8 +260,9 @@ function vidro(face: Face, familia: Familia) {
   // o que segura a leitura — subiu de 0,26/0,42 para 0,62/0,74. O dia baixou um pouco
   // (0,34 → 0,30) porque ganhou aresta especular e lente, que já dão presença ao card.
   return {
-    glassSurface: comAlfa(base, noite ? 0.62 : 0.30),
-    glassSurfaceStrong: comAlfa(base, noite ? 0.74 : 0.48),
+    // Bloco 128: a noite virou painel quase sólido (era 0,62/0,74) — sem vidro, só o véu do blur leve.
+    glassSurface: comAlfa(base, noite ? 0.84 : 0.30),
+    glassSurfaceStrong: comAlfa(base, noite ? 0.90 : 0.48),
     // Gaveta e painel são quase opacos de propósito: o critério de aceite é texto legível
     // sobre QUALQUER fundo, inclusive sobre uma mancha clara passando por baixo.
     glassSheet: comAlfa(base, noite ? 0.94 : 0.88),

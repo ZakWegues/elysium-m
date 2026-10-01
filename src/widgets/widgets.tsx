@@ -31,7 +31,8 @@ function fundo(p: Palette) {
   const noite = p.familia === 'ely';
   return {
     backgroundColor: noite ? '#111624F0' : '#FFFFFFE8',
-    borderColor: noite ? '#FFFFFF2A' : '#FFFFFFB0',
+    // Bloco 128: na noite, sem aresta de vidro — só um contorno quase invisível.
+    borderColor: noite ? '#FFFFFF10' : '#FFFFFFB0',
     borderWidth: 1,
     borderRadius: 24,
   } as const;

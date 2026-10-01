@@ -446,6 +446,8 @@ export type RpcResults = {
     port: number;
     /** Como o dono quer ser chamado (config do PC, fase 13); vazio em PC antigo. */
     nome?: string;
+    /** Bloco 128: o dono quer acompanhar o acesso de fora? Ausente em PC antigo. */
+    acessoRemoto?: boolean;
   };
 };
 

@@ -50,7 +50,10 @@ export function useConnection(
   const refreshEndpoints = useCallback(async (p: Pairing): Promise<Pairing> => {
     try {
       const info = await callRpc(p, 'pairing.endpoints');
-      setHasTunnel(info.hasTunnel);
+      // Bloco 128: com o acompanhamento do acesso de fora desligado no PC, a faixa não fala
+      // de túnel nenhum (nem "sem acesso remoto", nem "confira o Tailscale") — null é o
+      // mesmo estado de PC antigo: "PC fora do ar" com Procurar.
+      setHasTunnel(info.acessoRemoto === false ? null : info.hasTunnel);
 
       const known = new Set(p.endpoints);
       const novos = info.endpoints.filter(ip => !known.has(ip));
