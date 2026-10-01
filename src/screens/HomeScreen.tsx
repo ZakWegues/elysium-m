@@ -70,7 +70,7 @@ export default function HomeScreen({
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
   const [dados, setDados] = useState<Dados>({
     telemetria: null, lembretes: [], sugestoes: [], clima: null,
-    processos: [], discos: [], transferencia: '', saude: null, foco: null, aprendi: null,
+    processos: [], discos: [], transferencia: '', saude: null, foco: null, aprendi: null, hoje: null,
   });
   const [ocupado, setOcupado] = useState(false);
   const [ordem, setOrdem] = useState<string[]>(CARDS_PADRAO);
@@ -132,7 +132,17 @@ export default function HomeScreen({
         // Card novo numa versão futura precisa aparecer para quem já tinha configuração
         // gravada — senão nasce invisível e ninguém descobre que existe.
         const faltando = Object.keys(CARDS).filter(id => !conhecidos.includes(id));
-        setOrdem([...conhecidos, ...faltando]);
+        // Card novo de fábrica entra logo depois do vizinho da ordem de fábrica, não no fim
+        // da tela (o "Hoje", bloco 126, nasceria depois de todos).
+        const ordemNova = [...conhecidos];
+        for (const id of faltando) {
+          const i = CARDS_PADRAO.indexOf(id);
+          const antes = i > 0 ? CARDS_PADRAO.slice(0, i).reverse().find(v => ordemNova.includes(v)) : undefined;
+          if (i < 0) ordemNova.push(id);
+          else if (antes) ordemNova.splice(ordemNova.indexOf(antes) + 1, 0, id);
+          else ordemNova.unshift(id);
+        }
+        setOrdem(ordemNova);
         setOcultos([
           ...(salvo.ocultos ?? []).filter(id => id in CARDS),
           ...faltando.filter(id => !CARDS_PADRAO.includes(id)),
@@ -253,6 +263,7 @@ export default function HomeScreen({
     if (precisa.has('discos')) jobs.push(puxar('discos', async () =>
       (await callRpc(pairing, 'system.disks')).disks));
     if (precisa.has('foco')) jobs.push(puxar('foco', async () => await callRpc(pairing, 'foco.status')));
+    if (precisa.has('hoje')) jobs.push(puxar('hoje', async () => (await callRpc(pairing, 'resumo.dia', {}, { timeoutMs: 15000 })).texto));
     if (precisa.has('aprendi')) jobs.push(puxar('aprendi', async () => (await callRpc(pairing, 'memory.sugestoes')).sugestoes));
     if (precisa.has('saude')) jobs.push(puxar('saude', async () =>
       (await callRpc(pairing, 'system.saude', {}, { timeoutMs: 15000 })).itens));

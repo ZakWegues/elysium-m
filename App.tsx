@@ -33,6 +33,7 @@ import { useDeepLinks } from './src/lib/deepLinks';
 import * as QuickActions from 'expo-quick-actions';
 import { callRpc } from './src/lib/rpc';
 import { errMessage } from './src/lib/errors';
+import { falar } from './src/lib/falar';
 import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -204,12 +205,22 @@ function AppInner() {
       } catch (e) { Alert.alert('Modo foco', errMessage(e)); }
       return;
     }
+    if (destino === 'hoje') {
+      const p = pairingRef.current;
+      if (!p) { atalhoPendente.current = a; return; }
+      try {
+        const { texto } = await callRpc(p, 'resumo.dia', {}, { timeoutMs: 15000 });
+        Alert.alert('Hoje', texto, [{ text: 'Ouvir', onPress: () => { void falar(texto, p); } }, { text: 'OK' }]);
+      } catch (e) { Alert.alert('Hoje', errMessage(e)); }
+      return;
+    }
     if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
     else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
   }, []);
   useEffect(() => {
     QuickActions.setItems([
       { id: 'chat', title: 'Falar com o ELYSIUM', params: { destino: 'chat' } },
+      { id: 'hoje', title: 'Resumo do dia', params: { destino: 'hoje' } },
       { id: 'foco', title: 'Modo foco (25 min)', params: { destino: 'foco' } },
       { id: 'busca', title: 'Buscar ou comandar', params: { destino: 'busca' } },
     ]).catch(() => { /* launcher sem suporte a atalhos */ });

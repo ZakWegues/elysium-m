@@ -8,6 +8,7 @@ import { haptica } from '../../lib/haptica';
 import { TelemetryFrame } from '../../lib/telemetry';
 import { findMetric } from '../../lib/telemetryFormat';
 import { errMessage } from '../../lib/errors';
+import { falar, pararDeFalar } from '../../lib/falar';
 import { useTheme } from '../../theme';
 import { SpotifyBar } from '../SpotifyPlayer';
 import { MetricBar, Text } from '../../components/ui';
@@ -47,6 +48,11 @@ export const CARDS: Record<string, DefCard> = {
     corpo: ({ dados }) => <Lista itens={dados.processos.slice(0, 4).map(p => ({
       chave: String(p.pid), icone: 'cpu' as const, texto: p.name, direita: `${Math.round(p.cpu ?? 0)}%`,
     }))} vazio="Sem leitura de processos." />,
+  },
+  // Resumo do dia (bloco 126): o mesmo texto do "bom dia" do PC, montado sem modelo.
+  hoje: {
+    titulo: 'Hoje', icone: 'sun', precisa: ['hoje'],
+    corpo: ({ dados, pairing }) => <Hoje texto={dados.hoje} pairing={pairing} />,
   },
   // Memória que aprende (fase 13): o que o PC percebeu nas conversas, para guardar ou não.
   aprendi: {
@@ -231,6 +237,28 @@ function Lista({
         </View>
       ))}
     </>
+  );
+}
+
+function Hoje({ texto, pairing }: { texto: string | null; pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const [falando, setFalando] = useState(false);
+  if (!texto) return <Text variant="caption" color={palette.textMuted}>O PC não respondeu (ou é anterior à 1.7.1).</Text>;
+  async function ouvir() {
+    haptica.leve();
+    if (falando) { pararDeFalar(); setFalando(false); return; }
+    setFalando(true);
+    try { await falar(texto!, pairing); } finally { setFalando(false); }
+  }
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="body" style={{ lineHeight: 21 }}>{texto}</Text>
+      <Pressable onPress={ouvir} hitSlop={6}
+        style={[styles.botaoSaude, { alignSelf: 'flex-start', flexDirection: 'row', gap: 6, paddingHorizontal: 12, borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+        <Feather name={falando ? 'square' : 'volume-2'} size={14} color={palette.primary} />
+        <Text variant="label" color={palette.primary}>{falando ? 'Parar' : 'Ouvir'}</Text>
+      </Pressable>
+    </View>
   );
 }
 
