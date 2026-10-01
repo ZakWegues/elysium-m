@@ -36,6 +36,7 @@ import { errMessage } from './src/lib/errors';
 import { falar } from './src/lib/falar';
 import { DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
 import { useMicrofoneLivre } from './src/lib/microfone';
+import { ComandosIa } from './src/components/ComandosIa';
 import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -187,10 +188,14 @@ function AppInner() {
   }, [screen, refreshMailboxBadge]);
 
   // Conteúdo compartilhado de outro app do Android cai direto na Caixa do PC.
+  // Bloco 137: o que foi compartilhado pode passar por um comando de IA (ou "Resumir a página").
+  const [textoParaIa, setTextoParaIa] = useState<string | null>(null);
+
   const handleShared = useCallback((text: string, ok: boolean) => {
     Alert.alert(
       ok ? 'Enviado pro PC' : 'Não consegui enviar',
-      ok ? text.slice(0, 120) : 'O PC está fora de alcance. Tente de novo quando ele voltar.'
+      ok ? text.slice(0, 120) : 'O PC está fora de alcance. Tente de novo quando ele voltar.',
+      ok ? [{ text: 'OK' }, { text: /^https?:\/\//i.test(text.trim()) ? 'Resumir / IA' : 'Usar IA', onPress: () => setTextoParaIa(text) }] : undefined,
     );
     if (!ok) return;
     refreshMailboxBadge();
@@ -422,6 +427,9 @@ function AppInner() {
 
       {/* A gaveta é o ÚLTIMO irmão de propósito: sem o `Modal` nativo, quem a põe por cima
           da barra de abas é a ordem de desenho (mais o zIndex dela). */}
+      <GlassModal title="Comandos de IA" visible={textoParaIa !== null} onClose={() => setTextoParaIa(null)}>
+        {textoParaIa !== null && <ComandosIa texto={textoParaIa} pairing={pairing} />}
+      </GlassModal>
       <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
         <SettingsScreen pairing={pairing} onUnpair={handleUnpair} onTrocarPc={handleTrocarPc} onAdicionarPc={handleAdicionarPc} />
       </GlassModal>

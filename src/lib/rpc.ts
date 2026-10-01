@@ -25,6 +25,9 @@ export type RpcMethod =
   | 'resumo.dia'
   | 'perfil.get'
   | 'listas.list'
+  | 'comandos.list'
+  | 'comandos.run'
+  | 'link.resumir'
   | 'listas.add'
   | 'listas.toggle'
   | 'listas.remove'
@@ -356,6 +359,9 @@ export type RpcResults = {
   'resumo.dia': { texto: string };
   'perfil.get': Perfil;
   'listas.list': { listas: Lista[] };
+  'comandos.list': { comandos: { id: string; nome: string; instrucao: string; fabrica?: boolean }[] };
+  'comandos.run': { comando: { id: string; nome: string }; resultado: string };
+  'link.resumir': { resumo: string };
   'listas.add': { lista: Lista; adicionados: string[]; repetidos: string[] };
   'listas.toggle': { lista: Lista };
   'listas.remove': { lista: Lista };

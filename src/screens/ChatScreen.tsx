@@ -71,6 +71,17 @@ export default function ChatScreen({
     { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() },
   ]);
   const [draft, setDraft] = useState('');
+  /**
+   * "/" no começo da mensagem lista os comandos de IA (bloco 137): "/Corrigir português
+   * texto…" manda só o texto para o comando, sem passar pela conversa.
+   */
+  const [comandosIa, setComandosIa] = useState<{ id: string; nome: string }[] | null>(null);
+  const barra = draft.startsWith('/') ? draft.slice(1).toLowerCase() : null;
+  const comandoEscolhido = barra !== null ? comandosIa?.find(c => barra.startsWith(c.nome.toLowerCase() + ' ')) : undefined;
+  useEffect(() => {
+    if (barra === null || comandosIa) return;
+    callRpc(pairing, 'comandos.list').then(r => setComandosIa(r.comandos)).catch(() => setComandosIa([]));
+  }, [barra === null, comandosIa, pairing]);
   const [sending, setSending] = useState(false);
   /** Id da bolha que está sendo escrita em pedaços; `null` fora de um stream. */
   const [escrevendoId, setEscrevendoId] = useState<string | null>(null);
@@ -277,9 +288,26 @@ export default function ChatScreen({
     return { onChunk, fechar, comecou: () => criada };
   }
 
+  async function rodarComandoIa(cmd: { id: string; nome: string }, alvo: string) {
+    setDraft('');
+    setSending(true);
+    const ts = Date.now();
+    setMessages((prev) => [...prev, { id: `me-${ts}`, from: 'me', text: `/${cmd.nome}\n${alvo}`, ts }]);
+    try {
+      const r = await callRpc(pairing, 'comandos.run', { comando: cmd.id, texto: alvo }, { timeoutMs: 120_000 });
+      setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: r.resultado, ts: Date.now() }]);
+    } catch (err) { pushError(errMessage(err)); }
+    finally { setSending(false); }
+  }
+
   async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
     const text = (texto ?? draft).trim();
     if (!text || sending) return;
+    // Comando de IA pela barra (bloco 137).
+    if (texto === undefined && comandoEscolhido) {
+      const alvo = text.slice(comandoEscolhido.nome.length + 1).trim();
+      if (alvo) { rodarComandoIa(comandoEscolhido, alvo); return; }
+    }
     setDraft('');
     setStarters([]);   // a fileira só faz sentido enquanto a tela está em branco
     setSugestoes([]);  // as da resposta anterior já não servem
@@ -725,6 +753,19 @@ export default function ChatScreen({
       )}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
+      {/* "/" = comandos de IA (bloco 137): toque escolhe, depois escreva ou cole o texto. */}
+      {barra !== null && !comandoEscolhido && (
+        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          {(comandosIa ?? []).filter(c => c.nome.toLowerCase().includes(barra.trim())).map(c => (
+            <Pressable key={c.id} onPress={() => setDraft(`/${c.nome} `)}
+              style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}>
+              <Text variant="caption" color={palette.text}>{c.nome}</Text>
+            </Pressable>
+          ))}
+          {comandosIa === null && <Text variant="caption" color={palette.textMuted}>Buscando os comandos de IA…</Text>}
+        </View>
+      )}
+
       {starters.length > 0 && messages.length <= 1 && !sending && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
           {starters.map((t) => (
