@@ -23,6 +23,8 @@ export type RpcMethod =
   | 'diag.registrar'
   | 'memory.sugestoes'
   | 'resumo.dia'
+  | 'perfil.get'
+  | 'perfil.set'
   | 'memory.aceitar'
   | 'memory.recusar'
   | 'foco.start'
@@ -317,6 +319,9 @@ export type ItemSaude = {
 };
 
 /** Modo foco do PC (fase 12). */
+/** Jeito de responder (bloco 134), guardado na config do PC. */
+export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string };
+
 export type EstadoFoco = {
   ativo: boolean;
   ate?: number;
@@ -337,6 +342,8 @@ export type RpcResults = {
   'foco.status': EstadoFoco;
   'diag.registrar': { registradas: number };
   'resumo.dia': { texto: string };
+  'perfil.get': Perfil;
+  'perfil.set': Perfil;
   'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
   'memory.aceitar': { fact: MemoryFact };
   'memory.recusar': { recusada: boolean };

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import * as Application from 'expo-application';
 import AvisoAtualizacao from '../components/AvisoAtualizacao';
 import { versaoInstalada } from '../lib/atualizacao';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
@@ -11,7 +11,7 @@ import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { definirNotificacoesAtivas, notificacoesAtivas, pedirPermissao } from '../lib/notificacoes';
 import { listarPcs, Pairing } from '../lib/pairing';
-import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
+import { callRpc, Perfil, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
@@ -38,7 +38,7 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
  * "Desparear" no fim de tudo. Agora a gaveta abre num hub; cada azulejo mostra o valor que
  * está valendo e abre a seção, com uma seta para voltar.
  */
-type Secao = 'aparencia' | 'voz' | 'avisos' | 'pareamento' | 'sobre';
+type Secao = 'aparencia' | 'voz' | 'conversa' | 'avisos' | 'pareamento' | 'sobre';
 
 export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens, familiaResolvida, name } = useTheme();
@@ -51,6 +51,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
   const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
     { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
+    { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
     { id: 'avisos', titulo: 'Notificações', icone: 'bell', resumo: avisos ? 'Avisando neste celular' : 'Desligadas' },
     { id: 'pareamento', titulo: 'Pareamento', icone: 'wifi', resumo: `${pairing.activeIp}:${pairing.port}` },
     { id: 'sobre', titulo: 'Sobre', icone: 'info', resumo: `Versão ${versaoInstalada()} · atualizações` },
@@ -84,6 +85,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       </Pressable>
       {secao === 'aparencia' && <SecaoAparencia />}
       {secao === 'voz' && <VozSection pairing={pairing} />}
+      {secao === 'conversa' && <SecaoConversa pairing={pairing} />}
       {secao === 'avisos' && (
         <View style={{ gap: tokens.spacing.lg }}>
           <AvisosLocais />
@@ -93,6 +95,69 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       {secao === 'pareamento' && <SecaoPareamento pairing={pairing} onUnpair={onUnpair} onTrocarPc={onTrocarPc} onAdicionarPc={onAdicionarPc} />}
       {secao === 'sobre' && <SecaoSobre pairing={pairing} />}
     </Animated.View>
+  );
+}
+
+/**
+ * Jeito de responder (bloco 134): o tamanho das respostas e as instruções em texto livre.
+ * Mora na config do PC (dado pessoal fica nos dados do app, não no código) — o celular
+ * só lê e grava pelo RPC.
+ */
+function SecaoConversa({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [rascunho, setRascunho] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  useEffect(() => {
+    callRpc(pairing, 'perfil.get')
+      .then((p) => { setPerfil(p); setRascunho(p.instrucoesPessoais); })
+      .catch((e) => setErro(`O PC não respondeu (ou é anterior à 1.8.0): ${errMessage(e)}`));
+  }, [pairing]);
+  async function gravar(patch: Partial<Perfil>) {
+    setSalvando(true);
+    try { setPerfil(await callRpc(pairing, 'perfil.set', patch)); haptica.leve(); }
+    catch (e) { Alert.alert('Jeito de responder', errMessage(e)); }
+    finally { setSalvando(false); }
+  }
+  if (erro) return <Text variant="caption" color={palette.textMuted}>{erro}</Text>;
+  if (!perfil) return <ActivityIndicator color={palette.primary} />;
+  const estilos: { valor: Perfil['estiloResposta']; rotulo: string; nota: string }[] = [
+    { valor: 'direto', rotulo: 'Direto', nota: 'O mínimo que resolve' },
+    { valor: 'equilibrado', rotulo: 'Equilibrado', nota: 'Conforme a pergunta' },
+    { valor: 'detalhado', rotulo: 'Detalhado', nota: 'Com o porquê e exemplos' },
+  ];
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="subheading">Tamanho das respostas</Text>
+      {estilos.map(o => {
+        const sel = perfil.estiloResposta === o.valor;
+        return (
+          <Pressable key={o.valor} disabled={salvando} onPress={() => gravar({ estiloResposta: o.valor })}
+            style={[styles.familiaBtn, { borderRadius: tokens.radii.md, backgroundColor: sel ? palette.primarySoft : 'transparent', borderColor: sel ? palette.primary : palette.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text variant="body" color={sel ? palette.primary : palette.text}>{o.rotulo}</Text>
+              <Text variant="caption" color={palette.textMuted}>{o.nota}</Text>
+            </View>
+            {sel && <Feather name="check" size={16} color={palette.primary} />}
+          </Pressable>
+        );
+      })}
+      <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Como o ELYSIUM responde</Text>
+      <Text variant="caption" color={palette.textMuted}>
+        Em texto livre: como você quer ser tratado, o que evitar, o que sempre incluir. Vale no PC e aqui.
+      </Text>
+      <TextInput
+        value={rascunho}
+        onChangeText={setRascunho}
+        multiline
+        maxLength={1500}
+        placeholder="Ex.: sem emoji; preço sempre em reais; me corrija se eu estiver errado."
+        placeholderTextColor={palette.textMuted}
+        style={{ minHeight: 110, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }}
+      />
+      <Button title={salvando ? 'Salvando…' : 'Salvar instruções'} disabled={salvando || rascunho === perfil.instrucoesPessoais} onPress={() => gravar({ instrucoesPessoais: rascunho })} />
+    </View>
   );
 }
 
