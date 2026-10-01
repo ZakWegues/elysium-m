@@ -6,7 +6,7 @@ import { parsePairingQr, resolveActiveEndpoint, savePairing, UnauthorizedError }
 import { useTheme } from '../theme';
 import { Button, Text } from '../components/ui';
 
-export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
+export default function PairingScreen({ onPaired, onCancel }: { onPaired: () => void; onCancel?: () => void }) {
   const { palette, tokens } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
@@ -120,6 +120,12 @@ export default function PairingScreen({ onPaired }: { onPaired: () => void }) {
           {busy ? 'Conectando...' : 'Aponte pro QR code de pareamento do ELYSIUM'}
         </Text>
         {busy && <ActivityIndicator color="#fff" style={{ marginTop: 12 }} />}
+        {/* Parear um SEGUNDO PC (bloco 121): dá para voltar sem ler QR nenhum. */}
+        {onCancel && !busy && (
+          <Text variant="body" color="#fff" onPress={onCancel} style={{ textAlign: 'center', marginTop: 14, textDecorationLine: 'underline' }}>
+            Cancelar
+          </Text>
+        )}
       </View>
     </View>
   );

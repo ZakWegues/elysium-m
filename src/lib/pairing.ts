@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { fetchWithTimeout, PROBE_TIMEOUT_MS } from './http';
+import { definirPcAtivo } from './pcAtivo';
 
 /**
  * O token foi regenerado no PC, ou mudou, e este pareamento está inválido.
@@ -72,22 +73,110 @@ function migrate(raw: unknown): Pairing | null {
   return null;
 }
 
-export async function loadPairing(): Promise<Pairing | null> {
-  const raw = await SecureStore.getItemAsync(KEY);
-  if (!raw) return null;
+// ── Vários PCs (fase 13, bloco 121) ───────────────────────────────────────────
+//
+// O cofre guarda a lista e qual está ativo. A chave antiga ('elysium_pairing') continua
+// gravada com o PC ATIVO: tudo que chamava loadPairing/savePairing segue igual, e um OTA
+// revertido para uma versão sem o cofre ainda encontra um pareamento válido.
+
+const KEY_COFRE = 'elysium_pairings_v1';
+/** Teto: o SecureStore do Android não gosta de valor acima de ~2 KB. */
+export const MAX_PCS = 5;
+
+export type Cofre = { ativo: string; principal: string; pcs: Pairing[] };
+
+/** Identidade do PC: o hostname (sobrevive a IP novo e a QR regenerado); sem ele, o 1º endereço. */
+export function idDoPc(p: Pairing): string {
+  return (p.hostname || `${p.endpoints[0]}:${p.port}`).toLowerCase();
+}
+
+/** Acrescenta ou atualiza (mesmo PC, token novo) e torna ativo. Pura, para teste. */
+export function cofreCom(c: Cofre | null, p: Pairing): Cofre {
+  const id = idDoPc(p);
+  if (!c) return { ativo: id, principal: id, pcs: [p] };
+  const outros = c.pcs.filter(x => idDoPc(x) !== id);
+  return { ...c, ativo: id, pcs: [...outros, p].slice(-MAX_PCS) };
+}
+
+/** Tira um PC; se era o ativo, o próximo da lista assume. null = não sobrou nenhum. Pura. */
+export function cofreSem(c: Cofre, id: string): Cofre | null {
+  const pcs = c.pcs.filter(x => idDoPc(x) !== id);
+  if (!pcs.length) return null;
+  const ativo = c.ativo === id ? idDoPc(pcs[0]) : c.ativo;
+  // O principal é quem usa as chaves sem sufixo; se ele saiu, o próximo herda (e os dados
+  // sem sufixo, que eram dele, ficam para trás — esquecer um PC é esquecer o que era dele).
+  const principal = pcs.some(x => idDoPc(x) === c.principal) ? c.principal : idDoPc(pcs[0]);
+  return { ativo, principal, pcs };
+}
+
+export function pcAtivoDo(c: Cofre): Pairing {
+  return c.pcs.find(x => idDoPc(x) === c.ativo) ?? c.pcs[0];
+}
+
+async function lerCofre(): Promise<Cofre | null> {
   try {
-    return migrate(JSON.parse(raw));
-  } catch {
-    return null;
+    const raw = await SecureStore.getItemAsync(KEY_COFRE);
+    if (raw) {
+      const c = JSON.parse(raw) as Cofre;
+      const pcs = (c.pcs ?? []).map(migrate).filter((x): x is Pairing => x !== null);
+      if (pcs.length) return { ativo: c.ativo, principal: c.principal, pcs };
+    }
+  } catch { /* cofre ilegível: cai no pareamento antigo */ }
+  // Primeira vez nesta versão: o pareamento de sempre vira o PC principal.
+  try {
+    const antigo = await SecureStore.getItemAsync(KEY);
+    const p = antigo ? migrate(JSON.parse(antigo)) : null;
+    return p ? cofreCom(null, p) : null;
+  } catch { return null; }
+}
+
+async function gravarCofre(c: Cofre | null): Promise<void> {
+  if (!c) {
+    await SecureStore.deleteItemAsync(KEY_COFRE);
+    await SecureStore.deleteItemAsync(KEY);
+    definirPcAtivo('', true);
+    return;
   }
+  const ativo = pcAtivoDo(c);
+  await SecureStore.setItemAsync(KEY_COFRE, JSON.stringify(c));
+  await SecureStore.setItemAsync(KEY, JSON.stringify(ativo));
+  definirPcAtivo(idDoPc(ativo), idDoPc(ativo) === c.principal);
 }
 
+/** O PC ativo — e já deixa as chaves do AsyncStorage apontando para ele. */
+export async function loadPairing(): Promise<Pairing | null> {
+  const c = await lerCofre();
+  if (!c) return null;
+  const ativo = pcAtivoDo(c);
+  definirPcAtivo(idDoPc(ativo), idDoPc(ativo) === c.principal);
+  return ativo;
+}
+
+/** Grava o PC (novo ou o mesmo com endereço/token novos) e o torna o ativo. */
 export async function savePairing(pairing: Pairing): Promise<void> {
-  await SecureStore.setItemAsync(KEY, JSON.stringify(pairing));
+  await gravarCofre(cofreCom(await lerCofre(), pairing));
 }
 
+/** Esquece o PC ATIVO. Se houver outro, ele assume; senão, o app volta para o QR. */
 export async function clearPairing(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEY);
+  const c = await lerCofre();
+  if (!c) { await gravarCofre(null); return; }
+  await gravarCofre(cofreSem(c, c.ativo));
+}
+
+export async function listarPcs(): Promise<{ id: string; nome: string; ativo: boolean; principal: boolean }[]> {
+  const c = await lerCofre();
+  if (!c) return [];
+  return c.pcs.map(p => ({ id: idDoPc(p), nome: p.hostname || p.endpoints[0], ativo: idDoPc(p) === c.ativo, principal: idDoPc(p) === c.principal }));
+}
+
+/** Troca o PC ativo; devolve o pareamento dele. */
+export async function trocarPc(id: string): Promise<Pairing | null> {
+  const c = await lerCofre();
+  if (!c || !c.pcs.some(x => idDoPc(x) === id)) return null;
+  const novo = { ...c, ativo: id };
+  await gravarCofre(novo);
+  return pcAtivoDo(novo);
 }
 
 export function baseUrl(pairing: Pairing): string {

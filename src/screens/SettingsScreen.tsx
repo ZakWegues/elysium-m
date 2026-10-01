@@ -10,7 +10,7 @@ import * as Updates from 'expo-updates';
 import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { definirNotificacoesAtivas, notificacoesAtivas, pedirPermissao } from '../lib/notificacoes';
-import { Pairing } from '../lib/pairing';
+import { listarPcs, Pairing } from '../lib/pairing';
 import { callRpc, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
@@ -39,7 +39,7 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
  */
 type Secao = 'aparencia' | 'voz' | 'avisos' | 'pareamento' | 'sobre';
 
-export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens, familiaResolvida, name } = useTheme();
   const [secao, setSecao] = useState<Secao | null>(null);
   const [vozPc, setVozPc] = useState(true);
@@ -89,16 +89,33 @@ export default function SettingsScreen({ pairing, onUnpair }: { pairing: Pairing
           <PushSection pairing={pairing} />
         </View>
       )}
-      {secao === 'pareamento' && <SecaoPareamento pairing={pairing} onUnpair={onUnpair} />}
+      {secao === 'pareamento' && <SecaoPareamento pairing={pairing} onUnpair={onUnpair} onTrocarPc={onTrocarPc} onAdicionarPc={onAdicionarPc} />}
       {secao === 'sobre' && <SecaoSobre pairing={pairing} />}
     </Animated.View>
   );
 }
 
-function SecaoPareamento({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+function SecaoPareamento({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens } = useTheme();
+  // Vários PCs (bloco 121): a lista, o ativo marcado, trocar com um toque.
+  const [pcs, setPcs] = useState<{ id: string; nome: string; ativo: boolean }[]>([]);
+  useEffect(() => { listarPcs().then(setPcs).catch(() => setPcs([])); }, [pairing]);
   return (
     <View style={{ gap: tokens.spacing.lg }}>
+      <View style={{ gap: tokens.spacing.xs }}>
+        <Text variant="subheading">PCs pareados</Text>
+        {pcs.map(p => (
+          <Pressable key={p.id} onPress={() => !p.ativo && onTrocarPc(p.id)} style={styles.linhaEndereco} disabled={p.ativo}>
+            <Feather name={p.ativo ? 'check-circle' : 'monitor'} size={15} color={p.ativo ? palette.success : palette.textMuted} />
+            <Text variant="body" style={{ flex: 1 }}>{p.nome}</Text>
+            <Text variant="caption" color={p.ativo ? palette.success : palette.primary}>{p.ativo ? 'em uso' : 'usar este'}</Text>
+          </Pressable>
+        ))}
+        <Button title="Parear outro PC" variant="secondary" onPress={onAdicionarPc} />
+        <Text variant="caption" color={palette.textMuted}>
+          Cada PC tem as próprias conversas e recados neste celular. Até 5 PCs.
+        </Text>
+      </View>
       <Card glass style={{ gap: tokens.spacing.md, flexDirection: 'row', alignItems: 'center' }}>
         <View
           style={[
@@ -134,7 +151,7 @@ function SecaoPareamento({ pairing, onUnpair }: { pairing: Pairing; onUnpair: ()
           </View>
         ))}
       </View>
-      <Button title="Desparear" variant="destructive" onPress={onUnpair} />
+      <Button title={pcs.length > 1 ? 'Esquecer este PC' : 'Desparear'} variant="destructive" onPress={onUnpair} />
     </View>
   );
 }

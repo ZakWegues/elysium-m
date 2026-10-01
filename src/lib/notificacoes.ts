@@ -1,3 +1,4 @@
+import { chavePorPc } from './pcAtivo';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -29,8 +30,8 @@ import { callRpc, Entrega, Reminder } from './rpc';
  * o módulo derruba o Expo Go na importação. Entra por import dinâmico.
  */
 
-const CHAVE_VISTAS = 'elysium_entregas_vistas_v1';
-const CHAVE_ESPELHADOS = 'elysium_lembretes_espelhados_v1';
+const CHAVE_VISTAS = () => chavePorPc('elysium_entregas_vistas_v1');
+const CHAVE_ESPELHADOS = () => chavePorPc('elysium_lembretes_espelhados_v1');
 const CHAVE_ATIVAS = 'elysium_notificacoes_ativas_v1';
 const MAX_VISTAS = 120;
 const CANAL = 'elysium-entregas';
@@ -121,12 +122,12 @@ export async function mostrarEntrega(e: Entrega): Promise<void> {
  */
 export async function receberEntrega(e: Entrega, pairing?: Pairing | null): Promise<void> {
   if (!(await notificacoesAtivas())) return;
-  const vistas = await lerLista(CHAVE_VISTAS);
+  const vistas = await lerLista(CHAVE_VISTAS());
   if (!vistas.includes(e.id)) {
-    const espelhados = e.tipo === 'lembrete' && e.ref ? await lerLista(CHAVE_ESPELHADOS) : [];
+    const espelhados = e.tipo === 'lembrete' && e.ref ? await lerLista(CHAVE_ESPELHADOS()) : [];
     if (!(e.ref && espelhados.includes(e.ref))) await mostrarEntrega(e);
     vistas.push(e.id);
-    await gravarLista(CHAVE_VISTAS, vistas.slice(-MAX_VISTAS));
+    await gravarLista(CHAVE_VISTAS(), vistas.slice(-MAX_VISTAS));
   }
   if (pairing) {
     try { await callRpc(pairing, 'notify.ack', { ids: [e.id] }, { timeoutMs: 6000 }); } catch { /* o próximo ciclo confirma */ }
@@ -138,8 +139,8 @@ export async function buscarEntregas(pairing: Pairing): Promise<number> {
   if (!(await notificacoesAtivas())) return 0;
   const { entregas } = await callRpc(pairing, 'notify.pending', {}, { timeoutMs: 8000 });
   if (!entregas.length) return 0;
-  const vistas = await lerLista(CHAVE_VISTAS);
-  const espelhados = await lerLista(CHAVE_ESPELHADOS);
+  const vistas = await lerLista(CHAVE_VISTAS());
+  const espelhados = await lerLista(CHAVE_ESPELHADOS());
   let novas = 0;
   for (const e of entregas) {
     if (vistas.includes(e.id)) continue;
@@ -147,7 +148,7 @@ export async function buscarEntregas(pairing: Pairing): Promise<number> {
     if (!jaNoAparelho) { await mostrarEntrega(e); novas++; }
     vistas.push(e.id);
   }
-  await gravarLista(CHAVE_VISTAS, vistas.slice(-MAX_VISTAS));
+  await gravarLista(CHAVE_VISTAS(), vistas.slice(-MAX_VISTAS));
   try { await callRpc(pairing, 'notify.ack', { ids: entregas.map(e => e.id) }, { timeoutMs: 6000 }); } catch { /* fica na fila, as vistas seguram a duplicata */ }
   return novas;
 }
@@ -164,7 +165,7 @@ export async function espelharLembretes(pairing: Pairing): Promise<void> {
   const { reminders } = await callRpc(pairing, 'reminders.list', {}, { timeoutMs: 8000 });
   const agora = Date.now();
   const alvo = (reminders as Reminder[]).filter(r => !r.firedAt && r.dueAt > agora + 15_000);
-  const antes = await lerLista(CHAVE_ESPELHADOS);
+  const antes = await lerLista(CHAVE_ESPELHADOS());
   const querendo = new Set(alvo.map(r => r.id));
 
   for (const id of antes) {
@@ -188,7 +189,7 @@ export async function espelharLembretes(pairing: Pairing): Promise<void> {
       console.warn('[notificacoes] falha ao espelhar lembrete', err);
     }
   }
-  await gravarLista(CHAVE_ESPELHADOS, alvo.map(r => r.id));
+  await gravarLista(CHAVE_ESPELHADOS(), alvo.map(r => r.id));
 }
 
 /** O ciclo completo, tolerante a falha. Usado pelo primeiro plano e pelo segundo plano. */

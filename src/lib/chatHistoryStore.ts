@@ -1,8 +1,9 @@
+import { chavePorPc } from './pcAtivo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = 'elysium_chat_sessions';
+const STORAGE_KEY = () => chavePorPc('elysium_chat_sessions');
 /** Ids apagados aqui que ainda não foram propagados ao PC. */
-const TOMBSTONE_KEY = 'elysium_chat_deleted';
+const TOMBSTONE_KEY = () => chavePorPc('elysium_chat_deleted');
 const MAX_NON_FAVORITE_SESSIONS = 5;
 
 export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number };
@@ -22,7 +23,7 @@ export type ChatSession = {
 };
 
 async function readAll(): Promise<ChatSession[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  const raw = await AsyncStorage.getItem(STORAGE_KEY());
   if (!raw) return [];
   try {
     return JSON.parse(raw) as ChatSession[];
@@ -32,7 +33,7 @@ async function readAll(): Promise<ChatSession[]> {
 }
 
 async function writeAll(sessions: ChatSession[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  await AsyncStorage.setItem(STORAGE_KEY(), JSON.stringify(sessions));
 }
 
 export async function listSessions(): Promise<ChatSession[]> {
@@ -87,7 +88,7 @@ export async function deleteSession(id: string): Promise<void> {
 // ── sincronização com o PC ────────────────────────────────────────────────────
 
 export async function readTombstones(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(TOMBSTONE_KEY);
+  const raw = await AsyncStorage.getItem(TOMBSTONE_KEY());
   if (!raw) return [];
   try {
     return JSON.parse(raw) as string[];
@@ -98,13 +99,13 @@ export async function readTombstones(): Promise<string[]> {
 
 async function addTombstone(id: string): Promise<void> {
   const ids = await readTombstones();
-  if (!ids.includes(id)) await AsyncStorage.setItem(TOMBSTONE_KEY, JSON.stringify([...ids, id]));
+  if (!ids.includes(id)) await AsyncStorage.setItem(TOMBSTONE_KEY(), JSON.stringify([...ids, id]));
 }
 
 /** Chamado depois que o PC confirmou as exclusões. */
 export async function clearTombstones(ids: string[]): Promise<void> {
   const remaining = (await readTombstones()).filter((id) => !ids.includes(id));
-  await AsyncStorage.setItem(TOMBSTONE_KEY, JSON.stringify(remaining));
+  await AsyncStorage.setItem(TOMBSTONE_KEY(), JSON.stringify(remaining));
 }
 
 /**

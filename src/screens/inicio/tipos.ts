@@ -1,4 +1,5 @@
 import type Feather from '@expo/vector-icons/Feather';
+import { chavePorPc } from '../../lib/pcAtivo';
 import type { Pairing } from '../../lib/pairing';
 import type { Clima, DiskEntry, EstadoFoco, ItemSaude, PowerOperation, ProcessEntry, Reminder, Sugestao } from '../../lib/rpc';
 import type { TelemetryFrame } from '../../lib/telemetry';
@@ -15,7 +16,7 @@ export function saudacao(): string {
   return 'Boa noite';
 }
 /** Horário do desligamento agendado, em epoch ms. Ver `gravarAgendamento`. */
-export const CHAVE_AGENDAMENTO = 'elysium_desligamento_agendado';
+export const CHAVE_AGENDAMENTO = () => chavePorPc('elysium_desligamento_agendado');
 
 export type Dados = {
   telemetria: TelemetryFrame | null;

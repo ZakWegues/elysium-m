@@ -1,3 +1,4 @@
+import { chavePorPc } from './pcAtivo';
 /**
  * Fila de comandos digitados sem conexão.
  *
@@ -11,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pairing } from './pairing';
 import { sendCommand } from './api';
 
-const KEY = 'elysium_command_queue';
+const KEY = () => chavePorPc('elysium_command_queue');
 /** Comando velho demais provavelmente não faz mais sentido executar. */
 const MAX_AGE_MS = 30 * 60 * 1000;
 const MAX_ITEMS = 20;
@@ -24,7 +25,7 @@ export type QueuedCommand = {
 
 export async function listQueue(): Promise<QueuedCommand[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(KEY());
     if (!raw) return [];
     const items = JSON.parse(raw) as QueuedCommand[];
     if (!Array.isArray(items)) return [];
@@ -36,7 +37,7 @@ export async function listQueue(): Promise<QueuedCommand[]> {
 }
 
 async function writeQueue(items: QueuedCommand[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(items.slice(-MAX_ITEMS)));
+  await AsyncStorage.setItem(KEY(), JSON.stringify(items.slice(-MAX_ITEMS)));
 }
 
 export async function enqueueCommand(text: string): Promise<QueuedCommand> {
@@ -52,7 +53,7 @@ export async function removeFromQueue(id: string): Promise<void> {
 }
 
 export async function clearQueue(): Promise<void> {
-  await AsyncStorage.removeItem(KEY);
+  await AsyncStorage.removeItem(KEY());
 }
 
 /**

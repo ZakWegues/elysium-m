@@ -91,11 +91,11 @@ export default function HomeScreen({
   // Lê o agendamento guardado e descarta o que já venceu — um horário no passado só
   // deixaria um aviso mentiroso na tela.
   useEffect(() => {
-    AsyncStorage.getItem(CHAVE_AGENDAMENTO)
+    AsyncStorage.getItem(CHAVE_AGENDAMENTO())
       .then(bruto => {
         const quando = Number(bruto);
         if (bruto && Number.isFinite(quando) && quando > Date.now()) setAgendado(quando);
-        else if (bruto) AsyncStorage.removeItem(CHAVE_AGENDAMENTO).catch(() => { /* best-effort */ });
+        else if (bruto) AsyncStorage.removeItem(CHAVE_AGENDAMENTO()).catch(() => { /* best-effort */ });
       })
       .catch(err => console.warn('[energia] não consegui ler o agendamento', err));
   }, []);
@@ -356,8 +356,8 @@ export default function HomeScreen({
   async function gravarAgendamento(quando: number | null) {
     setAgendado(quando);
     try {
-      if (quando === null) await AsyncStorage.removeItem(CHAVE_AGENDAMENTO);
-      else await AsyncStorage.setItem(CHAVE_AGENDAMENTO, String(quando));
+      if (quando === null) await AsyncStorage.removeItem(CHAVE_AGENDAMENTO());
+      else await AsyncStorage.setItem(CHAVE_AGENDAMENTO(), String(quando));
     } catch (err) { console.warn('[energia] não consegui guardar o agendamento', err); }
   }
 

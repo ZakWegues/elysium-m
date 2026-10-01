@@ -1,13 +1,14 @@
+import { chavePorPc } from './pcAtivo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MailboxMessage } from './mailbox';
 
-const FAVORITES_KEY = 'elysium_mailbox_favorites';
-const CACHE_KEY = 'elysium_mailbox_cache';
+const FAVORITES_KEY = () => chavePorPc('elysium_mailbox_favorites');
+const CACHE_KEY = () => chavePorPc('elysium_mailbox_cache');
 
 type Cache = { messages: MailboxMessage[] };
 
 export async function loadFavorites(): Promise<Record<string, boolean>> {
-  const raw = await AsyncStorage.getItem(FAVORITES_KEY);
+  const raw = await AsyncStorage.getItem(FAVORITES_KEY());
   if (!raw) return {};
   try {
     return JSON.parse(raw);
@@ -19,12 +20,12 @@ export async function loadFavorites(): Promise<Record<string, boolean>> {
 export async function toggleFavorite(id: string): Promise<Record<string, boolean>> {
   const favorites = await loadFavorites();
   favorites[id] = !favorites[id];
-  await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  await AsyncStorage.setItem(FAVORITES_KEY(), JSON.stringify(favorites));
   return favorites;
 }
 
 export async function loadCache(): Promise<Cache> {
-  const raw = await AsyncStorage.getItem(CACHE_KEY);
+  const raw = await AsyncStorage.getItem(CACHE_KEY());
   if (!raw) return { messages: [] };
   try {
     return JSON.parse(raw);
@@ -34,7 +35,7 @@ export async function loadCache(): Promise<Cache> {
 }
 
 export async function saveCache(cache: Cache): Promise<void> {
-  await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  await AsyncStorage.setItem(CACHE_KEY(), JSON.stringify(cache));
 }
 
 // ── Conversas da Caixa ────────────────────────────────────────────────────────
@@ -44,10 +45,10 @@ export async function saveCache(cache: Cache): Promise<void> {
 // chave por OTA acorda o aparelho atualizado sem os dados que ele tinha. Chave nova é
 // segura, e é o caminho usado aqui.
 
-const SESSIONS_KEY = 'elysium_mailbox_sessions';
+const SESSIONS_KEY = () => chavePorPc('elysium_mailbox_sessions');
 /** Ids apagados aqui que ainda não foram propagados ao PC. */
-const TOMBSTONE_KEY = 'elysium_mailbox_deleted';
-const ACTIVE_KEY = 'elysium_mailbox_active';
+const TOMBSTONE_KEY = () => chavePorPc('elysium_mailbox_deleted');
+const ACTIVE_KEY = () => chavePorPc('elysium_mailbox_active');
 
 export type MailboxSession = {
   id: string;
@@ -59,7 +60,7 @@ export type MailboxSession = {
 };
 
 export async function loadSessions(): Promise<MailboxSession[]> {
-  const raw = await AsyncStorage.getItem(SESSIONS_KEY);
+  const raw = await AsyncStorage.getItem(SESSIONS_KEY());
   if (!raw) return [];
   try {
     const lista = JSON.parse(raw) as MailboxSession[];
@@ -77,7 +78,7 @@ export async function loadSessions(): Promise<MailboxSession[]> {
  * o outro acabou de apagar, e conversa apagada reapareceria sozinha.
  */
 export async function replaceSessions(sessions: MailboxSession[]): Promise<void> {
-  await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  await AsyncStorage.setItem(SESSIONS_KEY(), JSON.stringify(sessions));
 }
 
 /** Só a cópia local. Quem propaga ao PC é o `mailboxSync`. */
@@ -109,7 +110,7 @@ export async function deleteSessionLocal(id: string): Promise<void> {
 }
 
 export async function readTombstones(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(TOMBSTONE_KEY);
+  const raw = await AsyncStorage.getItem(TOMBSTONE_KEY());
   if (!raw) return [];
   try {
     return JSON.parse(raw) as string[];
@@ -120,13 +121,13 @@ export async function readTombstones(): Promise<string[]> {
 
 async function addTombstone(id: string): Promise<void> {
   const ids = await readTombstones();
-  if (!ids.includes(id)) await AsyncStorage.setItem(TOMBSTONE_KEY, JSON.stringify([...ids, id]));
+  if (!ids.includes(id)) await AsyncStorage.setItem(TOMBSTONE_KEY(), JSON.stringify([...ids, id]));
 }
 
 /** Chamado depois que o PC confirmou as exclusões. */
 export async function clearTombstones(ids: string[]): Promise<void> {
   const restantes = (await readTombstones()).filter(id => !ids.includes(id));
-  await AsyncStorage.setItem(TOMBSTONE_KEY, JSON.stringify(restantes));
+  await AsyncStorage.setItem(TOMBSTONE_KEY(), JSON.stringify(restantes));
 }
 
 /**
@@ -155,10 +156,10 @@ export async function purgeDeleted(ids: string[]): Promise<string[]> {
 }
 
 export async function getActiveSessionId(): Promise<string | null> {
-  return AsyncStorage.getItem(ACTIVE_KEY);
+  return AsyncStorage.getItem(ACTIVE_KEY());
 }
 
 export async function setActiveSessionId(id: string | null): Promise<void> {
-  if (id) await AsyncStorage.setItem(ACTIVE_KEY, id);
-  else await AsyncStorage.removeItem(ACTIVE_KEY);
+  if (id) await AsyncStorage.setItem(ACTIVE_KEY(), id);
+  else await AsyncStorage.removeItem(ACTIVE_KEY());
 }

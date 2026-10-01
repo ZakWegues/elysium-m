@@ -14,7 +14,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
 import OnboardingScreen, { CHAVE_ONBOARDING } from './src/screens/OnboardingScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearPairing, loadPairing, savePairing, Pairing } from './src/lib/pairing';
+import { clearPairing, idDoPc, loadPairing, savePairing, trocarPc, Pairing } from './src/lib/pairing';
 import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -57,6 +57,8 @@ function AppInner() {
   const { palette } = useTheme();
   const [loading, setLoading] = useState(true);
   const [pairing, setPairing] = useState<Pairing | null>(null);
+  /** Lendo o QR de um PC a mais (bloco 121) — o atual continua pareado até dar certo. */
+  const [adicionandoPc, setAdicionandoPc] = useState(false);
   const [screen, setScreen] = useState<Screen>('home');
   const [playerOpen, setPlayerOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -192,15 +194,31 @@ function AppInner() {
   }, []));
 
   const handlePaired = useCallback(() => {
+    setAdicionandoPc(false);
     loadPairing().then(setPairing);
   }, []);
 
+  // "Desparear" esquece o PC ATIVO; se houver outro pareado, ele assume (bloco 121).
   const handleUnpair = useCallback(() => {
-    clearPairing().then(() => {
-      setPairing(null);
+    clearPairing().then(loadPairing).then((proximo) => {
+      setPairing(proximo);
       setScreen('home');
       setSettingsModalVisible(false);
     });
+  }, []);
+
+  const handleTrocarPc = useCallback((id: string) => {
+    trocarPc(id).then((p) => {
+      if (!p) return;
+      setPairing(p);
+      setScreen('home');
+      setSettingsModalVisible(false);
+    });
+  }, []);
+
+  const handleAdicionarPc = useCallback(() => {
+    setSettingsModalVisible(false);
+    setAdicionandoPc(true);
   }, []);
 
   // 401 na sonda é o único caso em que a rede está boa e o app não tem como se recuperar
@@ -212,10 +230,10 @@ function AppInner() {
     Alert.alert(
       'Pareamento inválido',
       'O PC respondeu, mas recusou o token deste celular. Isso acontece quando o QR é regenerado no ELYSIUM. Leia o QR novo para voltar.',
-      [{ text: 'Ler QR', onPress: handleUnpair }],
+      [{ text: 'Ler QR', onPress: () => setAdicionandoPc(true) }],
       { cancelable: false },
     );
-  }, [status, handleUnpair]);
+  }, [status]);
 
   if (loading) {
     return (
@@ -226,10 +244,10 @@ function AppInner() {
     );
   }
 
-  if (!pairing) {
+  if (!pairing || adicionandoPc) {
     return (
       <>
-        <PairingScreen onPaired={handlePaired} />
+        <PairingScreen onPaired={handlePaired} onCancel={pairing ? () => setAdicionandoPc(false) : undefined} />
         <StatusBar style="auto" />
       </>
     );
@@ -251,7 +269,7 @@ function AppInner() {
       <BlurTargetProvider>
         <AppBackground />
       </BlurTargetProvider>
-      <TelaAnimada chave={screen}>
+      <TelaAnimada key={idDoPc(pairing)} chave={screen}>
         {screen === 'home' && (
           <HomeScreen
             pairing={pairing}
@@ -321,7 +339,7 @@ function AppInner() {
       {/* A gaveta é o ÚLTIMO irmão de propósito: sem o `Modal` nativo, quem a põe por cima
           da barra de abas é a ordem de desenho (mais o zIndex dela). */}
       <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
-        <SettingsScreen pairing={pairing} onUnpair={handleUnpair} />
+        <SettingsScreen pairing={pairing} onUnpair={handleUnpair} onTrocarPc={handleTrocarPc} onAdicionarPc={handleAdicionarPc} />
       </GlassModal>
     </View>
     </SobreposicaoContext.Provider>
