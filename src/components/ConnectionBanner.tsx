@@ -1,3 +1,5 @@
+import * as IntentLauncher from 'expo-intent-launcher';
+import { Linking } from 'react-native';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import Animated, { FadeInUp, FadeOut, ReduceMotion } from 'react-native-reanimated';
@@ -45,9 +47,12 @@ export function ConnectionBanner({
     // Sem túnel no PC, "fora do ar" é enganoso: o PC pode estar ligado e funcionando,
     // e simplesmente não haver caminho até ele fora de casa. Dizer o motivo real evita
     // a caça ao problema errado.
+    // Com túnel no PC, a causa mais comum fora de casa é o Tailscale do CELULAR ter caído
+    // (o HyperOS mata o app e o ícone de VPN continua na barra — §12). Dizer isso, com o
+    // botão que abre o app dele, em vez de mandar procurar o problema no PC (bloco 122).
     const base = hasTunnel === false
       ? 'Sem acesso remoto — só funciona na rede de casa'
-      : 'PC fora do ar';
+      : hasTunnel ? 'PC fora de alcance — fora de casa? confira o Tailscale' : 'PC fora do ar';
     label = queued > 0 ? `${base} · ${queued} na fila` : base;
   }
   else if (status === 'checking') label = 'Procurando o PC…';
@@ -83,13 +88,25 @@ export function ConnectionBanner({
           <Pressable onPress={onRetry} hitSlop={8}>
             <Text variant="label" color={foreground}>Tentar</Text>
           </Pressable>
-          <Pressable onPress={onScan} hitSlop={8}>
-            <Text variant="label" color={foreground}>Procurar</Text>
-          </Pressable>
+          {hasTunnel ? (
+            <Pressable onPress={abrirTailscale} hitSlop={8}>
+              <Text variant="label" color={foreground}>Tailscale</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={onScan} hitSlop={8}>
+              <Text variant="label" color={foreground}>Procurar</Text>
+            </Pressable>
+          )}
         </>
       )}
     </Animated.View>
   );
+}
+
+/** Abre o app do Tailscale; sem ele instalado, a página dele na loja. */
+function abrirTailscale(): void {
+  try { IntentLauncher.openApplication('com.tailscale.ipn'); }
+  catch { Linking.openURL('market://details?id=com.tailscale.ipn').catch(() => {}); }
 }
 
 const styles = StyleSheet.create({
