@@ -4,6 +4,7 @@ import { createAudioPlayer, AudioPlayer } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import { Pairing } from './pairing';
 import { fetchWithTimeout } from './http';
+import { liberarMicrofone, ocuparMicrofone } from './microfone';
 
 /**
  * Falar uma resposta no celular (bloco 85).
@@ -59,6 +60,12 @@ export async function falar(texto: string, pairing: Pairing | null): Promise<voi
   const t = texto.trim();
   if (!t) return;
   pararDeFalar();
+  // Bloco 129: enquanto fala, a palavra "Elysium" não escuta — ouviria a própria voz.
+  ocuparMicrofone('falar');
+  try { await falarAgora(t, pairing); } finally { liberarMicrofone('falar'); }
+}
+
+async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
   if (pairing && (await vozDoPcLigada())) {
     try {
       const url = `http://${pairing.activeIp}:${pairing.port}/api/tts?text=${encodeURIComponent(t.slice(0, 2000))}`;

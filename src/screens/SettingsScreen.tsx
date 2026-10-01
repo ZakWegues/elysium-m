@@ -17,6 +17,7 @@ import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text, Toque } from '../components/ui';
 import { falar, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
+import { ligarPalavra, palavraLigada } from '../lib/palavraNoCelular';
 
 /**
  * As duas famílias, mais "seguir o aparelho".
@@ -325,13 +326,25 @@ function SecaoSobre({ pairing }: { pairing: Pairing }) {
 function VozSection({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [doPc, setDoPc] = useState(true);
-  useEffect(() => { vozDoPcLigada().then(setDoPc); }, []);
+  const [palavra, setPalavra] = useState(true);
+  useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); }, []);
   const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
     { valor: true, rotulo: 'Voz do PC', nota: 'A mesma voz neural da caixa de som do PC (escolhida em Ajustes → Voz lá). Sem PC, cai na do celular.', icone: 'monitor' },
     { valor: false, rotulo: 'Voz do celular', nota: 'A voz do Android. Funciona sem o PC, mas soa mais robótica.', icone: 'smartphone' },
   ];
   return (
     <View style={{ gap: tokens.spacing.sm }}>
+      {/* Bloco 129: a palavra de ativação do celular. Vale ao voltar para a Início/Chat. */}
+      <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+        <Feather name="mic" size={17} color={palavra ? palette.primary : palette.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body">Ouvir “Elysium”</Text>
+          <Text variant="caption" color={palette.textMuted}>
+            Com o app aberto na Início ou no Chat, diga “Elysium” (ou “Elysium, pausa a música”) e ele entra na mão livre. Só com o app na tela — nada escuta em segundo plano.
+          </Text>
+        </View>
+        <Switch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} trackColor={{ true: palette.primary }} />
+      </View>
       <Text variant="subheading">Voz das respostas</Text>
       {opcoes.map(o => {
         const sel = o.valor === doPc;

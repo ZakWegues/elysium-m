@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
@@ -34,6 +34,8 @@ import * as QuickActions from 'expo-quick-actions';
 import { callRpc } from './src/lib/rpc';
 import { errMessage } from './src/lib/errors';
 import { falar } from './src/lib/falar';
+import { DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
+import { useMicrofoneLivre } from './src/lib/microfone';
 import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -72,6 +74,19 @@ function AppInner() {
   const [modoChat, setModoChat] = useState<'ia' | 'pc'>('ia');
   /** Texto que a busca da Início mandou para o chat; o ChatScreen envia ao abrir e limpa. */
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
+  /** "Elysium" ouvido (bloco 129): cada disparo é um `n` novo para o Chat entrar na mão livre. */
+  const [pedidoVoz, setPedidoVoz] = useState<{ n: number; texto: string } | null>(null);
+  const [palavraOn, setPalavraOn] = useState(false);
+  const [appNaFrente, setAppNaFrente] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    palavraLigada().then(setPalavraOn);
+    const sub = AppState.addEventListener('change', (s) => {
+      setAppNaFrente(s === 'active');
+      // Voltou ao app: relê o ajuste (pode ter mudado em Ajustes → Voz).
+      if (s === 'active') palavraLigada().then(setPalavraOn);
+    });
+    return () => sub.remove();
+  }, []);
   /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
   const [pedidoBusca, setPedidoBusca] = useState(0);
 
@@ -234,6 +249,24 @@ function AppInner() {
     void atalho(a);
   }, [pairing, atalho]);
 
+  // Bloco 129: ouvir "Elysium" só com o app na frente, na Início ou no Chat, com o microfone
+  // livre (sem mão livre, gravação ou fala em curso) e sem Ajustes aberto por cima.
+  const micLivre = useMicrofoneLivre();
+  usePalavraNoCelular({
+    ativo: Boolean(pairing) && palavraOn && appNaFrente && micLivre && !settingsModalVisible && (screen === 'home' || screen === 'chat'),
+    aoOuvir: useCallback((resto: string) => {
+      setModoChat('ia');
+      setScreen('chat');
+      setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: resto }));
+    }, []),
+    aoDesligar: useCallback((d: DiagPalavra) => {
+      const p = pairingRef.current;
+      if (!p) return;
+      const erros = Object.entries(d.erros).map(([k, v]) => `${k} ${v}`).join(', ') || 'nenhum';
+      callRpc(p, 'diag.registrar', { origem: 'palavra-cel', linhas: [`sessões ${d.sessoes}, disparos ${d.disparos}, erros: ${erros}`] }).catch(() => {});
+    }, []),
+  });
+
   // Deep links dos widgets: elysium://busca, elysium://chat, elysium://pc, elysium://rotinas.
   useDeepLinks(useCallback((destino) => {
     if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
@@ -360,6 +393,7 @@ function AppInner() {
             modoInicial={modoChat}
             perguntaPendente={perguntaPendente}
             onPerguntaEnviada={() => setPerguntaPendente(null)}
+            pedidoVoz={pedidoVoz}
           />
         )}
       </TelaAnimada>

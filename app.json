@@ -190,7 +190,15 @@
           ]
         }
       ],
-      "expo-quick-actions"
+      "expo-quick-actions",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "O ELYSIUM usa o microfone para ouvir quando você diz “Elysium” e na conversa por voz.",
+          "speechRecognitionPermission": "O ELYSIUM reconhece a palavra “Elysium” com o app aberto.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as"]
+        }
+      ]
     ],
     "extra": {
       "eas": {

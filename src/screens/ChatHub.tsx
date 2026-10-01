@@ -35,6 +35,7 @@ export default function ChatHub({
   modoInicial,
   perguntaPendente,
   onPerguntaEnviada,
+  pedidoVoz,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
@@ -46,9 +47,12 @@ export default function ChatHub({
   /** Texto vindo da busca da Início, para o chat da IA enviar assim que abrir. */
   perguntaPendente?: string | null;
   onPerguntaEnviada?: () => void;
+  /** "Elysium" ouvido (bloco 129) — vai para o chat da IA, mesmo se o hub estava nos recados. */
+  pedidoVoz?: { n: number; texto: string } | null;
 }) {
   const { palette, tokens } = useTheme();
   const [modo, setModo] = useState<'ia' | 'pc'>(modoInicial ?? 'ia');
+  useEffect(() => { if (pedidoVoz?.n) setModo('ia'); }, [pedidoVoz?.n]);
   /**
    * Cada lado tem o seu histórico, e o botão de relógio abre o do lado em que você está.
    *
@@ -134,6 +138,7 @@ export default function ChatHub({
           <ChatScreen
             perguntaPendente={perguntaPendente}
             onPerguntaEnviada={onPerguntaEnviada}
+            pedidoVoz={pedidoVoz}
             pairing={pairing}
             onUnpair={onUnpair}
             sessionId={sessionId}

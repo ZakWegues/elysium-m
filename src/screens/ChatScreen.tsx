@@ -4,6 +4,7 @@ import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { falar, pararDeFalar } from '../lib/falar';
+import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { MotivoParada, resumoRodada } from '../lib/maoLivreDiag';
@@ -36,8 +37,14 @@ export default function ChatScreen({
   semCabecalho,
   perguntaPendente,
   onPerguntaEnviada,
+  pedidoVoz,
 }: {
   pairing: Pairing;
+  /**
+   * "Elysium" ouvido pelo app (bloco 129): cada `n` novo entra na mão livre; com `texto`,
+   * ele é o primeiro pedido (o que veio colado na palavra).
+   */
+  pedidoVoz?: { n: number; texto: string } | null;
   /** Texto que a busca da Início pediu para enviar. Enviado uma vez, ao chegar. */
   perguntaPendente?: string | null;
   onPerguntaEnviada?: () => void;
@@ -378,9 +385,13 @@ export default function ChatScreen({
       return;
     }
 
+    // Bloco 129: tira o reconhecedor do "Elysium" do microfone ANTES de preparar o gravador.
+    ocuparMicrofone('gravar');
+    await new Promise((r) => setTimeout(r, 150));
     try {
       await recorder.prepareToRecordAsync();
     } catch (err) {
+      liberarMicrofone('gravar');
       pushError(`Falha ao preparar gravação: ${errMessage(err)}`);
       return;
     }
@@ -388,6 +399,7 @@ export default function ChatScreen({
     try {
       recorder.record();
     } catch (err) {
+      liberarMicrofone('gravar');
       pushError(`Falha ao iniciar gravação: ${errMessage(err)}`);
       return;
     }
@@ -408,6 +420,8 @@ export default function ChatScreen({
     } catch (err) {
       pushError(`Falha ao parar gravação: ${errMessage(err)}`);
       return;
+    } finally {
+      liberarMicrofone('gravar');
     }
 
     const uri = recorder.uri;
@@ -487,9 +501,41 @@ export default function ChatScreen({
     return { uri: falou && maoLivreRef.current ? recorder.uri : null, niveis, inicio, primeiraFalaEm, fim: Date.now(), motivo };
   }
 
-  async function cicloMaoLivre() {
+  /** Pedido falado que já veio em texto (colado no "Elysium"): mesma conversa, sem gravar. */
+  async function enviarTextoFalado(texto: string): Promise<string | null> {
+    setSending(true);
+    setMessages((prev) => [...prev, { id: `me-voz-${Date.now()}`, from: 'me', text: texto, ts: Date.now() }]);
+    try {
+      const conn = await ensureVoiceConnection();
+      const bolha = bolhaEmPedacos();
+      const { reply } = await conn.sendText(texto, bolha.onChunk);
+      bolha.fechar(reply);
+      return reply;
+    } catch (err) {
+      setEscrevendoId(null);
+      pushError(errMessage(err));
+      return null;
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function cicloMaoLivre(primeiroPedido?: string) {
     const linhas: string[] = [];
     let numero = 0;
+    ocuparMicrofone('mao-livre');
+    // O reconhecedor do "Elysium" acabou de ser abortado; um respiro para ele soltar o microfone.
+    await new Promise((r) => setTimeout(r, 300));
+    if (primeiroPedido) {
+      setFaseMaoLivre('pensando');
+      const reply = await enviarTextoFalado(primeiroPedido);
+      if (reply && maoLivreRef.current && !FRASES_DE_PARAR.test(primeiroPedido)) {
+        setFaseMaoLivre('falando');
+        await falar(reply, pairing);
+      } else {
+        maoLivreRef.current = false;
+      }
+    }
     while (maoLivreRef.current) {
       setFaseMaoLivre('ouvindo');
       haptica.leve();
@@ -513,6 +559,7 @@ export default function ChatScreen({
     maoLivreRef.current = false;
     setMaoLivre(false);
     setFaseMaoLivre(null);
+    liberarMicrofone('mao-livre');
     // Para o log do PC (bloco 116). Melhor esforço: sem PC, a calibragem só perde esta conversa.
     if (linhas.length) callRpc(pairing, 'diag.registrar', { origem: 'mao-livre', linhas }).catch(() => {});
   }
@@ -536,7 +583,25 @@ export default function ChatScreen({
 
   // Sair da tela (ou trocar de conversa) desliga a mão livre: microfone aberto sem ninguém
   // olhando para a tela é exatamente o que ninguém quer.
-  useEffect(() => () => { maoLivreRef.current = false; pararDeFalar(); }, []);
+  useEffect(() => () => { maoLivreRef.current = false; pararDeFalar(); liberarMicrofone('mao-livre'); liberarMicrofone('gravar'); }, []);
+
+  // "Elysium" ouvido (bloco 129): entra na mão livre — e, se o pedido veio colado, ele é a
+  // primeira rodada. Um respiro antes de gravar: o reconhecedor acabou de soltar o microfone.
+  const ultimoPedidoVoz = useRef(0);
+  useEffect(() => {
+    if (!pedidoVoz || pedidoVoz.n === ultimoPedidoVoz.current) return;
+    ultimoPedidoVoz.current = pedidoVoz.n;
+    if (maoLivreRef.current || micStatus !== 'ready') return;
+    const texto = pedidoVoz.texto.trim();
+    const t = setTimeout(() => {
+      maoLivreRef.current = true;
+      setMaoLivre(true);
+      haptica.medio();
+      cicloMaoLivre(texto || undefined);
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoVoz?.n, micStatus]);
 
   return (
     // O espaço do teclado é reservado uma vez só, na raiz do app (App.tsx). Aqui havia
