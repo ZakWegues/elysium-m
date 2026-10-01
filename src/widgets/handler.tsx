@@ -3,7 +3,7 @@ import { registerWidgetTaskHandler, requestWidgetUpdate, type WidgetTaskHandlerP
 import { loadPairing, Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { paletaDosWidgets } from './tema';
-import { ClimaWidget, EstadoPc, RotinasWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetRotinas } from './widgets';
+import { ClimaWidget, EstadoPc, FocoWidget, RotinasWidget, SaudeWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetFoco, WidgetRotinas, WidgetSaude } from './widgets';
 
 /**
  * O handler dos widgets (bloco 73). Roda em segundo plano, sem UI, sempre que o Android
@@ -20,6 +20,8 @@ export const WIDGET_ACOES = 'Acoes';
 export const WIDGET_ESTADO = 'Estado';
 export const WIDGET_CLIMA = 'Clima';
 export const WIDGET_ROTINAS = 'Rotinas';
+export const WIDGET_FOCO = 'Foco';
+export const WIDGET_SAUDE = 'Saude';
 
 function agora(): string {
   return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -84,6 +86,25 @@ async function lerRotinas(pairing: Pairing | null): Promise<RotinasWidget> {
   }
 }
 
+async function lerFoco(pairing: Pairing | null, aviso?: string): Promise<FocoWidget> {
+  if (!pairing) return { online: false, ativo: false };
+  try {
+    const f = await callRpc(pairing, 'foco.status', {}, { timeoutMs: 8000 });
+    const minutos = f.ativo && f.ate ? Math.max(0, Math.ceil((f.ate - Date.now()) / 60000)) : undefined;
+    return { online: true, ativo: f.ativo, minutos, distracoes: f.distracoes, aviso };
+  } catch { return { online: false, ativo: false }; }
+}
+
+async function lerSaude(pairing: Pairing | null): Promise<SaudeWidget> {
+  if (!pairing) return { online: false, ruins: 0 };
+  try {
+    const { itens } = await callRpc(pairing, 'system.saude', {}, { timeoutMs: 15000 });
+    const ruins = itens.filter(i => i.nivel !== 'ok');
+    const pior = ruins.find(i => i.nivel === 'erro') ?? ruins[0];
+    return { online: true, ruins: ruins.length, pior: pior ? { titulo: pior.titulo, detalhe: pior.detalhe.split(' — ')[0], nivel: pior.nivel } : undefined };
+  } catch { return { online: false, ruins: 0 }; }
+}
+
 /** As ações do widget Ações → RPC. Devolve a frase curta que o widget mostra embaixo. */
 async function executarAcao(acao: string, pairing: Pairing | null): Promise<string> {
   if (!pairing) return 'Pareie o celular no app';
@@ -142,6 +163,27 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       renderWidget(<WidgetRotinas p={p} r={await lerRotinas(pairing)} />);
       return;
     }
+
+    // Bloco 123: começar/parar o foco direto da tela inicial.
+    case WIDGET_FOCO: {
+      const pairing = await loadPairing();
+      let aviso: string | undefined;
+      if (widgetAction === 'WIDGET_CLICK' && clickAction === 'FOCO' && pairing) {
+        const acao = String(clickActionData?.acao ?? '');
+        try {
+          if (acao === 'parar') { await callRpc(pairing, 'foco.stop', {}, { timeoutMs: 8000 }); aviso = 'Foco encerrado'; }
+          else { await callRpc(pairing, 'foco.start', { minutos: Number(acao) || 25 }, { timeoutMs: 8000 }); aviso = 'Foco começou'; }
+        } catch (err) { aviso = `Não deu: ${(err as Error).message}`.slice(0, 50); }
+      }
+      renderWidget(<WidgetFoco p={p} f={await lerFoco(pairing, aviso)} />);
+      return;
+    }
+
+    case WIDGET_SAUDE: {
+      const pairing = await loadPairing();
+      renderWidget(<WidgetSaude p={p} s={await lerSaude(pairing)} />);
+      return;
+    }
   }
 });
 
@@ -165,6 +207,17 @@ export async function atualizarWidgetEstado(pairing: Pairing | null): Promise<vo
     const p = await paletaDosWidgets();
     const r = await lerRotinas(pairing);
     await requestWidgetUpdate({ widgetName: WIDGET_ROTINAS, renderWidget: () => <WidgetRotinas p={p} r={r} /> });
+  } catch { /* idem */ }
+  // Foco e Saúde (bloco 123).
+  try {
+    const p = await paletaDosWidgets();
+    const f = await lerFoco(pairing);
+    await requestWidgetUpdate({ widgetName: WIDGET_FOCO, renderWidget: () => <WidgetFoco p={p} f={f} /> });
+  } catch { /* idem */ }
+  try {
+    const p = await paletaDosWidgets();
+    const s = await lerSaude(pairing);
+    await requestWidgetUpdate({ widgetName: WIDGET_SAUDE, renderWidget: () => <WidgetSaude p={p} s={s} /> });
   } catch { /* idem */ }
 }
 

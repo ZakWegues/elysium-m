@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -30,6 +30,9 @@ import { MOV, tempo } from './src/lib/motion';
 import { ligarSincronizacaoEmPrimeiroPlano, pedirPermissao } from './src/lib/notificacoes';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
+import * as QuickActions from 'expo-quick-actions';
+import { callRpc } from './src/lib/rpc';
+import { errMessage } from './src/lib/errors';
 import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -183,6 +186,42 @@ function AppInner() {
   }, [refreshMailboxBadge]);
 
   useShareIntent(pairing, handleShared);
+
+  // Atalhos do ícone (toque longo, bloco 123). Não uso o useQuickActionCallback da lib: ele
+  // refaz o efeito a cada callback novo e dispararia o atalho inicial de novo a cada troca de
+  // pareamento. O pareamento vai num ref; o atalho que abriu o app frio espera ele carregar.
+  const pairingRef = useRef<Pairing | null>(null);
+  pairingRef.current = pairing;
+  const atalhoPendente = useRef<QuickActions.Action | null>(QuickActions.initial ?? null);
+  const atalho = useCallback(async (a: QuickActions.Action) => {
+    const destino = String(a.params?.destino ?? a.id);
+    if (destino === 'foco') {
+      const p = pairingRef.current;
+      if (!p) { atalhoPendente.current = a; return; }
+      try {
+        const f = await callRpc(p, 'foco.start', { minutos: 25 });
+        Alert.alert('Modo foco', `${f.minutos ?? 25} minutos. Discord, Steam e afins viram aviso no PC.`);
+      } catch (e) { Alert.alert('Modo foco', errMessage(e)); }
+      return;
+    }
+    if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
+    else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
+  }, []);
+  useEffect(() => {
+    QuickActions.setItems([
+      { id: 'chat', title: 'Falar com o ELYSIUM', params: { destino: 'chat' } },
+      { id: 'foco', title: 'Modo foco (25 min)', params: { destino: 'foco' } },
+      { id: 'busca', title: 'Buscar ou comandar', params: { destino: 'busca' } },
+    ]).catch(() => { /* launcher sem suporte a atalhos */ });
+    const sub = QuickActions.addListener((a) => { void atalho(a); });
+    return () => sub.remove();
+  }, [atalho]);
+  useEffect(() => {
+    if (!pairing || !atalhoPendente.current) return;
+    const a = atalhoPendente.current;
+    atalhoPendente.current = null;
+    void atalho(a);
+  }, [pairing, atalho]);
 
   // Deep links dos widgets: elysium://busca, elysium://chat, elysium://pc, elysium://rotinas.
   useDeepLinks(useCallback((destino) => {

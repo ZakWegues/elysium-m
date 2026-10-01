@@ -232,3 +232,57 @@ export function WidgetRotinas({ p, r }: { p: Palette; r: RotinasWidget }) {
     </FlexWidget>
   );
 }
+
+// ── Fase 13 (bloco 123) ───────────────────────────────────────────────────────
+
+export type FocoWidget = { online: boolean; ativo: boolean; minutos?: number; distracoes?: number; aviso?: string };
+
+/** Modo foco (4×1): começar 25/50 min, ou quanto falta e parar — sem abrir o app. */
+export function WidgetFoco({ p, f }: { p: Palette; f: FocoWidget }) {
+  const botao = (id: string, rotulo: string, perigo = false) => (
+    <FlexWidget
+      key={id}
+      style={{ height: 'match_parent', paddingHorizontal: 12, borderRadius: 16, backgroundColor: c(perigo ? p.errorSoft : p.primarySoft), alignItems: 'center', justifyContent: 'center' }}
+      clickAction="FOCO"
+      clickActionData={{ acao: id }}
+      accessibilityLabel={rotulo}
+    >
+      <TextWidget text={rotulo} style={{ fontSize: 12, fontWeight: '600', color: c(perigo ? p.error : p.primary) }} />
+    </FlexWidget>
+  );
+  return (
+    <FlexWidget style={{ ...fundo(p), height: 'match_parent', width: 'match_parent', flexDirection: 'row', alignItems: 'center', padding: 8, flexGap: 8 }}>
+      <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
+        <TextWidget text={!f.online ? 'PC fora de alcance' : f.ativo ? `Foco: ${f.minutos ?? 0} min` : 'Modo foco'} style={{ fontSize: 13, fontWeight: '600', color: c(p.text) }} maxLines={1} truncate="END" />
+        <TextWidget
+          text={f.aviso ?? (f.ativo ? (f.distracoes ? `${f.distracoes} distração(ões)` : 'sem distrações') : 'Discord, Steam e afins viram aviso')}
+          style={{ fontSize: 10, color: c(p.textMuted) }} maxLines={1} truncate="END"
+        />
+      </FlexWidget>
+      {f.online && (f.ativo ? [botao('parar', 'Parar', true)] : [botao('25', '25 min'), botao('50', '50 min')])}
+    </FlexWidget>
+  );
+}
+
+export type SaudeWidget = { online: boolean; ruins: number; pior?: { titulo: string; detalhe: string; nivel: string } };
+
+/** Saúde do ELYSIUM (2×1): bolinha e o pior item. Toque abre a Início. */
+export function WidgetSaude({ p, s }: { p: Palette; s: SaudeWidget }) {
+  const cor = !s.online ? p.textMuted : !s.ruins ? p.success : s.pior?.nivel === 'erro' ? p.error : '#d99a2b';
+  return (
+    <FlexWidget
+      style={{ ...fundo(p), height: 'match_parent', width: 'match_parent', flexDirection: 'column', padding: 12, justifyContent: 'center' }}
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: 'elysium://inicio' }}
+      accessibilityLabel="Saúde do ELYSIUM"
+    >
+      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flexGap: 6 }}>
+        <FlexWidget style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: c(cor) }} />
+        <TextWidget text={!s.online ? 'PC fora de alcance' : !s.ruins ? 'ELYSIUM: tudo certo' : s.ruins === 1 ? '1 ponto de atenção' : `${s.ruins} pontos de atenção`} style={{ fontSize: 12, fontWeight: '600', color: c(p.text) }} maxLines={1} truncate="END" />
+      </FlexWidget>
+      {s.online && s.pior ? (
+        <TextWidget text={`${s.pior.titulo}: ${s.pior.detalhe}`} style={{ fontSize: 10, color: c(p.textMuted), marginTop: 4 }} maxLines={2} truncate="END" />
+      ) : null}
+    </FlexWidget>
+  );
+}

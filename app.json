@@ -160,10 +160,37 @@
               "maxResizeHeight": "250dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Foco",
+              "label": "ELYSIUM — Modo foco",
+              "description": "Começar 25 ou 50 min de foco no PC, ou ver quanto falta e parar.",
+              "minWidth": "250dp",
+              "minHeight": "60dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "500dp",
+              "maxResizeHeight": "120dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Saude",
+              "label": "ELYSIUM — Saúde",
+              "description": "Se está tudo certo com o ELYSIUM do PC, ou o que pede atenção.",
+              "minWidth": "180dp",
+              "minHeight": "60dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "500dp",
+              "maxResizeHeight": "160dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
             }
           ]
         }
-      ]
+      ],
+      "expo-quick-actions"
     ],
     "extra": {
       "eas": {
