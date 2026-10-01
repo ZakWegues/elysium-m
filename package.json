@@ -1,6 +1,6 @@
 {
   "name": "elysium-m",
-  "version": "1.5.2",
+  "version": "1.7.0",
   "main": "index.ts",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
