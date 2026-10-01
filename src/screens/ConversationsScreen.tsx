@@ -9,6 +9,7 @@ import { callRpc } from '../lib/rpc';
 import { Pairing } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Card, ScreenHeader, Text } from '../components/ui';
+import { buscarNasConversas } from '../lib/buscaConversas';
 import Animated from 'react-native-reanimated';
 import { LAYOUT, ENTRA, SAI } from '../lib/motion';
 
@@ -43,6 +44,9 @@ export default function ConversationsScreen({
   // aqui era o verbo que faltava, e é a mesma edição no lugar, sem caixa de diálogo.
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState('');
+  /** Busca dentro das conversas (bloco 133): com 3+ letras, a lista vira os trechos achados. */
+  const [consulta, setConsulta] = useState('');
+  const achados = consulta.trim().length >= 3 ? buscarNasConversas(sessions, consulta) : null;
 
   async function refresh() {
     const list = await listSessions();
@@ -114,13 +118,39 @@ export default function ConversationsScreen({
       <Animated.ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}>
         <Button title="+ Nova conversa" onPress={onNew} />
 
+        <View style={[styles.busca, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>
+          <Feather name="search" size={16} color={palette.textMuted} />
+          <TextInput
+            value={consulta}
+            onChangeText={setConsulta}
+            placeholder="Buscar dentro das conversas"
+            placeholderTextColor={palette.textMuted}
+            style={{ flex: 1, color: palette.text, fontSize: 14, paddingVertical: 0 }}
+          />
+          {consulta ? (
+            <Pressable onPress={() => setConsulta('')} hitSlop={8}><Feather name="x" size={16} color={palette.textMuted} /></Pressable>
+          ) : null}
+        </View>
+
+        {achados && achados.length === 0 && (
+          <Text variant="caption" color={palette.textMuted}>Nada com isso nas conversas guardadas neste celular.</Text>
+        )}
+        {achados?.map((a) => (
+          <Pressable key={a.sessaoId} onPress={() => onSelect(a.sessaoId)}>
+            <Card glass style={{ gap: 4 }}>
+              <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{a.titulo} · {relativeTime(a.em)}</Text>
+              <Text variant="body" numberOfLines={3}>{a.deQuem === 'eu' ? 'Você: ' : ''}{a.trecho}</Text>
+            </Card>
+          </Pressable>
+        ))}
+
         <Text variant="caption" color={offline ? palette.error : palette.textMuted}>
           {offline
             ? 'PC fora de alcance — mostrando a cópia local. Sincroniza sozinho quando voltar.'
             : 'Sincronizado com o PC. As 5 mais recentes ficam guardadas; favoritar tira dessa contagem.'}
         </Text>
 
-        {!loading && sessions.length === 0 && (
+        {!achados && !loading && sessions.length === 0 && (
           <Animated.View layout={LAYOUT} entering={ENTRA} exiting={SAI}>
             <Card glass style={styles.center}>
               <Text variant="body" color={palette.textMuted}>
@@ -130,7 +160,7 @@ export default function ConversationsScreen({
           </Animated.View>
         )}
 
-        {sessions.map((session) => (
+        {!achados && sessions.map((session) => (
           <Animated.View key={session.id} layout={LAYOUT} entering={ENTRA} exiting={SAI}>
             <Card glass style={styles.row}>
               {renomeando === session.id ? (
@@ -177,4 +207,5 @@ export default function ConversationsScreen({
 const styles = StyleSheet.create({
   center: { alignItems: 'center', paddingVertical: 32 },
   row: { flexDirection: 'row', alignItems: 'center' },
+  busca: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: StyleSheet.hairlineWidth },
 });
