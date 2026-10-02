@@ -21,6 +21,7 @@ import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizac
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
+import { useEstadoPalavra } from '../lib/palavraNoCelular';
 
 /** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
 const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
@@ -420,6 +421,7 @@ export default function HomeScreen({
   }
 
   const online = status === 'open';
+  const palavra = useEstadoPalavra();
 
   return (
     <View style={{ flex: 1 }}>
@@ -427,6 +429,21 @@ export default function HomeScreen({
         title={nome ? `${saudacao()}, ${nome}` : saudacao()}
         right={
           <View style={styles.linhaStatus}>
+            {/* "Elysium" (bloco 129): microfone aceso = escutando; cortado = não deu, toque diz o porquê. */}
+            {palavra.fase === 'ouvindo' || palavra.fase === 'falhou' ? (
+              <Pressable
+                hitSlop={8}
+                style={{ marginRight: 8 }}
+                onPress={() => Alert.alert(
+                  'Palavra “Elysium”',
+                  palavra.fase === 'ouvindo'
+                    ? `Escutando ${palavra.offline ? 'no próprio celular' : 'pelo reconhecimento do Google'}. Diga “Elysium” (ou “Elysium, pausa a música”).`
+                    : `Não está escutando: ${palavra.motivo}.\n\nDá para desligar em Ajustes → Voz.`,
+                )}
+              >
+                <Feather name={palavra.fase === 'ouvindo' ? 'mic' : 'mic-off'} size={16} color={palavra.fase === 'ouvindo' ? palette.primary : palette.error} />
+              </Pressable>
+            ) : null}
             <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
               <Feather name="search" size={16} color={palette.textMuted} />
             </GlassCircle>

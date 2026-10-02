@@ -270,6 +270,11 @@ function AppInner() {
       const erros = Object.entries(d.erros).map(([k, v]) => `${k} ${v}`).join(', ') || 'nenhum';
       callRpc(p, 'diag.registrar', { origem: 'palavra-cel', linhas: [`sessões ${d.sessoes}, disparos ${d.disparos}, erros: ${erros}`] }).catch(() => {});
     }, []),
+    // Falha de arranque e serviço escolhido vão na hora — antes o arranque falhava calado.
+    aoDiagnostico: useCallback((linha: string) => {
+      const p = pairingRef.current;
+      if (p) callRpc(p, 'diag.registrar', { origem: 'palavra-cel', linhas: [linha] }).catch(() => {});
+    }, []),
   });
 
   // Deep links dos widgets: elysium://busca, elysium://chat, elysium://pc, elysium://rotinas.

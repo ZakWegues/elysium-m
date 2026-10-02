@@ -17,7 +17,7 @@ import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text, Toque } from '../components/ui';
 import { falar, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
-import { ligarPalavra, palavraLigada } from '../lib/palavraNoCelular';
+import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 
 /**
  * As duas famílias, mais "seguir o aparelho".
@@ -392,6 +392,7 @@ function VozSection({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [doPc, setDoPc] = useState(true);
   const [palavra, setPalavra] = useState(true);
+  const estado = useEstadoPalavra();
   useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); }, []);
   const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
     { valor: true, rotulo: 'Voz do PC', nota: 'A mesma voz neural da caixa de som do PC (escolhida em Ajustes → Voz lá). Sem PC, cai na do celular.', icone: 'monitor' },
@@ -410,6 +411,13 @@ function VozSection({ pairing }: { pairing: Pairing }) {
         </View>
         <Switch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} trackColor={{ true: palette.primary }} />
       </View>
+      {palavra && (
+        <Text variant="caption" color={estado.fase === 'falhou' ? palette.error : palette.textMuted}>
+          {estado.fase === 'ouvindo' ? `Agora: escutando ${estado.offline ? 'no próprio celular' : 'pelo Google (online)'}.`
+            : estado.fase === 'falhou' ? `Agora: não está escutando — ${estado.motivo}.`
+            : 'Agora: pausado (escuta só com a Início ou o Chat na tela, e para enquanto Ajustes está aberto).'}
+        </Text>
+      )}
       <Text variant="subheading">Voz das respostas</Text>
       {opcoes.map(o => {
         const sel = o.valor === doPc;
