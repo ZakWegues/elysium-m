@@ -257,8 +257,25 @@ function AppInner() {
   // Bloco 129: ouvir "Elysium" só com o app na frente, na Início ou no Chat, com o microfone
   // livre (sem mão livre, gravação ou fala em curso) e sem Ajustes aberto por cima.
   const micLivre = useMicrofoneLivre();
+  // Teclado aberto também pausa: digitando, não há por que ouvir — e o microfone aberto
+  // brigava com o teclado do Android (02/10, "o teclado tá bugado").
+  const condicoesPalavra = {
+    pareado: Boolean(pairing), ligada: palavraOn, naFrente: appNaFrente, microfoneLivre: micLivre,
+    semAjustes: !settingsModalVisible, telaCerta: screen === 'home' || screen === 'chat', semTeclado: !keyboard.visible,
+  };
+  const palavraAtiva = Object.values(condicoesPalavra).every(Boolean);
+  // Por que pausou (para o log do PC): só quando muda.
+  const motivoPausaAnterior = useRef('');
+  useEffect(() => {
+    const motivo = Object.entries(condicoesPalavra).filter(([, v]) => !v).map(([k]) => k).join(', ');
+    if (motivo === motivoPausaAnterior.current) return;
+    motivoPausaAnterior.current = motivo;
+    const p = pairingRef.current;
+    if (p && palavraOn) callRpc(p, 'diag.registrar', { origem: 'palavra-cel', linhas: [motivo ? `pausada: ${motivo}` : 'ativa'] }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [palavraAtiva, ...Object.values(condicoesPalavra)]);
   usePalavraNoCelular({
-    ativo: Boolean(pairing) && palavraOn && appNaFrente && micLivre && !settingsModalVisible && (screen === 'home' || screen === 'chat'),
+    ativo: palavraAtiva,
     aoOuvir: useCallback((resto: string) => {
       setModoChat('ia');
       setScreen('chat');

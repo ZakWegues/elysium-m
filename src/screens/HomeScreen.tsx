@@ -430,7 +430,7 @@ export default function HomeScreen({
         right={
           <View style={styles.linhaStatus}>
             {/* "Elysium" (bloco 129): microfone aceso = escutando; cortado = não deu, toque diz o porquê. */}
-            {palavra.fase === 'ouvindo' || palavra.fase === 'falhou' ? (
+            {palavra.fase !== 'desligada' ? (
               <Pressable
                 hitSlop={8}
                 style={{ marginRight: 8 }}
@@ -438,10 +438,12 @@ export default function HomeScreen({
                   'Palavra “Elysium”',
                   palavra.fase === 'ouvindo'
                     ? `Escutando ${palavra.offline ? 'no próprio celular' : 'pelo reconhecimento do Google'}. Diga “Elysium” (ou “Elysium, pausa a música”).`
-                    : `Não está escutando: ${palavra.motivo}.\n\nDá para desligar em Ajustes → Voz.`,
+                    : palavra.fase === 'iniciando'
+                      ? 'Ligando o reconhecimento de voz… Se ficar assim (amarelo), ele não está conseguindo começar — o motivo vai para o log do PC.'
+                      : `Não está escutando: ${palavra.motivo}.\n\nDá para desligar em Ajustes → Voz.`,
                 )}
               >
-                <Feather name={palavra.fase === 'ouvindo' ? 'mic' : 'mic-off'} size={16} color={palavra.fase === 'ouvindo' ? palette.primary : palette.error} />
+                <Feather name={palavra.fase === 'falhou' ? 'mic-off' : 'mic'} size={16} color={palavra.fase === 'ouvindo' ? palette.primary : palavra.fase === 'iniciando' ? '#d99a2b' : palette.error} />
               </Pressable>
             ) : null}
             <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>

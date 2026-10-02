@@ -53,6 +53,8 @@ export type EstadoPalavra =
 let estadoAtual: EstadoPalavra = { fase: 'desligada' };
 const ouvintes = new Set<(e: EstadoPalavra) => void>();
 function definirEstado(e: EstadoPalavra) {
+  // Sem isto, cada fim/início de sessão (pode ser a cada meio segundo) redesenhava a Início.
+  if (JSON.stringify(e) === JSON.stringify(estadoAtual)) return;
   estadoAtual = e;
   ouvintes.forEach(fn => fn(e));
 }
@@ -98,6 +100,16 @@ export function usePalavraNoCelular({
   const config = useRef<{ servico?: string; offline: boolean } | null>(null);
   const jaContou = useRef(new Set<string>());
   const diag = useRef<DiagPalavra>({ sessoes: 0, disparos: 0, erros: {} });
+  /**
+   * 02/10: depois da OTA o log mostrou UMA sessão e nenhum evento "start" — e o Zak via o
+   * teclado bugado. Suspeita: o reconhecedor num liga-desliga sem fim. Estes números saem
+   * num resumo a cada 30 s, e sessão que morre em menos de 3 s sem ouvir nada freia o
+   * religamento (2 s, 4 s… até 30 s) em vez de tentar de novo em meio segundo.
+   */
+  const contas = useRef({ chamadas: 0, inicios: 0, fins: 0, resultados: 0, curtas: 0 });
+  const ultimoResumo = useRef('');
+  const inicioSessao = useRef(0);
+  const ouviuNaSessao = useRef(false);
 
   /** Uma linha ao PC por motivo diferente — não um laço de linhas iguais. */
   function avisar(linha: string) {
@@ -140,6 +152,9 @@ export function usePalavraNoCelular({
       if (!ativoRef.current || parado.current) { definirEstado({ fase: 'desligada' }); return; }
       rodando.current = true;
       diag.current.sessoes++;
+      contas.current.chamadas++;
+      inicioSessao.current = Date.now();
+      ouviuNaSessao.current = false;
       ExpoSpeechRecognitionModule.start({
         lang: 'pt-BR',
         interimResults: true,
@@ -172,12 +187,15 @@ export function usePalavraNoCelular({
   }
 
   useSpeechRecognitionEvent('start', () => {
+    contas.current.inicios++;
     if (!config.current) return;
     definirEstado({ fase: 'ouvindo', offline: config.current.offline, servico: config.current.servico ?? 'padrão' });
     if (diag.current.sessoes === 1) avisar(`escutando (${config.current.offline ? 'no aparelho' : 'online'})`);
   });
 
   useSpeechRecognitionEvent('result', (ev) => {
+    contas.current.resultados++;
+    ouviuNaSessao.current = true;
     if (!ativoRef.current || parado.current) return;
     recuo.current = 500;
     // Qualquer alternativa serve: a primeira costuma ser "elísio" e a segunda "Elysium".
@@ -198,6 +216,12 @@ export function usePalavraNoCelular({
 
   useSpeechRecognitionEvent('end', () => {
     rodando.current = false;
+    contas.current.fins++;
+    // Sessão curta e muda: freia em vez de religar em meio segundo.
+    if (Date.now() - inicioSessao.current < 3000 && !ouviuNaSessao.current) {
+      contas.current.curtas++;
+      recuo.current = Math.min(30_000, Math.max(2000, recuo.current * 2));
+    }
     if (!parado.current && ativoRef.current) definirEstado({ fase: 'iniciando' });
     agendar();
   });
@@ -224,7 +248,7 @@ export function usePalavraNoCelular({
     if (ev.error === 'not-allowed') { falhar('permissão de microfone/fala negada'); return; }
     if (ev.error === 'service-not-allowed' || ev.error === 'language-not-supported') { falhar(`${ev.error}: ${ev.message}`); return; }
     // "Ninguém falou" e "abortado" são rotina; o resto dobra o recuo.
-    if (ev.error === 'no-speech' || ev.error === 'aborted' || ev.error === 'speech-timeout') recuo.current = 500;
+    if (ev.error === 'no-speech' || ev.error === 'aborted' || ev.error === 'speech-timeout') { /* o 'end' decide o recuo */ }
     else {
       recuo.current = Math.min(30_000, recuo.current * 2);
       avisar(`erro ${ev.error}: ${ev.message}`);
@@ -245,6 +269,18 @@ export function usePalavraNoCelular({
     }
     return () => { if (!ativoRef.current) parar(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ativo]);
+
+  // Resumo a cada 30 s enquanto ativo, só quando algo mudou.
+  useEffect(() => {
+    if (!ativo) return;
+    const id = setInterval(() => {
+      const c = contas.current;
+      const erros = Object.entries(diag.current.erros).map(([k, v]) => `${k} ${v}`).join(', ') || 'nenhum';
+      const linha = `resumo: start() ${c.chamadas}, início ${c.inicios}, fim ${c.fins}, resultados ${c.resultados}, sessões curtas ${c.curtas}, erros: ${erros}, recuo ${Math.round(recuo.current / 1000)} s, estado ${estadoAtual.fase}`;
+      if (linha !== ultimoResumo.current) { ultimoResumo.current = linha; aoDiagRef.current?.(linha); }
+    }, 30_000);
+    return () => clearInterval(id);
   }, [ativo]);
 
   // Desmontou (app fechado): solta o microfone.
