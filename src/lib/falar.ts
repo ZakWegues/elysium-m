@@ -109,6 +109,7 @@ async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
     };
     const teto = setTimeout(terminar, tetoDaFala(t));
     terminarAtual = terminar;
-    Speech.speak(t, { language: 'pt-BR', onDone: terminar, onStopped: terminar, onError: terminar });
+    // "Ely" lido "Éli" (02/10), como na voz do PC.
+    Speech.speak(t.replace(/\bEly\b/gi, 'Éli'), { language: 'pt-BR', onDone: terminar, onStopped: terminar, onError: terminar });
   });
 }
