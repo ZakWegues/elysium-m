@@ -239,7 +239,7 @@ function AppInner() {
   }, []);
   useEffect(() => {
     QuickActions.setItems([
-      { id: 'chat', title: 'Falar com o ELYSIUM', params: { destino: 'chat' } },
+      { id: 'chat', title: 'Falar com a Ely', params: { destino: 'chat' } },
       { id: 'hoje', title: 'Resumo do dia', params: { destino: 'hoje' } },
       { id: 'foco', title: 'Modo foco (25 min)', params: { destino: 'foco' } },
       { id: 'busca', title: 'Buscar ou comandar', params: { destino: 'busca' } },

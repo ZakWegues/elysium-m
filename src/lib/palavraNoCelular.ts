@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from 'expo-audio';
 import { acharPalavra } from './palavraCasa';
 
 /**
@@ -97,7 +98,14 @@ export function usePalavraNoCelular({
   /** Depois de um disparo (ou falha sem volta), não religa até o `ativo` cair e voltar. */
   const parado = useRef(false);
   /** Configuração descoberta uma vez: serviço e se dá para ficar offline. */
-  const config = useRef<{ servico?: string; offline: boolean } | null>(null);
+  /**
+   * Os modos a tentar, do melhor ao mais garantido (02/10): no aparelho pelo Google, online
+   * pelo Google, e o padrão do sistema. Um modo que não confirma o início em 4 s é largado.
+   */
+  const modos = useRef<{ servico?: string; offline: boolean }[] | null>(null);
+  const degrau = useRef(0);
+  const vigia = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const config = { get current() { return modos.current?.[degrau.current] ?? null; } };
   const jaContou = useRef(new Set<string>());
   const diag = useRef<DiagPalavra>({ sessoes: 0, disparos: 0, erros: {} });
   /**
@@ -125,30 +133,59 @@ export function usePalavraNoCelular({
     avisar(`não escuta: ${motivo}`);
   }
 
-  async function descobrir(): Promise<{ servico?: string; offline: boolean }> {
+  async function descobrir(): Promise<{ servico?: string; offline: boolean }[]> {
     let servicos: string[] = [];
     let padrao = '';
     try { servicos = ExpoSpeechRecognitionModule.getSpeechRecognitionServices(); } catch { /* lista vazia */ }
     try { padrao = ExpoSpeechRecognitionModule.getDefaultRecognitionService().packageName; } catch { /* sem padrão */ }
     const google = SERVICOS_GOOGLE.find(s => servicos.includes(s));
-    const servico = google ?? (padrao || undefined);
     let offline = false;
+    if (servicos.includes('com.google.android.as')) {
+      try {
+        const { installedLocales } = await comPrazo(ExpoSpeechRecognitionModule.getSupportedLocales({ androidRecognitionServicePackage: 'com.google.android.as' }), 2500);
+        offline = installedLocales.some(l => /^pt[-_]BR$/i.test(l));
+      } catch { offline = false; }
+    }
+    const lista: { servico?: string; offline: boolean }[] = [];
+    if (offline) lista.push({ servico: 'com.google.android.as', offline: true });
+    if (google) lista.push({ servico: google, offline: false });
+    lista.push({ servico: undefined, offline: false });
+    avisar(`serviços: ${servicos.join(', ') || 'nenhum'}; padrão: ${padrao || '—'}; modos: ${lista.map(m => `${m.servico ?? 'sistema'}${m.offline ? ' (offline)' : ''}`).join(' → ')}`);
+    return lista;
+  }
+
+  /**
+   * Permissão pelo gravador (expo-audio), não pelo módulo de fala: no celular do Zak o
+   * `requestPermissionsAsync` do expo-speech-recognition simplesmente não responde ("erro ao
+   * iniciar: sem resposta" a cada 30 s no log de 02/10). A permissão é a mesma (microfone).
+   */
+  async function temMicrofone(): Promise<boolean> {
     try {
-      const { installedLocales } = await comPrazo(ExpoSpeechRecognitionModule.getSupportedLocales({ androidRecognitionServicePackage: servico === 'com.google.android.as' ? servico : undefined }), 2500);
-      offline = installedLocales.some(l => /^pt[-_]BR$/i.test(l));
-    } catch { offline = false; }
-    avisar(`serviços: ${servicos.join(', ') || 'nenhum'}; padrão: ${padrao || '—'}; usando: ${servico ?? 'padrão do sistema'}; pt-BR offline: ${offline ? 'sim' : 'não'}`);
-    return { servico, offline };
+      if ((await comPrazo(getRecordingPermissionsAsync(), 5000)).granted) return true;
+      return (await requestRecordingPermissionsAsync()).granted;
+    } catch { return false; }
+  }
+
+  function largarModo(motivo: string) {
+    if (vigia.current) { clearTimeout(vigia.current); vigia.current = null; }
+    try { ExpoSpeechRecognitionModule.abort(); } catch { /* já parado */ }
+    rodando.current = false;
+    const m = config.current;
+    degrau.current++;
+    if (!config.current) { falhar(`o reconhecedor de voz do celular não respondeu em nenhum modo (${motivo})`); return; }
+    avisar(`modo ${m?.servico ?? 'sistema'}${m?.offline ? ' offline' : ''} largado (${motivo}); tentando ${config.current.servico ?? 'o padrão do sistema'}${config.current.offline ? ' offline' : ''}`);
+    recuo.current = 500;
+    agendar();
   }
 
   async function comecar() {
     if (!ativoRef.current || rodando.current || parado.current) return;
     definirEstado({ fase: 'iniciando' });
     try {
-      const perm = await comPrazo(ExpoSpeechRecognitionModule.requestPermissionsAsync(), 30_000);
-      if (!perm.granted) { falhar('sem permissão de microfone/fala'); return; }
-      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) { falhar('o Android diz que não há reconhecimento de fala disponível'); return; }
-      if (!config.current) config.current = await descobrir();
+      if (!(await temMicrofone())) { falhar('sem permissão de microfone'); return; }
+      if (!modos.current) { modos.current = await descobrir(); degrau.current = 0; }
+      const modo = config.current;
+      if (!modo) { falhar('nenhum modo de reconhecimento'); return; }
       if (!ativoRef.current || parado.current) { definirEstado({ fase: 'desligada' }); return; }
       rodando.current = true;
       diag.current.sessoes++;
@@ -160,14 +197,17 @@ export function usePalavraNoCelular({
         interimResults: true,
         continuous: true,
         maxAlternatives: 3,
-        contextualStrings: ['Elysium', 'ok Elysium', 'ei Elysium'],
-        requiresOnDeviceRecognition: config.current.offline,
-        androidRecognitionServicePackage: config.current.servico,
+        contextualStrings: ['Ely', 'ei Ely', 'oi Ely', 'Elysium'],
+        requiresOnDeviceRecognition: modo.offline,
+        androidRecognitionServicePackage: modo.servico,
       });
+      // Sem confirmação (início, áudio ou resultado) em 4 s, este modo não serve aqui.
+      if (vigia.current) clearTimeout(vigia.current);
+      vigia.current = setTimeout(() => { vigia.current = null; if (rodando.current) largarModo('não confirmou o início em 4 s'); }, 4000);
     } catch (e) {
       rodando.current = false;
       avisar(`erro ao iniciar: ${e instanceof Error ? e.message : String(e)}`);
-      recuo.current = Math.min(30_000, recuo.current * 2);
+      recuo.current = Math.min(30_000, Math.max(2000, recuo.current * 2));
       agendar();
     }
   }
@@ -180,20 +220,27 @@ export function usePalavraNoCelular({
 
   function parar() {
     if (religar.current) { clearTimeout(religar.current); religar.current = null; }
+    if (vigia.current) { clearTimeout(vigia.current); vigia.current = null; }
     if (rodando.current) {
       try { ExpoSpeechRecognitionModule.abort(); } catch { /* já parado */ }
       rodando.current = false;
     }
   }
 
+  const confirmou = () => { if (vigia.current) { clearTimeout(vigia.current); vigia.current = null; } };
+  useSpeechRecognitionEvent('audiostart', confirmou);
+  useSpeechRecognitionEvent('speechstart', confirmou);
   useSpeechRecognitionEvent('start', () => {
+    confirmou();
     contas.current.inicios++;
     if (!config.current) return;
     definirEstado({ fase: 'ouvindo', offline: config.current.offline, servico: config.current.servico ?? 'padrão' });
-    if (diag.current.sessoes === 1) avisar(`escutando (${config.current.offline ? 'no aparelho' : 'online'})`);
+    avisar(`escutando (${config.current.servico ?? "sistema"}, ${config.current.offline ? "no aparelho" : "online"})`);
   });
 
   useSpeechRecognitionEvent('result', (ev) => {
+    confirmou();
+    if (estadoAtual.fase !== 'ouvindo' && config.current) definirEstado({ fase: 'ouvindo', offline: config.current.offline, servico: config.current.servico ?? 'padrão' });
     contas.current.resultados++;
     ouviuNaSessao.current = true;
     if (!ativoRef.current || parado.current) return;
@@ -229,24 +276,12 @@ export function usePalavraNoCelular({
   useSpeechRecognitionEvent('error', (ev) => {
     rodando.current = false;
     diag.current.erros[ev.error] = (diag.current.erros[ev.error] ?? 0) + 1;
-    const cfg = config.current;
-    // Offline sem o pacote de idioma: tenta online antes de desistir.
-    if (ev.error === 'language-not-supported' && cfg?.offline) {
-      cfg.offline = false;
-      avisar('pt-BR offline recusado; tentando online');
-      recuo.current = 500;
-      return;
-    }
-    // Serviço recusou: tenta o padrão do sistema (ou o Google, se estava no padrão).
-    if (ev.error === 'service-not-allowed' && cfg && !jaContou.current.has('trocou serviço')) {
-      jaContou.current.add('trocou serviço');
-      cfg.servico = cfg.servico ? undefined : SERVICOS_GOOGLE[0];
-      avisar(`serviço recusou (${ev.message}); tentando ${cfg.servico ?? 'o padrão do sistema'}`);
-      recuo.current = 500;
+    // Serviço ou idioma recusado neste modo: o próximo da escada.
+    if (ev.error === 'language-not-supported' || ev.error === 'service-not-allowed' || ev.error === 'client') {
+      largarModo(`${ev.error}: ${ev.message}`);
       return;
     }
     if (ev.error === 'not-allowed') { falhar('permissão de microfone/fala negada'); return; }
-    if (ev.error === 'service-not-allowed' || ev.error === 'language-not-supported') { falhar(`${ev.error}: ${ev.message}`); return; }
     // "Ninguém falou" e "abortado" são rotina; o resto dobra o recuo.
     if (ev.error === 'no-speech' || ev.error === 'aborted' || ev.error === 'speech-timeout') { /* o 'end' decide o recuo */ }
     else {

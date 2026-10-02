@@ -143,7 +143,7 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
           </Pressable>
         );
       })}
-      <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Como o ELYSIUM responde</Text>
+      <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Como a Ely responde</Text>
       <Text variant="caption" color={palette.textMuted}>
         Em texto livre: como você quer ser tratado, o que evitar, o que sempre incluir. Vale no PC e aqui.
       </Text>
@@ -404,9 +404,9 @@ function VozSection({ pairing }: { pairing: Pairing }) {
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="mic" size={17} color={palavra ? palette.primary : palette.textMuted} />
         <View style={{ flex: 1 }}>
-          <Text variant="body">Ouvir “Elysium”</Text>
+          <Text variant="body">Ouvir “Ely”</Text>
           <Text variant="caption" color={palette.textMuted}>
-            Com o app aberto na Início ou no Chat, diga “Elysium” (ou “Elysium, pausa a música”) e ele entra na mão livre. Só com o app na tela — nada escuta em segundo plano.
+            Com o app aberto na Início ou no Chat, diga “Ely” (ou “Ely, pausa a música”) e ela entra na conversa por voz. Só com o app na tela — nada escuta em segundo plano.
           </Text>
         </View>
         <Switch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} trackColor={{ true: palette.primary }} />

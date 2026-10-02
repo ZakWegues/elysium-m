@@ -1,5 +1,5 @@
 /**
- * Achar "Elysium" no que o reconhecedor do Android escreveu (bloco 129). Pura, para teste.
+ * Achar "Ely" (ou "Elysium") no que o reconhecedor do Android escreveu (bloco 129). Pura, para teste.
  *
  * O reconhecedor é de ditado em português: ele não conhece a palavra e escreve o som mais
  * parecido — "elísio", "elisium", "ilísio", "elysio", às vezes "e lísio" separado. O
@@ -13,6 +13,14 @@
 // — sem esse "i" obrigatório, "é liso" dispararia.
 const VARIACOES = /(?:^|\s)(?:(?:ei|ok|oi|fala)\s)?(?:[eia]l[iy][sz][iy]?[uo]m?|e l[iy][sz][iy][uo]m?)(?=\s|$)/;
 
+/**
+ * "Ely" (02/10): o Zak trocou o nome do assistente para Ely (o app continua ELYSIUM). O
+ * ditado escreve "Ely", "Eli", "Elly", "Ellie". Por ser curta, só vale no COMEÇO da frase
+ * ou depois de "ei/oi/ok/fala" — "a Eli ligou" no meio de uma conversa não dispara. E nunca
+ * "ele"/"eles" (o "e" final é o que separa "Eli" de "ele").
+ */
+const ELY = /^(?:(?:ei|ok|oi|fala|e ai)\s)?el+(?:y|i|ie|ye)(?=\s|$)|\s(?:ei|ok|oi|fala)\sel+(?:y|i|ie|ye)(?=\s|$)/;
+
 export function semAcento(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
@@ -20,7 +28,7 @@ export function semAcento(s: string): string {
 export function acharPalavra(texto: string): { achou: boolean; resto: string } {
   // Já sem acento: só ASCII sobra (e `\p{L}` não é garantido no Hermes).
   const t = semAcento(texto).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const m = VARIACOES.exec(t);
+  const m = VARIACOES.exec(t) ?? ELY.exec(t);
   if (!m) return { achou: false, resto: '' };
   // O resto vem do texto ORIGINAL (com acento), na mesma posição em palavras: contar as
   // palavras até o fim do casamento e cortar ali.

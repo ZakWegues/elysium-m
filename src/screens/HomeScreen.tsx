@@ -435,9 +435,9 @@ export default function HomeScreen({
                 hitSlop={8}
                 style={{ marginRight: 8 }}
                 onPress={() => Alert.alert(
-                  'Palavra “Elysium”',
+                  'Palavra “Ely”',
                   palavra.fase === 'ouvindo'
-                    ? `Escutando ${palavra.offline ? 'no próprio celular' : 'pelo reconhecimento do Google'}. Diga “Elysium” (ou “Elysium, pausa a música”).`
+                    ? `Escutando ${palavra.offline ? 'no próprio celular' : 'pelo reconhecimento do Google'}. Diga “Ely” (ou “Ely, pausa a música”).`
                     : palavra.fase === 'iniciando'
                       ? 'Ligando o reconhecimento de voz… Se ficar assim (amarelo), ele não está conseguindo começar — o motivo vai para o log do PC.'
                       : `Não está escutando: ${palavra.motivo}.\n\nDá para desligar em Ajustes → Voz.`,

@@ -20,3 +20,17 @@ describe('palavra "Elysium" no celular (bloco 129)', () => {
     }
   });
 });
+
+describe('palavra "Ely" (02/10)', () => {
+  it('acha Ely/Eli/Elly no começo ou depois de ei/oi', () => {
+    expect(acharPalavra('Ely, pausa a música')).toEqual({ achou: true, resto: 'pausa a música' });
+    expect(acharPalavra('Eli que horas são')).toEqual({ achou: true, resto: 'que horas são' });
+    expect(acharPalavra('oi Ellie')).toEqual({ achou: true, resto: '' });
+    expect(acharPalavra('e aí, ei Ely abre o chrome').achou).toBe(true);
+  });
+  it('não dispara com "ele", nem com Eli no meio da frase', () => {
+    for (const t of ['ele vai chegar', 'eles foram', 'a Eli ligou ontem', 'Eliana chegou', 'elite']) {
+      expect(acharPalavra(t).achou, t).toBe(false);
+    }
+  });
+});

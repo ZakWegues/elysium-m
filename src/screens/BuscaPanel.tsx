@@ -171,7 +171,7 @@ export default function BuscaPanel({
     if (!q) lista = lista.filter(it => it.grupo === 'nav' || it.grupo === 'acao');
     else lista = lista.slice(0, 30);
     if (q.length >= 2) {
-      lista.push({ grupo: 'chat', icone: 'cpu', texto: `Perguntar ao ELYSIUM: “${q}”`, executar: () => onPerguntar(q) });
+      lista.push({ grupo: 'chat', icone: 'cpu', texto: `Perguntar à Ely: “${q}”`, executar: () => onPerguntar(q) });
     }
     return lista;
   }, [consulta, itens]);
@@ -209,7 +209,7 @@ export default function BuscaPanel({
       <View style={{ marginTop: tokens.spacing.sm }}>
         {visiveis.length === 0 && (
           <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingVertical: tokens.spacing.xl }}>
-            Nada com esse nome. Continue escrevendo para perguntar ao ELYSIUM.
+            Nada com esse nome. Continue escrevendo para perguntar à Ely.
           </Text>
         )}
         {visiveis.map((it, i) => {
