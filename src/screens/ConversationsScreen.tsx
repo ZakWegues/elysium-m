@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { conversaEmMarkdown } from '../lib/exportarConversa';
 import Feather from '@expo/vector-icons/Feather';
 import {
   ChatSession, deleteSession, listSessions, renameSession, toggleFavorite,
@@ -192,6 +193,14 @@ export default function ConversationsScreen({
               </Pressable>
               <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={8} style={{ marginRight: 8 }}>
                 <Feather name="star" size={20} color={session.favorite ? '#F5A623' : palette.border} />
+              </Pressable>
+              <Pressable
+                onPress={() => { Share.share({ title: session.title, message: conversaEmMarkdown(session) }).catch(() => {}); }}
+                hitSlop={8}
+                style={{ marginRight: 8 }}
+                accessibilityLabel="Compartilhar a conversa"
+              >
+                <Feather name="share-2" size={18} color={palette.textMuted} />
               </Pressable>
               <Pressable onPress={() => handleDelete(session.id)} hitSlop={8}>
                 <Feather name="trash-2" size={20} color={palette.textMuted} />
