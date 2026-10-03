@@ -37,6 +37,7 @@ import { falar } from './src/lib/falar';
 import { DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
 import { useMicrofoneLivre } from './src/lib/microfone';
 import { ComandosIa } from './src/components/ComandosIa';
+import { BotaoInterromper } from './src/components/BotaoInterromper';
 import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -75,7 +76,7 @@ function AppInner() {
   const [modoChat, setModoChat] = useState<'ia' | 'pc'>('ia');
   /** Texto que a busca da Início mandou para o chat; o ChatScreen envia ao abrir e limpa. */
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
-  /** "Elysium" ouvido (bloco 129): cada disparo é um `n` novo para o Chat entrar na mão livre. */
+  /** "Elysium" ouvido (bloco 129): cada disparo é um `n` novo para o Chat ouvir um pedido. */
   const [pedidoVoz, setPedidoVoz] = useState<{ n: number; texto: string } | null>(null);
   const [palavraOn, setPalavraOn] = useState(false);
   const [appNaFrente, setAppNaFrente] = useState(AppState.currentState === 'active');
@@ -235,7 +236,8 @@ function AppInner() {
       return;
     }
     if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
-    else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
+    // "Falar com a Ely" já abre ouvindo um pedido, como se tivesse dito "Ely" (02/10).
+    else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); }
   }, []);
   useEffect(() => {
     QuickActions.setItems([
@@ -440,6 +442,7 @@ function AppInner() {
       {!keyboard.visible && sobreposicoes === 0 && (
         <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
+      <BotaoInterromper />
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />

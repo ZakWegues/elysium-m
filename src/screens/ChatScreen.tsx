@@ -44,8 +44,8 @@ export default function ChatScreen({
 }: {
   pairing: Pairing;
   /**
-   * "Elysium" ouvido pelo app (bloco 129): cada `n` novo entra na mão livre; com `texto`,
-   * ele é o primeiro pedido (o que veio colado na palavra).
+   * "Ely" ouvido pelo app (bloco 129): cada `n` novo vale um pedido por voz; com `texto`,
+   * ele é o próprio pedido (o que veio colado na palavra).
    */
   pedidoVoz?: { n: number; texto: string } | null;
   /** Texto que a busca da Início pediu para enviar. Enviado uma vez, ao chegar. */
@@ -88,13 +88,9 @@ export default function ChatScreen({
   const [recording, setRecording] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [micStatus, setMicStatus] = useState<MicStatus>('checking');
-  // Medição de nível ligada: é o que a conversa mão livre usa para saber quando a pessoa
-  // parou de falar (bloco 89). No aperta-e-fala não muda nada.
+  // Medição de nível ligada: é o que o pedido depois do "Ely" usa para saber quando a pessoa
+  // parou de falar. No aperta-e-fala não muda nada.
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
-  /** Conversa mão livre (bloco 89): grava → responde → volta a ouvir, sem tocar na tela. */
-  const [maoLivre, setMaoLivre] = useState(false);
-  const [faseMaoLivre, setFaseMaoLivre] = useState<'ouvindo' | 'pensando' | 'falando' | null>(null);
-  const maoLivreRef = useRef(false);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
   const listRef = useRef<FlatList<StoredMessage>>(null);
   // Começa SEMPRE em null, mesmo recebendo um sessionId. Inicializar com a prop fazia a
@@ -520,21 +516,28 @@ export default function ChatScreen({
     Alert.alert('Resposta', undefined, botoes, { cancelable: true });
   }
 
-  // ── Mão livre (bloco 89) ──────────────────────────────────────────────────
+  // ── Pedido por voz depois do "Ely" (02/10) ────────────────────────────────
+  // Era a conversa mão livre (bloco 89): gravava → respondia → voltava a ouvir, sem fim.
+  // O Zak pediu para tirar: agora "Ely" vale UM pedido — ouve, responde, fala e encerra.
+  // Para continuar, diz "Ely" de novo ou segura o microfone.
+  //
   // Nível em dBFS do expo-audio: fala perto do celular fica entre −30 e −10; um quarto
   // silencioso, abaixo de −50. Os dois limiares com folga entre si evitam que um ruído no
   // meio do caminho fique alternando "falou"/"calou".
   const LIMIAR_FALA_DB = -38;
   const LIMIAR_SILENCIO_DB = -46;
   const SILENCIO_PARA_FECHAR_MS = 1300;
-  const ESPERA_SEM_FALA_MS = 20_000;
+  // Depois do "Ely" a pessoa já está falando; 8 s sem voz é desistência, não pausa.
+  const ESPERA_SEM_FALA_MS = 8_000;
   const TETO_GRAVACAO_MS = 30_000;
-  // Só frases de encerrar, nunca "para" sozinho: "para a música" é um pedido, não um tchau.
-  const FRASES_DE_PARAR = /^\W*(chega|pode parar|tchau|at[eé] mais|obrigad[oa],? (é|e) s[oó]|encerrar|desliga (a )?m[aã]o livre)(?=\W|$)/i;
+
+  /** Fase do pedido por voz, para a faixa acima do campo. `null` = nenhum em andamento. */
+  const [faseVoz, setFaseVoz] = useState<'ouvindo' | 'pensando' | null>(null);
+  const turnoRef = useRef(false);
 
   /**
-   * Grava até a pessoa falar e calar. `uri` null = ninguém falou em 20 s (ou mão livre
-   * desligou). Os níveis e o motivo de parar voltam junto para o diagnóstico (bloco 116).
+   * Grava até a pessoa falar e calar. `uri` null = ninguém falou (ou o turno foi cancelado).
+   * Os níveis e o motivo de parar voltam junto para o diagnóstico (bloco 116).
    */
   async function gravarAteSilencio(): Promise<{ uri: string | null; niveis: number[]; inicio: number; primeiraFalaEm: number | null; fim: number; motivo: MotivoParada }> {
     await recorder.prepareToRecordAsync();
@@ -546,7 +549,7 @@ export default function ChatScreen({
     let motivo: MotivoParada = 'desligou';
     const niveis: number[] = [];
     try {
-      while (maoLivreRef.current) {
+      while (turnoRef.current) {
         await new Promise((r) => setTimeout(r, 120));
         const nivel = recorder.getStatus().metering ?? -160;
         niveis.push(nivel);
@@ -560,10 +563,10 @@ export default function ChatScreen({
     } finally {
       try { await recorder.stop(); } catch { /* já parado */ }
     }
-    return { uri: falou && maoLivreRef.current ? recorder.uri : null, niveis, inicio, primeiraFalaEm, fim: Date.now(), motivo };
+    return { uri: falou && turnoRef.current ? recorder.uri : null, niveis, inicio, primeiraFalaEm, fim: Date.now(), motivo };
   }
 
-  /** Pedido falado que já veio em texto (colado no "Elysium"): mesma conversa, sem gravar. */
+  /** Pedido falado que já veio em texto (colado no "Ely"): mesma conversa, sem gravar. */
   async function enviarTextoFalado(texto: string): Promise<string | null> {
     setSending(true);
     setMessages((prev) => [...prev, { id: `me-voz-${Date.now()}`, from: 'me', text: texto, ts: Date.now() }]);
@@ -582,84 +585,72 @@ export default function ChatScreen({
     }
   }
 
-  async function cicloMaoLivre(primeiroPedido?: string) {
-    const linhas: string[] = [];
-    let numero = 0;
-    ocuparMicrofone('mao-livre');
-    // O reconhecedor do "Elysium" acabou de ser abortado; um respiro para ele soltar o microfone.
-    await new Promise((r) => setTimeout(r, 300));
-    if (primeiroPedido) {
-      setFaseMaoLivre('pensando');
-      const reply = await enviarTextoFalado(primeiroPedido);
-      if (reply && maoLivreRef.current && !FRASES_DE_PARAR.test(primeiroPedido)) {
-        setFaseMaoLivre('falando');
-        await falar(reply, pairing);
+  /** Um pedido só: o que veio colado no "Ely", ou o que a pessoa falar em seguida. */
+  async function turnoDeVoz(pedidoColado?: string) {
+    turnoRef.current = true;
+    ocuparMicrofone('gravar');
+    let linha: string | null = null;
+    try {
+      // O reconhecedor do "Ely" acabou de ser abortado; um respiro para ele soltar o microfone.
+      await new Promise((r) => setTimeout(r, 300));
+      let resposta: string | null = null;
+      if (pedidoColado) {
+        setFaseVoz('pensando');
+        resposta = await enviarTextoFalado(pedidoColado);
       } else {
-        maoLivreRef.current = false;
+        setFaseVoz('ouvindo');
+        haptica.leve();
+        const g = await gravarAteSilencio();
+        if (!turnoRef.current) return;
+        if (!g.uri) {
+          linha = resumoRodada({ numero: 1, ...g, caracteres: null });
+          pushError('Não ouvi nenhum pedido. Diga "Ely" de novo quando quiser.');
+          return;
+        }
+        setFaseVoz('pensando');
+        const r = await enviarAudio(g.uri);
+        linha = resumoRodada({ numero: 1, ...g, caracteres: r ? r.transcricao.trim().length : null });
+        resposta = r?.reply ?? null;
       }
+      setFaseVoz(null);
+      liberarMicrofone('gravar');
+      // A fala tem o botão "Interromper" do App (02/10); aqui só espera ela acabar.
+      if (resposta && turnoRef.current) await falar(resposta, pairing);
+    } catch (err) {
+      pushError(`Voz: ${errMessage(err)}`);
+    } finally {
+      turnoRef.current = false;
+      setFaseVoz(null);
+      liberarMicrofone('gravar');
+      // Para o log do PC (bloco 116). Melhor esforço: sem PC, a calibragem só perde este pedido.
+      if (linha) callRpc(pairing, 'diag.registrar', { origem: 'voz-ely', linhas: [linha] }).catch(() => {});
     }
-    while (maoLivreRef.current) {
-      setFaseMaoLivre('ouvindo');
-      haptica.leve();
-      let g: Awaited<ReturnType<typeof gravarAteSilencio>>;
-      try { g = await gravarAteSilencio(); }
-      catch (err) { pushError(`Mão livre: ${errMessage(err)}`); break; }
-      numero++;
-      if (!maoLivreRef.current || !g.uri) {
-        linhas.push(resumoRodada({ numero, ...g, caracteres: null }));
-        if (maoLivreRef.current) pushError('Ninguém falou em 20 s — mão livre desligada.');
-        break;
-      }
-      setFaseMaoLivre('pensando');
-      const r = await enviarAudio(g.uri);
-      linhas.push(resumoRodada({ numero, ...g, caracteres: r ? r.transcricao.trim().length : null }));
-      if (!r || !maoLivreRef.current) break;
-      if (FRASES_DE_PARAR.test(r.transcricao.trim())) break;
-      setFaseMaoLivre('falando');
-      await falar(r.reply, pairing);
-    }
-    maoLivreRef.current = false;
-    setMaoLivre(false);
-    setFaseMaoLivre(null);
-    liberarMicrofone('mao-livre');
-    // Para o log do PC (bloco 116). Melhor esforço: sem PC, a calibragem só perde esta conversa.
-    if (linhas.length) callRpc(pairing, 'diag.registrar', { origem: 'mao-livre', linhas }).catch(() => {});
   }
 
-  function alternarMaoLivre() {
-    if (maoLivreRef.current) {
-      maoLivreRef.current = false;
-      pararDeFalar();
-      haptica.leve();
-      return;
-    }
-    if (micStatus !== 'ready') {
-      Alert.alert('Microfone indisponível', 'Permissão de microfone não foi concedida.');
-      return;
-    }
-    maoLivreRef.current = true;
-    setMaoLivre(true);
-    haptica.medio();
-    cicloMaoLivre();
+  function cancelarTurno() {
+    turnoRef.current = false;
+    pararDeFalar();
+    haptica.leve();
   }
 
-  // Sair da tela (ou trocar de conversa) desliga a mão livre: microfone aberto sem ninguém
+  // Sair da tela (ou trocar de conversa) cancela o pedido: microfone aberto sem ninguém
   // olhando para a tela é exatamente o que ninguém quer.
-  useEffect(() => () => { maoLivreRef.current = false; pararDeFalar(); liberarMicrofone('mao-livre'); liberarMicrofone('gravar'); }, []);
+  useEffect(() => () => { turnoRef.current = false; pararDeFalar(); liberarMicrofone('gravar'); }, []);
 
-  // "Elysium" ouvido (bloco 129): entra na mão livre — e, se o pedido veio colado, ele é a
-  // primeira rodada. Um respiro antes de gravar: o reconhecedor acabou de soltar o microfone.
+  // "Ely" ouvido (bloco 129): um pedido — o colado na palavra, ou o próximo que a pessoa
+  // falar. Um respiro antes de gravar: o reconhecedor acabou de soltar o microfone.
   const ultimoPedidoVoz = useRef(0);
   useEffect(() => {
     if (!pedidoVoz || pedidoVoz.n === ultimoPedidoVoz.current) return;
+    // Microfone ainda conferindo (Chat recém-aberto pelo atalho): espera, o efeito roda de
+    // novo quando o status muda. Marcar antes perderia o pedido.
+    if (micStatus === 'checking') return;
     ultimoPedidoVoz.current = pedidoVoz.n;
-    if (maoLivreRef.current || micStatus !== 'ready') return;
+    if (turnoRef.current || micStatus !== 'ready') return;
     const texto = pedidoVoz.texto.trim();
     const t = setTimeout(() => {
-      maoLivreRef.current = true;
-      setMaoLivre(true);
       haptica.medio();
-      cicloMaoLivre(texto || undefined);
+      turnoDeVoz(texto || undefined);
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -784,13 +775,13 @@ export default function ChatScreen({
         </View>
       )}
 
-      {maoLivre && (
-        <View style={[styles.faixaMaoLivre, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
-          <Feather name={faseMaoLivre === 'falando' ? 'volume-2' : faseMaoLivre === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />
+      {faseVoz && (
+        <View style={[styles.faixaVoz, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
+          <Feather name={faseVoz === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />
           <Text variant="caption" color={palette.primary} style={{ flex: 1 }}>
-            {faseMaoLivre === 'falando' ? 'Respondendo…' : faseMaoLivre === 'pensando' ? 'Pensando…' : 'Mão livre — pode falar. Diga "chega" para parar.'}
+            {faseVoz === 'pensando' ? 'Pensando…' : 'Pode falar o pedido.'}
           </Text>
-          <Pressable onPress={alternarMaoLivre} hitSlop={10}>
+          <Pressable onPress={cancelarTurno} hitSlop={10} accessibilityLabel="Cancelar pedido por voz">
             <Feather name="x" size={16} color={palette.primary} />
           </Pressable>
         </View>
@@ -839,7 +830,7 @@ export default function ChatScreen({
           pulsando={recording}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
-          disabled={sending || micStatus !== 'ready' || maoLivre}
+          disabled={sending || micStatus !== 'ready' || faseVoz !== null}
         >
           <Feather
             name="mic"
@@ -847,17 +838,9 @@ export default function ChatScreen({
             color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
           />
         </GlassCircle>
-        {/* Com o campo vazio, o botão de enviar vira o da conversa mão livre (bloco 89):
-            não há o que enviar, e o gesto "falar sem segurar" mora perto do microfone. */}
-        {draft.trim() || sending ? (
-          <GlassCircle size={40} ativo onPress={() => handleSend()} disabled={sending}>
-            <Feather name="arrow-up" size={20} color={palette.primary} />
-          </GlassCircle>
-        ) : (
-          <GlassCircle size={40} ativo={maoLivre} pulsando={maoLivre && faseMaoLivre === 'ouvindo'} onPress={alternarMaoLivre} disabled={micStatus !== 'ready'}>
-            <Feather name="headphones" size={19} color={maoLivre ? palette.error : palette.primary} />
-          </GlassCircle>
-        )}
+        <GlassCircle size={40} ativo={!!draft.trim()} onPress={() => handleSend()} disabled={sending || !draft.trim()}>
+          <Feather name="arrow-up" size={20} color={draft.trim() ? palette.primary : palette.textMuted} />
+        </GlassCircle>
         </View>
       </View>
 
@@ -961,7 +944,7 @@ const styles = StyleSheet.create({
   fontes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   fonte: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, maxWidth: 180 },
   sugestao: { paddingHorizontal: 11, paddingVertical: 7, borderWidth: StyleSheet.hairlineWidth },
-  faixaMaoLivre: {
+  faixaVoz: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: 12, marginBottom: 8, paddingVertical: 8, paddingHorizontal: 12,
     borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,

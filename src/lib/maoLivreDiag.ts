@@ -1,5 +1,5 @@
 /**
- * Números da mão livre (fase 13, bloco 116).
+ * Números do pedido por voz (fase 13, bloco 116; a mão livre saiu em 02/10).
  *
  * Os limiares do bloco 89 (−38 dB para "falou", −46 para "ainda falando", 1,3 s de silêncio
  * para fechar) foram escolhidos sem medir nada no celular de verdade. Cada rodada vira uma linha
@@ -29,7 +29,7 @@ const DESCRICAO: Record<MotivoParada, string> = {
   silencio: 'silêncio depois da fala',
   sem_fala: 'ninguém falou em 20 s',
   teto: 'teto de 30 s',
-  desligou: 'mão livre desligada',
+  desligou: 'pedido cancelado',
 };
 
 function segundos(ms: number): string {

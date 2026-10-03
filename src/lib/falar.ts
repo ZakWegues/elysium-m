@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { createAudioPlayer, AudioPlayer } from 'expo-audio';
@@ -5,6 +6,7 @@ import { File, Paths } from 'expo-file-system';
 import { Pairing } from './pairing';
 import { fetchWithTimeout } from './http';
 import { liberarMicrofone, ocuparMicrofone } from './microfone';
+import { escolherVozFeminina } from './vozFeminina';
 
 /**
  * Falar uma resposta no celular (bloco 85).
@@ -18,7 +20,7 @@ import { liberarMicrofone, ocuparMicrofone } from './microfone';
  * Baixa para um arquivo em vez de dar a URL ao player: assim o prazo é nosso, e uma falha
  * vira fallback em vez de um player mudo esperando para sempre.
  *
- * A promessa só resolve quando a fala TERMINA (bloco 89): a conversa mão livre precisa
+ * A promessa só resolve quando a fala TERMINA (bloco 89): o pedido por voz e o botão Interromper precisam
  * saber a hora de voltar a ouvir — antes disso o microfone gravaria a própria resposta.
  */
 
@@ -26,6 +28,16 @@ const CHAVE = 'elysium_voz_do_pc_v1';
 const PRAZO_MS = 8000;
 
 let player: AudioPlayer | null = null;
+/** Voz feminina do aparelho, procurada uma vez (02/10). `null` = não achou; usa a padrão. */
+let vozDoAparelho: Promise<string | null> | null = null;
+function vozFemininaDoAparelho(): Promise<string | null> {
+  if (!vozDoAparelho) {
+    vozDoAparelho = Speech.getAvailableVoicesAsync()
+      .then(v => escolherVozFeminina(v))
+      .catch(() => null);
+  }
+  return vozDoAparelho;
+}
 let preferencia: boolean | null = null;
 /** Resolve a fala em curso quando alguém interrompe — ninguém fica esperando para sempre. */
 let terminarAtual: (() => void) | null = null;
@@ -56,13 +68,44 @@ function tetoDaFala(texto: string): number {
   return Math.min(120_000, 6000 + texto.length * 90);
 }
 
+// ── "Está falando?" para o botão Interromper (02/10) ─────────────────────────
+// Com a mão livre fora, parar a Ely no meio da fala volta a ser um botão na tela, visível
+// em qualquer tela enquanto ela fala. Mesmo padrão do `useMicrofoneLivre`.
+let falandoAgora = false;
+const ouvintesDaFala = new Set<(f: boolean) => void>();
+function marcarFala(f: boolean) {
+  if (falandoAgora === f) return;
+  falandoAgora = f;
+  ouvintesDaFala.forEach(fn => fn(f));
+}
+export function useFalando(): boolean {
+  const [f, setF] = useState(falandoAgora);
+  useEffect(() => {
+    ouvintesDaFala.add(setF);
+    setF(falandoAgora);
+    return () => { ouvintesDaFala.delete(setF); };
+  }, []);
+  return f;
+}
+
+/**
+ * Cada fala tem um número. Uma fala nova interrompe a anterior, e o `finally` da anterior
+ * roda DEPOIS de a nova começar: sem o número, ele soltava o microfone e apagava o
+ * "falando" no meio da fala nova.
+ */
+let geracao = 0;
+
 export async function falar(texto: string, pairing: Pairing | null): Promise<void> {
   const t = texto.trim();
   if (!t) return;
   pararDeFalar();
-  // Bloco 129: enquanto fala, a palavra "Elysium" não escuta — ouviria a própria voz.
+  const minha = ++geracao;
+  // Bloco 129: enquanto fala, a palavra "Ely" não escuta — ouviria a própria voz.
   ocuparMicrofone('falar');
-  try { await falarAgora(t, pairing); } finally { liberarMicrofone('falar'); }
+  marcarFala(true);
+  try { await falarAgora(t, pairing); } finally {
+    if (minha === geracao) { liberarMicrofone('falar'); marcarFala(false); }
+  }
 }
 
 async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
@@ -98,6 +141,7 @@ async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
       // Cai na voz do aparelho logo abaixo.
     }
   }
+  const voz = await vozFemininaDoAparelho();
   await new Promise<void>((resolver) => {
     let feito = false;
     const terminar = () => {
@@ -110,6 +154,7 @@ async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
     const teto = setTimeout(terminar, tetoDaFala(t));
     terminarAtual = terminar;
     // "Ely" lido "Éli" (02/10), como na voz do PC.
-    Speech.speak(t.replace(/\bEly\b/gi, 'Éli'), { language: 'pt-BR', onDone: terminar, onStopped: terminar, onError: terminar });
+    // Voz feminina do aparelho quando achar uma (02/10); senão a padrão com o tom um pouco acima.
+    Speech.speak(t.replace(/\bEly\b/gi, 'Éli'), { language: 'pt-BR', ...(voz ? { voice: voz } : { pitch: 1.1 }), onDone: terminar, onStopped: terminar, onError: terminar });
   });
 }
