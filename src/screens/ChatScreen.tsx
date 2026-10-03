@@ -263,10 +263,12 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[]) => void; comecou: () => boolean } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[]) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
+    let ultimo = '';
     const onChunk = (parcial: string) => {
+      ultimo = parcial;
       if (!criada) {
         criada = true;
         setEscrevendoId(id);
@@ -281,7 +283,25 @@ export default function ChatScreen({
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
-    return { onChunk, fechar, comecou: () => criada };
+    return { onChunk, fechar, comecou: () => criada, parcial: () => ultimo };
+  }
+
+  /**
+   * "Parar" enquanto a resposta chega (02/10, como no ChatGPT). Fecha o WebSocket — o PC
+   * descarta o resto — e o que já chegou fica na bolha, marcado com "…". A conexão reabre
+   * sozinha no próximo envio (`ensureVoiceConnection`).
+   */
+  const paradoRef = useRef(false);
+  const bolhaAtualRef = useRef<ReturnType<typeof bolhaEmPedacos> | null>(null);
+  function pararResposta() {
+    if (!sending || paradoRef.current) return;
+    paradoRef.current = true;
+    haptica.leve();
+    const b = bolhaAtualRef.current;
+    if (b?.comecou()) b.fechar(b.parcial().trimEnd() + ' …');
+    else setEscrevendoId(null);
+    voiceConnRef.current?.close();
+    voiceConnRef.current = null;
   }
 
   async function rodarComandoIa(cmd: { id: string; nome: string }, alvo: string) {
@@ -312,6 +332,8 @@ export default function ChatScreen({
     setSending(true);
 
     const bolha = bolhaEmPedacos();
+    bolhaAtualRef.current = bolha;
+    paradoRef.current = false;
     try {
       // WebSocket primeiro: é o único caminho que traz a resposta em pedaços. Se ele não
       // abrir (PC de pé mas WS bloqueado, por exemplo), o HTTP de sempre continua valendo
@@ -332,15 +354,18 @@ export default function ChatScreen({
       } catch (wsErr) {
         // Só cai no HTTP se o PC não chegou a responder NADA: com pedaços já na tela o
         // comando já rodou lá, e mandar de novo abriria o programa duas vezes.
-        if (bolha.comecou()) throw wsErr;
+        if (bolha.comecou() || paradoRef.current) throw wsErr;
         console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
         reply = await sendCommand(pairing, text, 'texto');
       }
+      if (paradoRef.current) return;
       bolha.fechar(reply, fontes);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       speakReply(paraFala(reply));
     } catch (err) {
       setEscrevendoId(null);
+      // Parado pelo botão: o erro é o da conexão fechada de propósito, não um problema.
+      if (paradoRef.current) return;
       if (err instanceof AuthError) {
         Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
         onUnpair();
@@ -362,6 +387,8 @@ export default function ChatScreen({
       pushError(`Falha: ${errMessage(err)}`);
     } finally {
       setSending(false);
+      bolhaAtualRef.current = null;
+      paradoRef.current = false;
     }
   }
 
@@ -838,9 +865,15 @@ export default function ChatScreen({
             color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
           />
         </GlassCircle>
-        <GlassCircle size={40} ativo={!!draft.trim()} onPress={() => handleSend()} disabled={sending || !draft.trim()}>
-          <Feather name="arrow-up" size={20} color={draft.trim() ? palette.primary : palette.textMuted} />
-        </GlassCircle>
+        {sending ? (
+          <GlassCircle size={40} ativo onPress={pararResposta}>
+            <Feather name="square" size={17} color={palette.error} />
+          </GlassCircle>
+        ) : (
+          <GlassCircle size={40} ativo={!!draft.trim()} onPress={() => handleSend()} disabled={!draft.trim()}>
+            <Feather name="arrow-up" size={20} color={draft.trim() ? palette.primary : palette.textMuted} />
+          </GlassCircle>
+        )}
         </View>
       </View>
 
