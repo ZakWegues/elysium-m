@@ -16,7 +16,7 @@ import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text, Toque } from '../components/ui';
-import { falar, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
+import { falar, lerRespostasEscritas, ligarLerRespostasEscritas, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 
 /**
@@ -392,8 +392,9 @@ function VozSection({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [doPc, setDoPc] = useState(true);
   const [palavra, setPalavra] = useState(true);
+  const [ler, setLer] = useState(true);
   const estado = useEstadoPalavra();
-  useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); }, []);
+  useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); lerRespostasEscritas().then(setLer); }, []);
   const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
     { valor: true, rotulo: 'Voz do PC', nota: 'A mesma voz neural da caixa de som do PC (escolhida em Ajustes → Voz lá). Sem PC, cai na do celular.', icone: 'monitor' },
     { valor: false, rotulo: 'Voz do celular', nota: 'A voz do Android. Funciona sem o PC, mas soa mais robótica.', icone: 'smartphone' },
@@ -406,10 +407,20 @@ function VozSection({ pairing }: { pairing: Pairing }) {
         <View style={{ flex: 1 }}>
           <Text variant="body">Ouvir “Ely”</Text>
           <Text variant="caption" color={palette.textMuted}>
-            Com o app aberto na Início ou no Chat, diga “Ely” (ou “Ely, pausa a música”) e ela entra na conversa por voz. Só com o app na tela — nada escuta em segundo plano.
+            Com o app aberto na Início ou no Chat, diga “Ely” e o seu pedido (ou “Ely, pausa a música”). Ela responde uma vez; para outro pedido, diga “Ely” de novo. Só com o app na tela — nada escuta em segundo plano.
           </Text>
         </View>
         <Switch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} trackColor={{ true: palette.primary }} />
+      </View>
+      <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+        <Feather name="volume-2" size={17} color={ler ? palette.primary : palette.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body">Ler respostas digitadas</Text>
+          <Text variant="caption" color={palette.textMuted}>
+            Quando você digita, ela também fala o começo da resposta. Pedidos por voz sempre respondem falando.
+          </Text>
+        </View>
+        <Switch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} trackColor={{ true: palette.primary }} />
       </View>
       {palavra && (
         <Text variant="caption" color={estado.fase === 'falhou' ? palette.error : palette.textMuted}>

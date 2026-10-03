@@ -20,7 +20,13 @@ export type Bloco =
   | { tipo: 'paragrafo'; trechos: Trecho[] }
   | { tipo: 'titulo'; nivel: number; trechos: Trecho[] }
   | { tipo: 'item'; marcador: string; nivel: number; trechos: Trecho[] }
-  | { tipo: 'codigo'; linguagem: string; texto: string };
+  | { tipo: 'codigo'; linguagem: string; texto: string }
+  | { tipo: 'tabela'; cabecalho: Trecho[][]; linhas: Trecho[][][] };
+
+/** "| a | b |" → ["a", "b"]. As barras das pontas são opcionais no markdown. */
+function celulas(linha: string): string[] {
+  return linha.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+}
 
 const INLINE = /(\*\*([^*\n]+)\*\*)|(`([^`\n]+)`)|(\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\))|((?:^|(?<=\s))(?:\*|_)([^*_\n]+)(?:\*|_)(?=\s|[.,;:!?]|$))|(https?:\/\/[^\s)]+)/g;
 
@@ -61,6 +67,18 @@ export function parseMarkdown(md: string): Bloco[] {
       continue;
     }
     if (!linha.trim()) { fecharParagrafo(); continue; }
+    // Tabela (02/10): a Ely gera tabela no chat escrito (comparações, horários), e sem isto
+    // ela chegava como um parágrafo de barras. Precisa da linha "|---|---|" logo abaixo.
+    if (linha.includes('|') && i + 1 < linhas.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(linhas[i + 1])) {
+      fecharParagrafo();
+      const cabecalho = celulas(linha).map(parseInline);
+      const corpo: Trecho[][][] = [];
+      i += 2;
+      while (i < linhas.length && linhas[i].includes('|') && linhas[i].trim()) corpo.push(celulas(linhas[i++]).map(parseInline));
+      i--;
+      blocos.push({ tipo: 'tabela', cabecalho, linhas: corpo });
+      continue;
+    }
     const titulo = /^(#{1,3})\s+(.+)$/.exec(linha);
     if (titulo) { fecharParagrafo(); blocos.push({ tipo: 'titulo', nivel: titulo[1].length, trechos: parseInline(titulo[2]) }); continue; }
     const item = /^(\s*)([-*•]|\d+[.)])\s+(.+)$/.exec(linha);
@@ -78,8 +96,10 @@ export function parseMarkdown(md: string): Bloco[] {
 
 /** O texto sem marcação — o que vai para a área de transferência e para a voz. */
 export function textoPuro(md: string): string {
+  const celula = (c: Trecho[]) => c.map(x => x.texto).join('');
   return parseMarkdown(md).map(b => {
     if (b.tipo === 'codigo') return b.texto;
+    if (b.tipo === 'tabela') return [b.cabecalho, ...b.linhas].map(l => l.map(celula).join(' | ')).join('\n');
     const t = b.trechos.map(x => x.texto).join('');
     return b.tipo === 'item' ? `${b.marcador} ${t}` : t;
   }).join('\n');
@@ -91,7 +111,8 @@ export function textoPuro(md: string): string {
  * começo, em frases inteiras, e avisa que o resto está na tela.
  */
 export function paraFala(md: string, limite = 320): string {
-  const limpo = parseMarkdown(md).filter(b => b.tipo !== 'codigo').map(b => {
+  // Código e tabela não se leem em voz alta: ficam na tela.
+  const limpo = parseMarkdown(md).filter(b => b.tipo !== 'codigo' && b.tipo !== 'tabela').map(b => {
     const t = (b as { trechos: Trecho[] }).trechos.map(x => x.texto).join('');
     return /[.!?:]$/.test(t) ? t : `${t}.`;
   }).join(' ').replace(/\s+/g, ' ').trim();

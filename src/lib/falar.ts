@@ -49,6 +49,24 @@ export async function vozDoPcLigada(): Promise<boolean> {
   return preferencia;
 }
 
+/**
+ * Ler em voz alta as respostas DIGITADAS (02/10). A voz é o padrão desde o bloco 85, mas
+ * quem digita costuma estar onde não dá para ouvir — agora dá para desligar. Pedidos por
+ * voz (o "Ely", segurar o microfone) sempre respondem falando.
+ */
+const CHAVE_LER = 'elysium_ler_respostas_escritas_v1';
+let lerEscritas: boolean | null = null;
+export async function lerRespostasEscritas(): Promise<boolean> {
+  if (lerEscritas === null) {
+    try { lerEscritas = (await AsyncStorage.getItem(CHAVE_LER)) !== '0'; } catch { lerEscritas = true; }
+  }
+  return lerEscritas;
+}
+export async function ligarLerRespostasEscritas(ligar: boolean): Promise<void> {
+  lerEscritas = ligar;
+  try { await AsyncStorage.setItem(CHAVE_LER, ligar ? '1' : '0'); } catch { /* fica só na memória */ }
+}
+
 export async function ligarVozDoPc(ligar: boolean): Promise<void> {
   preferencia = ligar;
   try { await AsyncStorage.setItem(CHAVE, ligar ? '1' : '0'); } catch { /* fica só na memória */ }

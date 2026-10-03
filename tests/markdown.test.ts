@@ -43,3 +43,22 @@ describe('paraFala no celular (bloco 130)', () => {
     expect(paraFala('Veja:\n```\nconst x = 1;\n```')).not.toMatch(/const/);
   });
 });
+
+describe('tabela (02/10)', () => {
+  const md = 'Comparando:\n\n| Plano | Preço |\n|---|:---:|\n| **Pro** | 20 |\n| Max | 100 |\n\nFim.';
+  it('vira bloco de tabela com cabeçalho e linhas; o resto continua', () => {
+    const b = parseMarkdown(md);
+    expect(b.map(x => x.tipo)).toEqual(['paragrafo', 'tabela', 'paragrafo']);
+    const t = b[1] as Extract<typeof b[number], { tipo: 'tabela' }>;
+    expect(t.cabecalho.length).toBe(2);
+    expect(t.linhas.length).toBe(2);
+    expect(t.linhas[0][0][0]).toEqual({ tipo: 'negrito', texto: 'Pro' });
+  });
+  it('texto puro em linhas com barra; a voz pula a tabela', () => {
+    expect(textoPuro(md)).toContain('Pro | 20');
+    expect(paraFala(md)).toBe('Comparando: Fim.');
+  });
+  it('barra solta sem a linha de traços não vira tabela', () => {
+    expect(parseMarkdown('a | b')[0].tipo).toBe('paragrafo');
+  });
+});

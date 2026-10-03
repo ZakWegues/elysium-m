@@ -3,7 +3,7 @@ import { Alert, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, 
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
-import { falar, pararDeFalar } from '../lib/falar';
+import { falar, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -361,7 +361,7 @@ export default function ChatScreen({
       if (paradoRef.current) return;
       bolha.fechar(reply, fontes);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
-      speakReply(paraFala(reply));
+      if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
       setEscrevendoId(null);
       // Parado pelo botão: o erro é o da conexão fechada de propósito, não um problema.

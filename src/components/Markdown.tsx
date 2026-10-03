@@ -1,4 +1,7 @@
-import { Linking, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { Feather } from '@expo/vector-icons';
+import { haptica } from '../lib/haptica';
 import { Text } from './ui';
 import { useTheme } from '../theme';
 import { Bloco, parseMarkdown, Trecho } from '../lib/markdown';
@@ -41,8 +44,31 @@ export function Markdown({ texto, cor }: { texto: string; cor: string }) {
       case 'codigo':
         return (
           <View key={i} style={[styles.codigo, { borderRadius: tokens.radii.sm, backgroundColor: palette.background, borderColor: palette.border }]}>
+            {/* Copiar só o código com um toque (02/10): o toque longo copia a bolha inteira. */}
+            <Pressable
+              onPress={() => { Clipboard.setStringAsync(b.texto).catch(() => {}); haptica.leve(); }}
+              hitSlop={10}
+              style={styles.copiarCodigo}
+              accessibilityLabel="Copiar o código"
+            >
+              <Feather name="copy" size={13} color={palette.textMuted} />
+            </Pressable>
             <Text variant="caption" color={cor} style={styles.mono} selectable>{b.texto}</Text>
           </View>
+        );
+      case 'tabela':
+        return (
+          <ScrollView key={i} horizontal showsHorizontalScrollIndicator={false}>
+            <View style={[styles.tabela, { borderColor: palette.border, borderRadius: tokens.radii.sm }]}>
+              {[b.cabecalho, ...b.linhas].map((linha, li) => (
+                <View key={li} style={[styles.linhaTabela, li > 0 && { borderTopColor: palette.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                  {linha.map((cel, ci) => (
+                    <Text key={ci} variant="caption" color={cor} style={[styles.celula, li === 0 && styles.negrito]}>{trechos(cel)}</Text>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         );
       default:
         return <Text key={i} variant="body" color={cor}>{trechos(b.trechos)}</Text>;
@@ -58,5 +84,9 @@ const styles = StyleSheet.create({
   link: { textDecorationLine: 'underline' },
   item: { flexDirection: 'row', gap: 6 },
   marcador: { minWidth: 14 },
-  codigo: { padding: 8, borderWidth: StyleSheet.hairlineWidth },
+  codigo: { padding: 8, paddingRight: 30, borderWidth: StyleSheet.hairlineWidth },
+  copiarCodigo: { position: 'absolute', top: 6, right: 6, zIndex: 1 },
+  tabela: { borderWidth: StyleSheet.hairlineWidth },
+  linhaTabela: { flexDirection: 'row' },
+  celula: { minWidth: 72, maxWidth: 180, paddingHorizontal: 8, paddingVertical: 5 },
 });
