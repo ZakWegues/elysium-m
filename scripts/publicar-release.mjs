@@ -36,14 +36,40 @@ if (!notas.trim()) falhar("faltam as notas: npm run release -- \"o que mudou\"")
 if (!fs.existsSync(apk)) falhar("não achei dist-apk/elysium-m.apk — rode npm run build:local antes");
 
 // A versão de DENTRO do APK, não a do app.json: é ela que o celular vai comparar.
-const aapt2 = path.join(process.env.ANDROID_HOME || path.join(os.homedir(), "Android", "Sdk"), "build-tools", "36.0.0", "aapt2.exe");
-if (fs.existsSync(aapt2)) {
+// 07/10: procura em QUALQUER build-tools (era fixo no 36.0.0) e, sem a ferramenta, FALHA —
+// antes só avisava e publicava, e um APK com a versão errada deixava o cartão "versão nova"
+// em laço no celular.
+function ferramenta(nome) {
+  const sdk = process.env.ANDROID_HOME || path.join(os.homedir(), "Android", "Sdk");
+  const bt = path.join(sdk, "build-tools");
+  const versoes = fs.existsSync(bt) ? fs.readdirSync(bt).sort((a, b) => b.localeCompare(a, undefined, { numeric: true })) : [];
+  for (const v of versoes) {
+    const f = path.join(bt, v, nome);
+    if (fs.existsSync(f)) return f;
+  }
+  return null;
+}
+const aapt2 = ferramenta("aapt2.exe");
+if (!aapt2) falhar("aapt2 não encontrado no Android SDK; sem ele não dá para conferir a versão do APK");
+{
   const badging = sh(aapt2, ["dump", "badging", apk]).split(/\r?\n/)[0];
   const nome = /versionName='([^']+)'/.exec(badging)?.[1];
   const codigo = Number(/versionCode='(\d+)'/.exec(badging)?.[1]);
   if (nome !== versao || codigo !== versionCode) falhar(`o APK é ${nome} (${codigo}), mas o app.json diz ${versao} (${versionCode}) — gere o APK de novo`);
-} else {
-  console.warn("! aapt2 não encontrado; publicando sem conferir a versão de dentro do APK");
+  console.log(`✓ APK ${nome} (${codigo})`);
+}
+
+// O certificado (07/10): sem o arquivo de assinatura o build sai com a chave de DEBUG, e o
+// Android recusa por cima do instalado ("app não instalado") sem dizer por quê. Só publica
+// com a mesma chave de sempre.
+const CERTIFICADO = "3b49374de7f46c17a50123e476318463b803826d562a3390405a31915be0e81c";
+const apksigner = ferramenta("apksigner.bat");
+if (!apksigner) falhar("apksigner não encontrado no Android SDK; sem ele não dá para conferir a assinatura");
+{
+  const saida = sh("cmd.exe", ["/c", apksigner, "verify", "--print-certs", apk]);
+  const digest = /certificate SHA-256 digest: ([0-9a-f]+)/i.exec(saida)?.[1]?.toLowerCase();
+  if (digest !== CERTIFICADO) falhar(`o APK foi assinado com outra chave (${digest ?? "nenhuma"}) — o celular recusaria por cima do instalado`);
+  console.log("✓ assinatura de sempre");
 }
 
 if (sh("git", ["status", "--porcelain"])) falhar("há mudança não commitada; a release tem de corresponder a um commit");
