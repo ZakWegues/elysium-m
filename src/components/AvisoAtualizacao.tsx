@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../theme';
 import { Button, Card, Text } from './ui';
 import type { Pairing } from '../lib/pairing';
 import {
-  adiada, adiar, baixarEInstalar, instalarNoPc, marcarNovidadesVistas, notasLimpas,
+  abrirPermissaoDeInstalar, adiada, adiar, baixarEInstalar, cancelarDownload, instalarNoPc, marcarNovidadesVistas, notasLimpas,
   novidadesPendentes, situacaoAtualizacao, versaoInstalada, type SituacaoAtualizacao,
 } from '../lib/atualizacao';
 import { confirmDestructive } from '../lib/confirm';
@@ -41,7 +41,25 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
     }
   }, [pairing, modo]);
 
-  useEffect(() => { void conferir(); }, [conferir]);
+  // Pergunta ao abrir e ao voltar ao app. Status do PC com mais de 30 min (ele confere a
+  // cada 6 h): pede para conferir o GitHub agora, em segundo plano, e mostra quando voltar
+  // (07/10 — antes o cartão só via o que o PC achou na última volta dele).
+  useEffect(() => {
+    let vivo = true;
+    const rodar = async () => {
+      await conferir();
+      try {
+        const s = await situacaoAtualizacao(pairing);
+        if (vivo && (!s.verificadoEm || Date.now() - s.verificadoEm > 30 * 60_000)) {
+          await situacaoAtualizacao(pairing, true);
+          if (vivo) await conferir();
+        }
+      } catch { /* PC fora: o cartão só não aparece */ }
+    };
+    void rodar();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') void rodar(); });
+    return () => { vivo = false; sub.remove(); };
+  }, [conferir, pairing]);
 
   const apk = sit?.apk ?? null;
 
@@ -51,10 +69,21 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
     setProgresso(0);
     try {
       await baixarEInstalar(pairing, apk, setProgresso);
-      haptica.sucesso();
+      // Chegou aqui = o instalador fechou SEM instalar (instalando, o app reinicia). Antes
+      // isto vibrava "sucesso" e o cartão continuava lá sem explicação.
+      haptica.aviso();
+      Alert.alert(
+        'A instalação não terminou',
+        'Se o Android pediu para permitir "instalar apps desconhecidos", libere para o ELYSIUM-M e toque em "Baixar e instalar" de novo.',
+        [
+          { text: 'Abrir a permissão', onPress: () => { void abrirPermissaoDeInstalar(); } },
+          { text: 'Tentar de novo', onPress: () => { void instalar(); } },
+          { text: 'Agora não', style: 'cancel' },
+        ],
+      );
     } catch (e) {
       haptica.erro();
-      Alert.alert('Não deu para atualizar', errMessage(e));
+      if (!/cancel/i.test(errMessage(e))) Alert.alert('Não deu para atualizar', errMessage(e));
     } finally {
       setProgresso(null);
     }
@@ -111,9 +140,14 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
           <View style={[styles.barra, { backgroundColor: palette.primarySoft, borderRadius: 3 }]}>
             <View style={{ width: `${Math.round(progresso * 100)}%`, height: '100%', backgroundColor: palette.primary, borderRadius: 3 }} />
           </View>
-          <Text variant="caption" color={palette.textMuted}>
-            Baixando do PC… {Math.round(progresso * 100)}% — depois o Android pede para confirmar.
-          </Text>
+          <View style={styles.linha}>
+            <Text variant="caption" color={palette.textMuted} style={{ flex: 1 }}>
+              Baixando do PC… {Math.round(progresso * 100)}% — depois o Android pede para confirmar.
+            </Text>
+            <Pressable onPress={cancelarDownload} hitSlop={12} accessibilityLabel="Cancelar o download">
+              <Text variant="label" color={palette.textMuted}>Cancelar</Text>
+            </Pressable>
+          </View>
         </>
       ) : (
         <Button title="Baixar e instalar" onPress={instalar} />
@@ -131,7 +165,8 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
         {sit?.baixando && (
           <Text variant="body">O PC está baixando {sit.baixando.oque}… {Math.round(sit.baixando.progresso * 100)}%. Toque em "Procurar" de novo em instantes.</Text>
         )}
-        {sit && !apk && !sit.baixando && (
+        {sit?.problema && <Text variant="body" color={palette.error}>{sit.problema}</Text>}
+        {sit && !apk && !sit.baixando && !sit.problema && (
           <Text variant="body">Celular na versão mais nova ({versaoInstalada()}).</Text>
         )}
         {sit && (sit.pcNova ? (

@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanima
 import Feather from '@expo/vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
 import * as Updates from 'expo-updates';
+import { aplicarOta, procurarOta } from '../lib/atualizacaoOta';
 import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { definirNotificacoesAtivas, notificacoesAtivas, pedirPermissao } from '../lib/notificacoes';
@@ -338,6 +339,26 @@ function AvisosLocais() {
   );
 }
 
+/** "Procurar atualização" do app (OTA): diz o que achou em vez de calar (07/10). */
+function BotaoProcurarOta() {
+  const [estado, setEstado] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const { isUpdatePending } = Updates.useUpdates();
+  async function procurar() {
+    setOcupado(true);
+    const r = await procurarOta(true);
+    setOcupado(false);
+    setEstado(r === 'baixada' ? 'Baixada. Toque em Reiniciar.' : r === 'nada' ? 'Este celular já está com a última.' : r === 'desligado' ? 'Atualização pelo ar desligada nesta versão.' : 'Não consegui procurar agora (sem internet?).');
+  }
+  if (isUpdatePending) return <Button title="Reiniciar e atualizar" onPress={() => aplicarOta()} />;
+  return (
+    <View style={{ gap: 6 }}>
+      <Button title={ocupado ? 'Procurando…' : 'Procurar atualização do app'} variant="secondary" onPress={procurar} disabled={ocupado} />
+      {estado ? <Text variant="caption">{estado}</Text> : null}
+    </View>
+  );
+}
+
 /** Versão, atualização pelo ar e um diagnóstico que dá para colar numa conversa. */
 function SecaoSobre({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
@@ -377,6 +398,7 @@ function SecaoSobre({ pairing }: { pairing: Pairing }) {
           </View>
         ))}
       </Card>
+      <BotaoProcurarOta />
       <Button title="Copiar diagnóstico" variant="secondary" onPress={copiar} />
       <Text variant="caption" color={palette.textMuted}>
         ELYSIUM-M é o companheiro do assistente ELYSIUM do PC. Conversa, voz, controle

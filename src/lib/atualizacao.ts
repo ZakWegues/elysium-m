@@ -37,7 +37,38 @@ export function compararVersoes(a: string, b: string): number {
   return 0;
 }
 
+/**
+ * O `versionCode` de um pacote: o script de publicação acrescenta "versionCode N" ao fim das
+ * notas (e o PC novo manda o campo). Com a MESMA versão e um vc maior, é APK novo — antes a
+ * comparação só olhava o "1.8.0" e uma republicação nunca chegava.
+ */
+export function codigoDoPacote(p: { notas?: string; versionCode?: number }): number | null {
+  if (typeof p.versionCode === 'number') return p.versionCode;
+  const m = /versionCode (\d+)/.exec(p.notas ?? '');
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/** Pura: o pacote é mais novo que o instalado? Versão primeiro; empate decide o vc. */
+export function pacoteMaisNovo(p: { versao: string; notas?: string; versionCode?: number }, instalada: string, vcInstalado: number | null): boolean {
+  const d = compararVersoes(p.versao, instalada);
+  if (d !== 0) return d > 0;
+  const vc = codigoDoPacote(p);
+  return vc !== null && vcInstalado !== null && vc > vcInstalado;
+}
+
+function vcInstalado(): number | null {
+  const n = parseInt(Application.nativeBuildVersion ?? '', 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 export type SituacaoAtualizacao = {
+  /**
+   * Por que o PC não sabe se há versão nova (07/10). Antes isso aparecia como "celular na
+   * versão mais nova" — mentira confortável quando o PC nem tinha conseguido perguntar.
+   */
+  problema: string | null;
+  /** Quando o PC conferiu o GitHub pela última vez (ms) — para re-perguntar se estiver velho. */
+  verificadoEm: number | null;
   /** O APK que o PC tem, se for mais novo que o instalado e já estiver inteiro no PC. */
   apk: PacoteAtualizacao | null;
   /** Versão que o PC está rodando. */
@@ -51,13 +82,16 @@ export type SituacaoAtualizacao = {
 export async function situacaoAtualizacao(pairing: Pairing, verificar = false): Promise<SituacaoAtualizacao> {
   const r = await callRpc(pairing, 'update.status', verificar ? { verificar: true } : {}, verificar ? { timeoutMs: 30000 } : {});
   const cel = r.celular;
+  const nova = cel ? pacoteMaisNovo(cel, versaoInstalada(), vcInstalado()) : false;
   return {
-    apk: cel?.pronto && compararVersoes(cel.versao, versaoInstalada()) > 0 ? cel : null,
+    problema: r.semToken ? 'O PC não tem acesso ao GitHub (falta o token em Ajustes → Sobre, no PC).' : r.erro ? `O PC não conseguiu conferir: ${r.erro}` : null,
+    verificadoEm: r.verificadoEm,
+    apk: cel?.pronto && nova ? cel : null,
     pcAtual: r.pc,
     pcNova: r.desktop?.pronto ? r.desktop : null,
     // O download no PC corre em segundo plano (bloco 95): "procurar" responde na hora e o
     // arquivo chega depois. Sem isto a tela diria "versão mais nova" durante o download.
-    baixando: cel && !cel.pronto && compararVersoes(cel.versao, versaoInstalada()) > 0
+    baixando: cel && !cel.pronto && nova
       ? { oque: `ELYSIUM-M ${cel.versao}`, progresso: cel.progresso }
       : r.desktop && !r.desktop.pronto ? { oque: `a versão ${r.desktop.versao} do PC`, progresso: r.desktop.progresso } : null,
   };
@@ -110,11 +144,37 @@ export async function adiar(versao: string): Promise<void> {
  * vez, a permissão "instalar apps desconhecidos" para o ELYSIUM-M — é o próprio Android que
  * mostra a tela; o app não tem como pular isso, e nem deveria.
  */
+/** APKs de versões antigas largados no cache (cada um ~115 MB) — 07/10. */
+function limparApksVelhos(): void {
+  try {
+    for (const item of Paths.cache.list()) {
+      if (item instanceof File && /^elysium-m-.*\.apk$/.test(item.name)) {
+        try { item.delete(); } catch { /* em uso: fica para a próxima */ }
+      }
+    }
+  } catch { /* sem listar, sem limpar */ }
+}
+
+/** Para o botão Cancelar do cartão. */
+let tarefaAtual: { cancel(): void } | null = null;
+export function cancelarDownload(): void {
+  try { tarefaAtual?.cancel(); } catch { /* já terminou */ }
+  tarefaAtual = null;
+}
+
+/**
+ * Resultado de abrir o instalador. Se ele INSTALAR, este processo morre e o app volta na
+ * versão nova — então chegar aqui depois do instalador quer dizer que não instalou
+ * (cancelado, "app não instalado", permissão de fontes desconhecidas negada).
+ */
+export type FimDoInstalador = 'nao-instalou';
+
 export async function baixarEInstalar(
   pairing: Pairing,
   pacote: PacoteAtualizacao,
   aoProgresso?: (fracao: number) => void,
-): Promise<void> {
+): Promise<FimDoInstalador> {
+  limparApksVelhos();
   const destino = new File(Paths.cache, `elysium-m-${pacote.versao}.apk`);
   try { if (destino.exists) destino.delete(); } catch { /* sobrescreve */ }
   const tarefa = File.createDownloadTask(
@@ -128,7 +188,9 @@ export async function baixarEInstalar(
       },
     },
   );
-  const arquivo = await tarefa.downloadAsync();
+  tarefaAtual = tarefa;
+  let arquivo: File | null;
+  try { arquivo = await tarefa.downloadAsync(); } finally { tarefaAtual = null; }
   if (!arquivo) throw new Error('o download foi cancelado');
   if (pacote.tamanho && arquivo.size !== pacote.tamanho) {
     try { arquivo.delete(); } catch { /* o cache se limpa */ }
@@ -143,4 +205,18 @@ export async function baixarEInstalar(
     type: 'application/vnd.android.package-archive',
     flags: 1,
   });
+  return 'nao-instalou';
+}
+
+/**
+ * A tela "Instalar apps desconhecidos" do Android já no ELYSIUM-M — o motivo mais comum de
+ * o instalador fechar sem instalar na primeira vez.
+ */
+export async function abrirPermissaoDeInstalar(): Promise<void> {
+  const pacote = Application.applicationId ?? 'com.zak.elysium.m';
+  try {
+    await IntentLauncher.startActivityAsync('android.settings.MANAGE_UNKNOWN_APP_SOURCES', { data: `package:${pacote}` });
+  } catch {
+    await IntentLauncher.startActivityAsync('android.settings.SECURITY_SETTINGS').catch(() => {});
+  }
 }

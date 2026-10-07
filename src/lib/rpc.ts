@@ -307,6 +307,8 @@ export type PacoteAtualizacao = {
   tamanho: number;
   pronto: boolean;
   progresso: number;
+  /** PC novo manda o versionCode do APK (07/10); o antigo só nas notas. */
+  versionCode?: number;
 };
 
 /** O que ocupa o disco do PC (fase 12). */
@@ -381,6 +383,8 @@ export type RpcResults = {
     pc: string;
     verificadoEm: number | null;
     erro: string | null;
+    /** PC sem token do GitHub: não consegue nem perguntar (07/10). PC antigo não manda. */
+    semToken?: boolean;
     desktop: PacoteAtualizacao | null;
     celular: PacoteAtualizacao | null;
   };

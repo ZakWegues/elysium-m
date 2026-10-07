@@ -26,3 +26,15 @@ describe("notas da release", () => {
     expect(notasLimpas("Sem código no fim")).toBe("Sem código no fim");
   });
 });
+
+describe('versionCode decide o empate (07/10)', async () => {
+  const { pacoteMaisNovo, codigoDoPacote } = await import('../src/lib/atualizacao');
+  it('mesma versão com vc maior é nova; menor ou igual não', () => {
+    expect(pacoteMaisNovo({ versao: '1.8.0', notas: 'x\n\nversionCode 19' }, '1.8.0', 18)).toBe(true);
+    expect(pacoteMaisNovo({ versao: '1.8.0', notas: 'versionCode 18' }, '1.8.0', 18)).toBe(false);
+    expect(pacoteMaisNovo({ versao: '1.8.0', versionCode: 20 }, '1.8.0', 18)).toBe(true);
+    expect(pacoteMaisNovo({ versao: '2.0.0', notas: '' }, '1.8.0', 18)).toBe(true);
+    expect(pacoteMaisNovo({ versao: '1.7.0', notas: 'versionCode 99' }, '1.8.0', 18)).toBe(false);
+    expect(codigoDoPacote({ notas: 'sem código' })).toBeNull();
+  });
+});

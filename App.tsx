@@ -38,6 +38,8 @@ import { aoMudarPalavra, DiagPalavra, palavraLigada, usePalavraNoCelular } from 
 import { useMicrofoneLivre } from './src/lib/microfone';
 import { ComandosIa } from './src/components/ComandosIa';
 import { BotaoInterromper } from './src/components/BotaoInterromper';
+import { AvisoOta } from './src/components/AvisoOta';
+import { useAtualizacaoOta } from './src/lib/atualizacaoOta';
 import { atualizarWidgetEstado } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
@@ -78,6 +80,8 @@ function AppInner() {
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
   /** "Elysium" ouvido (bloco 129): cada disparo é um `n` novo para o Chat ouvir um pedido. */
   const [pedidoVoz, setPedidoVoz] = useState<{ n: number; texto: string } | null>(null);
+  // Atualização pelo ar que chega (07/10): procura, baixa e oferece reiniciar.
+  const ota = useAtualizacaoOta();
   const [palavraOn, setPalavraOn] = useState(false);
   const [appNaFrente, setAppNaFrente] = useState(AppState.currentState === 'active');
   useEffect(() => {
@@ -439,6 +443,7 @@ function AppInner() {
         onRetry={recheck}
         onScan={runScan}
       />
+      <AvisoOta pendente={ota.pendente} />
       {/* Sai de cena enquanto o usuário digita: com o teclado aberto sobra pouca
           altura, e a barra empurraria a caixa de texto pra fora da vista. */}
       {!keyboard.visible && sobreposicoes === 0 && (
