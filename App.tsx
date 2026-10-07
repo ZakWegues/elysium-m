@@ -34,7 +34,7 @@ import * as QuickActions from 'expo-quick-actions';
 import { callRpc } from './src/lib/rpc';
 import { errMessage } from './src/lib/errors';
 import { falar } from './src/lib/falar';
-import { DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
+import { aoMudarPalavra, DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
 import { useMicrofoneLivre } from './src/lib/microfone';
 import { ComandosIa } from './src/components/ComandosIa';
 import { BotaoInterromper } from './src/components/BotaoInterromper';
@@ -87,7 +87,8 @@ function AppInner() {
       // Voltou ao app: relê o ajuste (pode ter mudado em Ajustes → Voz).
       if (s === 'active') palavraLigada().then(setPalavraOn);
     });
-    return () => sub.remove();
+    const tirar = aoMudarPalavra(setPalavraOn);
+    return () => { sub.remove(); tirar(); };
   }, []);
   /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
   const [pedidoBusca, setPedidoBusca] = useState(0);
@@ -257,7 +258,7 @@ function AppInner() {
   }, [pairing, atalho]);
 
   // Bloco 129: ouvir "Elysium" só com o app na frente, na Início ou no Chat, com o microfone
-  // livre (sem mão livre, gravação ou fala em curso) e sem Ajustes aberto por cima.
+  // livre (sem pedido por voz, gravação ou fala em curso) e sem Ajustes aberto por cima.
   const micLivre = useMicrofoneLivre();
   // Teclado aberto também pausa: digitando, não há por que ouvir — e o microfone aberto
   // brigava com o teclado do Android (02/10, "o teclado tá bugado").
@@ -423,6 +424,7 @@ function AppInner() {
             perguntaPendente={perguntaPendente}
             onPerguntaEnviada={() => setPerguntaPendente(null)}
             pedidoVoz={pedidoVoz}
+            onPedidoVozTratado={() => setPedidoVoz(null)}
           />
         )}
       </TelaAnimada>

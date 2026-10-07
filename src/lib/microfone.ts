@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
  * Quem está usando o microfone agora (bloco 129).
  *
  * O celular tem um microfone só, e três coisas querem ele: a palavra "Elysium" (o
- * reconhecedor do Android escutando), a mão livre e o segurar-para-falar (o gravador do
+ * reconhecedor do Android escutando), o pedido depois do "Ely" e o segurar-para-falar (o gravador do
  * expo-audio). Dois ao mesmo tempo = um deles grava silêncio ou dá erro de captura. E a
  * fala da resposta também conta: o reconhecedor ouviria a própria voz do ELYSIUM.
  *
- * Um conjunto de "ocupantes" com nome em vez de um booleano: a mão livre termina e libera
+ * Um conjunto de "ocupantes" com nome em vez de um booleano: o pedido por voz termina e libera
  * a dela sem soltar a fala que ainda está tocando.
  */
 const ocupantes = new Set<string>();

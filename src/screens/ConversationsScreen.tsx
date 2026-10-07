@@ -92,6 +92,12 @@ export default function ConversationsScreen({
     }
   }
 
+  function compartilhar(id: string) {
+    const sessao = sessions.find(x => x.id === id);
+    if (!sessao) return;
+    Share.share({ title: sessao.title, message: conversaEmMarkdown(sessao) }).catch(() => {});
+  }
+
   async function handleDelete(id: string) {
     await deleteSession(id);
     await refresh();
@@ -139,7 +145,13 @@ export default function ConversationsScreen({
         {achados?.map((a) => (
           <Pressable key={a.sessaoId} onPress={() => onSelect(a.sessaoId)}>
             <Card glass style={{ gap: 4 }}>
-              <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{a.titulo} · {relativeTime(a.em)}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text variant="caption" color={palette.textMuted} numberOfLines={1} style={{ flex: 1 }}>{a.titulo} · {relativeTime(a.em)}</Text>
+                {/* Compartilhar também daqui: achar pela busca e mandar adiante é o caminho comum. */}
+                <Pressable onPress={() => compartilhar(a.sessaoId)} hitSlop={12} accessibilityLabel="Compartilhar a conversa">
+                  <Feather name="share-2" size={16} color={palette.textMuted} />
+                </Pressable>
+              </View>
               <Text variant="body" numberOfLines={3}>{a.deQuem === 'eu' ? 'Você: ' : ''}{a.trecho}</Text>
             </Card>
           </Pressable>
@@ -186,23 +198,23 @@ export default function ConversationsScreen({
               )}
               <Pressable
                 onPress={() => { setRascunho(session.title); setRenomeando(session.id); }}
-                hitSlop={8}
+                hitSlop={12}
                 style={{ marginRight: 8 }}
               >
                 <Feather name="edit-2" size={17} color={palette.textMuted} />
               </Pressable>
-              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={8} style={{ marginRight: 8 }}>
+              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={12} style={{ marginRight: 8 }}>
                 <Feather name="star" size={20} color={session.favorite ? '#F5A623' : palette.border} />
               </Pressable>
               <Pressable
-                onPress={() => { Share.share({ title: session.title, message: conversaEmMarkdown(session) }).catch(() => {}); }}
-                hitSlop={8}
+                onPress={() => compartilhar(session.id)}
+                hitSlop={12}
                 style={{ marginRight: 8 }}
                 accessibilityLabel="Compartilhar a conversa"
               >
                 <Feather name="share-2" size={18} color={palette.textMuted} />
               </Pressable>
-              <Pressable onPress={() => handleDelete(session.id)} hitSlop={8}>
+              <Pressable onPress={() => handleDelete(session.id)} hitSlop={12}>
                 <Feather name="trash-2" size={20} color={palette.textMuted} />
               </Pressable>
             </Card>

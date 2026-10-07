@@ -18,3 +18,22 @@ describe('exportar conversa (02/10)', () => {
     expect(md).not.toMatch(/Pareado|Falha/);
   });
 });
+
+describe('exportar sem mensagens do app (07/10)', () => {
+  it('tira fila offline, anexo entregue e o marcador do áudio; usa a data da conversa; escapa colchete', () => {
+    const md = conversaEmMarkdown({
+      title: 'X',
+      createdAt: new Date(2026, 0, 5).getTime(),
+      messages: [
+        { id: 'a', from: 'me', text: '🎤 (áudio)', ts: 1 },
+        { id: 'b', from: 'me', text: 'que horas são', ts: 2 },
+        { id: 'c', from: 'reply', text: '⏳ PC fora do ar. Guardei esse comando e mando assim que ele voltar.', ts: 3 },
+        { id: 'd', from: 'reply', text: 'Arquivo entregue na caixa do PC.', ts: 4 },
+        { id: 'e', from: 'reply', text: 'São 10h.', ts: 5, fontes: [{ titulo: 'a]b', url: 'https://x.com' }] },
+      ],
+    }, new Date(2026, 9, 7));
+    expect(md).not.toMatch(/áudio|PC fora|caixa do PC/);
+    expect(md).toContain('5 de janeiro de 2026');
+    expect(md).toContain('[a\\]b](https://x.com)');
+  });
+});

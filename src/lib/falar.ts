@@ -32,9 +32,15 @@ let player: AudioPlayer | null = null;
 let vozDoAparelho: Promise<string | null> | null = null;
 function vozFemininaDoAparelho(): Promise<string | null> {
   if (!vozDoAparelho) {
+    // No Android a lista volta VAZIA enquanto o motor de voz ainda sobe; guardar esse `null`
+    // deixava a voz padrão (muitas vezes masculina) pela sessão inteira. Lista vazia = tentar
+    // de novo na próxima fala.
     vozDoAparelho = Speech.getAvailableVoicesAsync()
-      .then(v => escolherVozFeminina(v))
-      .catch(() => null);
+      .then(v => {
+        if (!v.length) vozDoAparelho = null;
+        return escolherVozFeminina(v);
+      })
+      .catch(() => { vozDoAparelho = null; return null; });
   }
   return vozDoAparelho;
 }
@@ -73,12 +79,20 @@ export async function ligarVozDoPc(ligar: boolean): Promise<void> {
 }
 
 export function pararDeFalar(): void {
+  // Avança a geração: uma fala que ainda está BAIXANDO o MP3 do PC (até 8 s) vê o número
+  // mudado quando o download termina e não toca. Antes o "Interromper" não fazia nada
+  // nessa janela e o áudio saía mesmo assim.
+  geracao++;
   Speech.stop();
   try { player?.pause(); player?.remove(); } catch { /* já liberado */ }
   player = null;
   const t = terminarAtual;
   terminarAtual = null;
   t?.();
+  // Quem parou solta o microfone e apaga o "falando" na hora: a fala parada não chega mais
+  // a fazer isso no próprio `finally` (a geração já é outra).
+  liberarMicrofone('falar');
+  marcarFala(false);
 }
 
 /** Teto de segurança: o evento de fim pode não vir (player liberado por fora, áudio mudo). */
@@ -117,22 +131,24 @@ export async function falar(texto: string, pairing: Pairing | null): Promise<voi
   const t = texto.trim();
   if (!t) return;
   pararDeFalar();
-  const minha = ++geracao;
+  const minha = geracao;
   // Bloco 129: enquanto fala, a palavra "Ely" não escuta — ouviria a própria voz.
   ocuparMicrofone('falar');
   marcarFala(true);
-  try { await falarAgora(t, pairing); } finally {
+  try { await falarAgora(t, pairing, minha); } finally {
     if (minha === geracao) { liberarMicrofone('falar'); marcarFala(false); }
   }
 }
 
-async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
+async function falarAgora(t: string, pairing: Pairing | null, minha: number): Promise<void> {
   if (pairing && (await vozDoPcLigada())) {
     try {
       const url = `http://${pairing.activeIp}:${pairing.port}/api/tts?text=${encodeURIComponent(t.slice(0, 2000))}`;
       const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${pairing.token}` } }, PRAZO_MS);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bytes = new Uint8Array(await res.arrayBuffer());
+      // Interrompida (ou trocada por outra fala) durante o download: não toca.
+      if (minha !== geracao) return;
       const arquivo = new File(Paths.cache, `fala-${Date.now()}.mp3`);
       arquivo.write(bytes);
       const este = createAudioPlayer(arquivo.uri);
@@ -159,7 +175,11 @@ async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
       // Cai na voz do aparelho logo abaixo.
     }
   }
+  if (minha !== geracao) return;
   const voz = await vozFemininaDoAparelho();
+  if (minha !== geracao) return;
+  // "Ely" lido "Éli" (02/10), como na voz do PC.
+  const dito = t.replace(/\bEly\b/gi, 'Éli');
   await new Promise<void>((resolver) => {
     let feito = false;
     const terminar = () => {
@@ -169,10 +189,14 @@ async function falarAgora(t: string, pairing: Pairing | null): Promise<void> {
       if (terminarAtual === terminar) terminarAtual = null;
       resolver();
     };
-    const teto = setTimeout(terminar, tetoDaFala(t));
+    // O teto CALA o aparelho além de resolver: antes ele só resolvia, o microfone era solto
+    // com a voz ainda saindo, e a escuta do "Ely" ouvia o "Éli" da própria resposta.
+    const teto = setTimeout(() => { Speech.stop(); terminar(); }, tetoDaFala(t));
     terminarAtual = terminar;
-    // "Ely" lido "Éli" (02/10), como na voz do PC.
-    // Voz feminina do aparelho quando achar uma (02/10); senão a padrão com o tom um pouco acima.
-    Speech.speak(t.replace(/\bEly\b/gi, 'Éli'), { language: 'pt-BR', ...(voz ? { voice: voz } : { pitch: 1.1 }), onDone: terminar, onStopped: terminar, onError: terminar });
+    // Voz feminina do aparelho quando achar uma (02/10); senão a padrão com o tom um pouco
+    // acima. Se a escolhida falhar (voz só de rede, sem internet), repete com a padrão.
+    const padrao = () => Speech.speak(dito, { language: 'pt-BR', pitch: 1.1, onDone: terminar, onStopped: terminar, onError: terminar });
+    if (voz) Speech.speak(dito, { language: 'pt-BR', voice: voz, onDone: terminar, onStopped: terminar, onError: () => { if (!feito && minha === geracao) padrao(); else terminar(); } });
+    else padrao();
   });
 }

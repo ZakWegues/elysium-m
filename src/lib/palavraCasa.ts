@@ -7,7 +7,7 @@
  * pelo som, sem acento, e o que vier DEPOIS dela é o pedido ("Elysium, pausa a música").
  *
  * Fica de fora de propósito o "Eliseu": é nome de gente, e dizer o nome de alguém perto
- * do celular não pode abrir a mão livre.
+ * do celular não pode abrir um pedido por voz.
  */
 // Junto ("elisio", "ilisium", "elizium") ou separado só com o "i" antes do fim ("e lisio")
 // — sem esse "i" obrigatório, "é liso" dispararia.

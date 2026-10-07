@@ -69,7 +69,10 @@ export function openVoiceConnection(
     }, INATIVIDADE_MS);
   }
 
+  /** Fechar antes de abrir (o "Parar" do chat) rejeita o `ready` na hora, em vez de esperar o prazo. */
+  let rejeitarReady: ((e: Error) => void) | null = null;
   const ready = new Promise<void>((resolve, reject) => {
+    rejeitarReady = reject;
     ws.onopen = () => {
       console.log('[voice-ws] conectado', url);
       resolve();
@@ -186,6 +189,7 @@ export function openVoiceConnection(
 
   function close() {
     settlePending((p) => p.reject(new Error('Falha: conexão encerrada antes da resposta')));
+    rejeitarReady?.(new Error('Falha: conexão encerrada antes de abrir'));
     ws.close();
   }
 

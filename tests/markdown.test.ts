@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paraFala, parseInline, parseMarkdown, textoPuro } from '../src/lib/markdown';
+import { celulas, ehSeparadorDeTabela, paraFala, parseInline, parseMarkdown, textoPuro } from '../src/lib/markdown';
 
 describe('markdown das bolhas (bloco 130)', () => {
   it('trechos dentro da linha: negrito, código, link, itálico', () => {
@@ -56,9 +56,26 @@ describe('tabela (02/10)', () => {
   });
   it('texto puro em linhas com barra; a voz pula a tabela', () => {
     expect(textoPuro(md)).toContain('Pro | 20');
-    expect(paraFala(md)).toBe('Comparando: Fim.');
+    expect(paraFala(md)).toBe('Comparando: Fim. O resto está na tela.');
   });
   it('barra solta sem a linha de traços não vira tabela', () => {
     expect(parseMarkdown('a | b')[0].tipo).toBe('paragrafo');
+  });
+});
+
+describe('células e separador (07/10)', () => {
+  it('barra escapada e barra dentro de código não dividem a célula', () => {
+    expect(celulas('| a \\| b | `x|y` | c |')).toEqual(['a | b', '`x|y`', 'c']);
+    expect(celulas('a | b')).toEqual(['a', 'b']);
+  });
+  it('separador exige barra; "---" sozinho é régua', () => {
+    expect(ehSeparadorDeTabela('|---|:---:|')).toBe(true);
+    expect(ehSeparadorDeTabela('|-|-|')).toBe(true);
+    expect(ehSeparadorDeTabela('---')).toBe(false);
+    expect(parseMarkdown('a | b\n---\ntexto').some(b => b.tipo === 'tabela')).toBe(false);
+  });
+  it('paraFala avisa da tela quando pulou código, mesmo curto', () => {
+    expect(paraFala('Veja:\n```\nx\n```')).toBe('Veja. O resto está na tela.');
+    expect(paraFala('Tudo certo.')).toBe('Tudo certo.');
   });
 });

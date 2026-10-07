@@ -36,6 +36,7 @@ export default function ChatHub({
   perguntaPendente,
   onPerguntaEnviada,
   pedidoVoz,
+  onPedidoVozTratado,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
@@ -49,6 +50,7 @@ export default function ChatHub({
   onPerguntaEnviada?: () => void;
   /** "Elysium" ouvido (bloco 129) — vai para o chat da IA, mesmo se o hub estava nos recados. */
   pedidoVoz?: { n: number; texto: string } | null;
+  onPedidoVozTratado?: () => void;
 }) {
   const { palette, tokens } = useTheme();
   const [modo, setModo] = useState<'ia' | 'pc'>(modoInicial ?? 'ia');
@@ -139,6 +141,7 @@ export default function ChatHub({
             perguntaPendente={perguntaPendente}
             onPerguntaEnviada={onPerguntaEnviada}
             pedidoVoz={pedidoVoz}
+            onPedidoVozTratado={onPedidoVozTratado}
             pairing={pairing}
             onUnpair={onUnpair}
             sessionId={sessionId}

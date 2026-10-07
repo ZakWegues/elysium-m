@@ -56,20 +56,29 @@ export function Markdown({ texto, cor }: { texto: string; cor: string }) {
             <Text variant="caption" color={cor} style={styles.mono} selectable>{b.texto}</Text>
           </View>
         );
-      case 'tabela':
+      case 'tabela': {
+        // Largura por COLUNA, medida pelo texto mais longo dela: cada linha era um flex
+        // independente e as colunas não alinhavam entre as linhas.
+        const linhasTab = [b.cabecalho, ...b.linhas];
+        const nCols = Math.max(...linhasTab.map(l => l.length));
+        const larguras = Array.from({ length: nCols }, (_, ci) => {
+          const maior = Math.max(0, ...linhasTab.map(l => (l[ci] ?? []).map(x => x.texto).join('').length));
+          return Math.min(200, Math.max(64, maior * 7.5 + 18));
+        });
         return (
           <ScrollView key={i} horizontal showsHorizontalScrollIndicator={false}>
             <View style={[styles.tabela, { borderColor: palette.border, borderRadius: tokens.radii.sm }]}>
-              {[b.cabecalho, ...b.linhas].map((linha, li) => (
+              {linhasTab.map((linha, li) => (
                 <View key={li} style={[styles.linhaTabela, li > 0 && { borderTopColor: palette.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-                  {linha.map((cel, ci) => (
-                    <Text key={ci} variant="caption" color={cor} style={[styles.celula, li === 0 && styles.negrito]}>{trechos(cel)}</Text>
+                  {larguras.map((w, ci) => (
+                    <Text key={ci} variant="caption" color={cor} style={[styles.celula, { width: w }, li === 0 && styles.negrito]}>{trechos(linha[ci] ?? [])}</Text>
                   ))}
                 </View>
               ))}
             </View>
           </ScrollView>
         );
+      }
       default:
         return <Text key={i} variant="body" color={cor}>{trechos(b.trechos)}</Text>;
     }
@@ -88,5 +97,5 @@ const styles = StyleSheet.create({
   copiarCodigo: { position: 'absolute', top: 6, right: 6, zIndex: 1 },
   tabela: { borderWidth: StyleSheet.hairlineWidth },
   linhaTabela: { flexDirection: 'row' },
-  celula: { minWidth: 72, maxWidth: 180, paddingHorizontal: 8, paddingVertical: 5 },
+  celula: { paddingHorizontal: 8, paddingVertical: 5 },
 });

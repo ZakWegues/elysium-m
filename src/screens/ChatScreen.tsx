@@ -7,7 +7,7 @@ import { falar, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
-import { MotivoParada, resumoRodada } from '../lib/maoLivreDiag';
+import { MotivoParada, resumoRodada } from '../lib/vozDiag';
 import { fromByteArray } from 'base64-js';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
@@ -41,6 +41,7 @@ export default function ChatScreen({
   perguntaPendente,
   onPerguntaEnviada,
   pedidoVoz,
+  onPedidoVozTratado,
 }: {
   pairing: Pairing;
   /**
@@ -48,6 +49,8 @@ export default function ChatScreen({
    * ele é o próprio pedido (o que veio colado na palavra).
    */
   pedidoVoz?: { n: number; texto: string } | null;
+  /** Avisa o App que o pedido de voz foi tratado — ele limpa, e remontar o Chat não repete. */
+  onPedidoVozTratado?: () => void;
   /** Texto que a busca da Início pediu para enviar. Enviado uma vez, ao chegar. */
   perguntaPendente?: string | null;
   onPerguntaEnviada?: () => void;
@@ -82,7 +85,20 @@ export default function ChatScreen({
     if (barra === null || comandosIa) return;
     callRpc(pairing, 'comandos.list').then(r => setComandosIa(r.comandos)).catch(() => setComandosIa([]));
   }, [barra === null, comandosIa, pairing]);
-  const [sending, setSending] = useState(false);
+  const [sending, setSendingEstado] = useState(false);
+  /**
+   * O estado `sending` só muda no próximo render: dois toques rápidos passavam os dois pela
+   * guarda e mandavam a pergunta duas vezes. O ref vale na hora. Começar um envio também
+   * zera o "parado" do botão Parar — antes ele só zerava no envio digitado e ficava preso
+   * depois de parar uma resposta falada.
+   */
+  const enviandoRef = useRef(false);
+  const paradoRef = useRef(false);
+  function setSending(v: boolean) {
+    enviandoRef.current = v;
+    if (v) paradoRef.current = false;
+    setSendingEstado(v);
+  }
   /** Id da bolha que está sendo escrita em pedaços; `null` fora de um stream. */
   const [escrevendoId, setEscrevendoId] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -291,10 +307,9 @@ export default function ChatScreen({
    * descarta o resto — e o que já chegou fica na bolha, marcado com "…". A conexão reabre
    * sozinha no próximo envio (`ensureVoiceConnection`).
    */
-  const paradoRef = useRef(false);
   const bolhaAtualRef = useRef<ReturnType<typeof bolhaEmPedacos> | null>(null);
   function pararResposta() {
-    if (!sending || paradoRef.current) return;
+    if (!enviandoRef.current || paradoRef.current) return;
     paradoRef.current = true;
     haptica.leve();
     const b = bolhaAtualRef.current;
@@ -311,14 +326,15 @@ export default function ChatScreen({
     setMessages((prev) => [...prev, { id: `me-${ts}`, from: 'me', text: `/${cmd.nome}\n${alvo}`, ts }]);
     try {
       const r = await callRpc(pairing, 'comandos.run', { comando: cmd.id, texto: alvo }, { timeoutMs: 120_000 });
+      if (paradoRef.current) return;
       setMessages((prev) => [...prev, { id: `reply-${Date.now()}`, from: 'reply', text: r.resultado, ts: Date.now() }]);
-    } catch (err) { pushError(errMessage(err)); }
+    } catch (err) { if (!paradoRef.current) pushError(errMessage(err)); }
     finally { setSending(false); }
   }
 
   async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
     const text = (texto ?? draft).trim();
-    if (!text || sending) return;
+    if (!text || enviandoRef.current) return;
     // Comando de IA pela barra (bloco 137).
     if (texto === undefined && comandoEscolhido) {
       const alvo = text.slice(comandoEscolhido.nome.length + 1).trim();
@@ -333,7 +349,6 @@ export default function ChatScreen({
 
     const bolha = bolhaEmPedacos();
     bolhaAtualRef.current = bolha;
-    paradoRef.current = false;
     try {
       // WebSocket primeiro: é o único caminho que traz a resposta em pedaços. Se ele não
       // abrir (PC de pé mas WS bloqueado, por exemplo), o HTTP de sempre continua valendo
@@ -388,7 +403,6 @@ export default function ChatScreen({
     } finally {
       setSending(false);
       bolhaAtualRef.current = null;
-      paradoRef.current = false;
     }
   }
 
@@ -401,7 +415,7 @@ export default function ChatScreen({
    * numa conversa que não mostra anexo nenhum.
    */
   async function handleAnexar() {
-    if (sending) return;
+    if (enviandoRef.current) return;
     const escolha = await DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
       copyToCacheDirectory: false,
@@ -443,19 +457,24 @@ export default function ChatScreen({
   }
 
   async function handleRecordStart() {
-    if (sending || recording) return;
+    if (enviandoRef.current || recording || turnoRef.current) return;
     if (micStatus !== 'ready') {
       Alert.alert('Microfone indisponível', 'Permissão de microfone não foi concedida.');
       return;
     }
 
-    // Bloco 129: tira o reconhecedor do "Elysium" do microfone ANTES de preparar o gravador.
-    ocuparMicrofone('gravar');
+    // Segurar o microfone enquanto ela fala é querer falar por cima: cala antes de gravar,
+    // senão o áudio leva a voz dela junto.
+    pararDeFalar();
+    // Bloco 129: tira o reconhecedor do "Ely" do microfone ANTES de preparar o gravador.
+    // Chave própria ('segurar'): o fim de um pedido por voz soltava a 'gravar' no meio
+    // desta gravação e o reconhecedor voltava a disputar o microfone.
+    ocuparMicrofone('segurar');
     await new Promise((r) => setTimeout(r, 150));
     try {
       await recorder.prepareToRecordAsync();
     } catch (err) {
-      liberarMicrofone('gravar');
+      liberarMicrofone('segurar');
       pushError(`Falha ao preparar gravação: ${errMessage(err)}`);
       return;
     }
@@ -463,7 +482,7 @@ export default function ChatScreen({
     try {
       recorder.record();
     } catch (err) {
-      liberarMicrofone('gravar');
+      liberarMicrofone('segurar');
       pushError(`Falha ao iniciar gravação: ${errMessage(err)}`);
       return;
     }
@@ -485,7 +504,7 @@ export default function ChatScreen({
       pushError(`Falha ao parar gravação: ${errMessage(err)}`);
       return;
     } finally {
-      liberarMicrofone('gravar');
+      liberarMicrofone('segurar');
     }
 
     const uri = recorder.uri;
@@ -505,20 +524,23 @@ export default function ChatScreen({
     try {
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
+      bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
       const { reply } = await conn.sendAudio(uri, bolha.onChunk, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
+      if (paradoRef.current) return null;
       bolha.fechar(reply);
       return { reply, transcricao };
     } catch (err) {
       setEscrevendoId(null);
-      pushError(errMessage(err));
+      if (!paradoRef.current) pushError(errMessage(err));
       return null;
     } finally {
       setSending(false);
+      bolhaAtualRef.current = null;
     }
   }
 
@@ -600,15 +622,18 @@ export default function ChatScreen({
     try {
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
+      bolhaAtualRef.current = bolha;
       const { reply } = await conn.sendText(texto, bolha.onChunk);
+      if (paradoRef.current) return null;
       bolha.fechar(reply);
       return reply;
     } catch (err) {
       setEscrevendoId(null);
-      pushError(errMessage(err));
+      if (!paradoRef.current) pushError(errMessage(err));
       return null;
     } finally {
       setSending(false);
+      bolhaAtualRef.current = null;
     }
   }
 
@@ -666,22 +691,30 @@ export default function ChatScreen({
 
   // "Ely" ouvido (bloco 129): um pedido — o colado na palavra, ou o próximo que a pessoa
   // falar. Um respiro antes de gravar: o reconhecedor acabou de soltar o microfone.
-  const ultimoPedidoVoz = useRef(0);
+  //
+  // 🔴 07/10: o pedido ficava no estado do App para sempre, e o "já tratado" era um ref que
+  // zera quando o Chat remonta — então TODA abertura do Chat depois de um "Ely" voltava a
+  // gravar sozinha (e reenviava o pedido colado). Parecia a mão livre de volta. Agora o
+  // pedido é consumido: `onPedidoVozTratado` limpa no App, como o `perguntaPendente`.
+  const timerVozRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!pedidoVoz || pedidoVoz.n === ultimoPedidoVoz.current) return;
+    if (!pedidoVoz) return;
     // Microfone ainda conferindo (Chat recém-aberto pelo atalho): espera, o efeito roda de
-    // novo quando o status muda. Marcar antes perderia o pedido.
+    // novo quando o status muda.
     if (micStatus === 'checking') return;
-    ultimoPedidoVoz.current = pedidoVoz.n;
-    if (turnoRef.current || micStatus !== 'ready') return;
     const texto = pedidoVoz.texto.trim();
-    const t = setTimeout(() => {
+    onPedidoVozTratado?.();
+    // Ocupado (respondendo, gravando, outro pedido): o "Ely" é descartado, não enfileirado.
+    if (turnoRef.current || enviandoRef.current || recording || micStatus !== 'ready') return;
+    timerVozRef.current = setTimeout(() => {
+      timerVozRef.current = null;
+      if (turnoRef.current || enviandoRef.current) return;
       haptica.medio();
       turnoDeVoz(texto || undefined);
     }, 400);
-    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoVoz?.n, micStatus]);
+  useEffect(() => () => { if (timerVozRef.current) clearTimeout(timerVozRef.current); }, []);
 
   return (
     // O espaço do teclado é reservado uma vez só, na raiz do app (App.tsx). Aqui havia
@@ -890,7 +923,7 @@ export default function ChatScreen({
             { id: `me-${ts}`, from: 'me', text: `📷 ${question}`, ts },
             { id: `reply-${ts + 1}`, from: 'reply', text: answer, ts: ts + 1 },
           ]);
-          falar(answer, pairing);
+          lerRespostasEscritas().then((ler) => { if (ler) falar(answer, pairing); });
         }}
       />
     </View>

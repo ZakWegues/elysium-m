@@ -23,9 +23,30 @@ export type Bloco =
   | { tipo: 'codigo'; linguagem: string; texto: string }
   | { tipo: 'tabela'; cabecalho: Trecho[][]; linhas: Trecho[][][] };
 
-/** "| a | b |" → ["a", "b"]. As barras das pontas são opcionais no markdown. */
-function celulas(linha: string): string[] {
-  return linha.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+/**
+ * "| a | b |" → ["a", "b"]. As barras das pontas são opcionais no markdown. Uma barra
+ * escapada (`\|`) ou dentro de código (`a|b`) é texto, não divisória — o split simples
+ * deslocava as células da linha inteira.
+ */
+export function celulas(linha: string): string[] {
+  const t = linha.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '');
+  const out: string[] = [];
+  let atual = '';
+  let emCodigo = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (ch === '\\' && t[i + 1] === '|') { atual += '|'; i++; continue; }
+    if (ch === '`') emCodigo = !emCodigo;
+    if (ch === '|' && !emCodigo) { out.push(atual.trim()); atual = ''; continue; }
+    atual += ch;
+  }
+  out.push(atual.trim());
+  return out;
+}
+
+/** A linha "|---|:---:|" que separa o cabeçalho. Exige ao menos uma barra: "---" sozinho é régua. */
+export function ehSeparadorDeTabela(linha: string): boolean {
+  return linha.includes('|') && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(linha);
 }
 
 const INLINE = /(\*\*([^*\n]+)\*\*)|(`([^`\n]+)`)|(\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\))|((?:^|(?<=\s))(?:\*|_)([^*_\n]+)(?:\*|_)(?=\s|[.,;:!?]|$))|(https?:\/\/[^\s)]+)/g;
@@ -69,7 +90,7 @@ export function parseMarkdown(md: string): Bloco[] {
     if (!linha.trim()) { fecharParagrafo(); continue; }
     // Tabela (02/10): a Ely gera tabela no chat escrito (comparações, horários), e sem isto
     // ela chegava como um parágrafo de barras. Precisa da linha "|---|---|" logo abaixo.
-    if (linha.includes('|') && i + 1 < linhas.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(linhas[i + 1])) {
+    if (linha.includes('|') && i + 1 < linhas.length && ehSeparadorDeTabela(linhas[i + 1])) {
       fecharParagrafo();
       const cabecalho = celulas(linha).map(parseInline);
       const corpo: Trecho[][][] = [];
@@ -111,12 +132,15 @@ export function textoPuro(md: string): string {
  * começo, em frases inteiras, e avisa que o resto está na tela.
  */
 export function paraFala(md: string, limite = 320): string {
-  // Código e tabela não se leem em voz alta: ficam na tela.
-  const limpo = parseMarkdown(md).filter(b => b.tipo !== 'codigo' && b.tipo !== 'tabela').map(b => {
+  // Código e tabela não se leem em voz alta: ficam na tela — e então a fala avisa, mesmo
+  // curta ("Veja a tabela:" sozinho deixava quem só ouve sem saber que havia mais).
+  const blocos = parseMarkdown(md);
+  const pulou = blocos.some(b => b.tipo === 'codigo' || b.tipo === 'tabela');
+  const limpo = blocos.filter(b => b.tipo !== 'codigo' && b.tipo !== 'tabela').map(b => {
     const t = (b as { trechos: Trecho[] }).trechos.map(x => x.texto).join('');
     return /[.!?:]$/.test(t) ? t : `${t}.`;
   }).join(' ').replace(/\s+/g, ' ').trim();
-  if (limpo.length <= limite) return limpo;
+  if (limpo.length <= limite) return pulou ? `${limpo.replace(/[:;,]$/, '.')} O resto está na tela.`.trim() : limpo;
   const frases = limpo.match(/[^.!?:]+[.!?:]+(\s|$)|[^.!?:]+$/g) ?? [limpo];
   let falado = '';
   for (const f of frases) {

@@ -27,7 +27,7 @@ export type Rodada = {
 
 const DESCRICAO: Record<MotivoParada, string> = {
   silencio: 'silêncio depois da fala',
-  sem_fala: 'ninguém falou em 20 s',
+  sem_fala: 'ninguém falou em 8 s',
   teto: 'teto de 30 s',
   desligou: 'pedido cancelado',
 };

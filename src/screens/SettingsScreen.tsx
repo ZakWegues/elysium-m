@@ -401,7 +401,7 @@ function VozSection({ pairing }: { pairing: Pairing }) {
   ];
   return (
     <View style={{ gap: tokens.spacing.sm }}>
-      {/* Bloco 129: a palavra de ativação do celular. Vale ao voltar para a Início/Chat. */}
+      {/* Bloco 129: a palavra de ativação do celular. Vale na hora (aoMudarPalavra). */}
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="mic" size={17} color={palavra ? palette.primary : palette.textMuted} />
         <View style={{ flex: 1 }}>

@@ -39,7 +39,18 @@ export async function palavraLigada(): Promise<boolean> {
   try { return (await AsyncStorage.getItem(CHAVE)) !== '0'; } catch { return true; }
 }
 
+/**
+ * Quem liga/desliga avisa na hora (07/10): o App só relia o ajuste ao voltar do segundo
+ * plano, então desligar em Ajustes e fechar a gaveta deixava a escuta ligada.
+ */
+const ouvintesDoAjuste = new Set<(ligada: boolean) => void>();
+export function aoMudarPalavra(fn: (ligada: boolean) => void): () => void {
+  ouvintesDoAjuste.add(fn);
+  return () => { ouvintesDoAjuste.delete(fn); };
+}
+
 export async function ligarPalavra(ligar: boolean): Promise<void> {
+  ouvintesDoAjuste.forEach(fn => fn(ligar));
   try { await AsyncStorage.setItem(CHAVE, ligar ? '1' : '0'); } catch { /* fica o padrão */ }
 }
 
