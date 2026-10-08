@@ -35,6 +35,14 @@ export type RpcMethod =
   | 'timers.start'
   | 'timers.cancel'
   | 'perfil.set'
+  | 'hoje.painel'
+  | 'habitos.list'
+  | 'habitos.save'
+  | 'habitos.marcar'
+  | 'habitos.delete'
+  | 'metas.save'
+  | 'metas.progresso'
+  | 'metas.delete'
   | 'memory.aceitar'
   | 'memory.recusar'
   | 'foco.start'
@@ -337,7 +345,27 @@ export type Lista = { id: string; nome: string; atualizadaEm: number; itens: { i
 export type TimerPc = { id: string; nome: string; criadoEm: number; fimEm: number; duracaoMs: number };
 
 /** Jeito de responder (bloco 134), guardado na config do PC. */
-export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string };
+export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string; /** Fase 16: como a Ely chama o dono ("chefe"). PC antigo não manda. */ tratamento?: string };
+
+/** Hábito com as contas do PC (fase 16). `mapa`: 30 dias, true feito, false não, null não vale. */
+export type Habito = {
+  id: string; nome: string; icone: string; dias: number[]; horaLembrete?: string; marcados: string[];
+  feitoHoje: boolean; valeHoje: boolean; sequencia: number; recorde: number; taxa: number; mapa: (boolean | null)[];
+};
+export type Meta = { id: string; titulo: string; alvo: number; unidade: string; progresso: number; prazo?: string; criadaEm: number; concluidaEm?: number };
+
+/** O briefing do dia (`hoje.painel`, fase 16). */
+export type PainelHoje = {
+  saudacao: string; frase: string; data: string;
+  clima: { cidade: string; temperatura: number; max: number; min: number; descricao: string; icone: string; chuvaHoje: boolean } | null;
+  lembretes: { id: string; texto: string; em: number }[];
+  timers: { id: string; nome: string; fimEm: number }[];
+  listas: { id: string; nome: string; pendentes: number; itens: string[] }[];
+  habitos: Habito[]; metas: Meta[];
+  proximaRotina: { nome: string; em: number } | null;
+  alertas: { titulo: string; detalhe: string; nivel: string }[];
+  geradoEm: number;
+};
 
 export type EstadoFoco = {
   ativo: boolean;
@@ -371,6 +399,14 @@ export type RpcResults = {
   'timers.start': { timer: TimerPc };
   'timers.cancel': { timer: TimerPc };
   'perfil.set': Perfil;
+  'hoje.painel': PainelHoje;
+  'habitos.list': { habitos: Habito[]; metas: Meta[] };
+  'habitos.save': { habito: Habito };
+  'habitos.marcar': { habito: Habito };
+  'habitos.delete': { ok: boolean };
+  'metas.save': { meta: Meta };
+  'metas.progresso': { meta: Meta };
+  'metas.delete': { ok: boolean };
   'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
   'memory.aceitar': { fact: MemoryFact };
   'memory.recusar': { recusada: boolean };
@@ -482,6 +518,8 @@ export type RpcResults = {
     port: number;
     /** Como o dono quer ser chamado (config do PC, fase 13); vazio em PC antigo. */
     nome?: string;
+    /** Fase 16: "chefe" etc. PC antigo não manda. */
+    tratamento?: string;
     /** Bloco 128: o dono quer acompanhar o acesso de fora? Ausente em PC antigo. */
     acessoRemoto?: boolean;
   };
@@ -525,6 +563,9 @@ export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
   // Esvaziar a Lixeira e limpar temporários não têm desfazer; instalar fecha o app do PC.
   'storage.clean',
   'update.install',
+  // Fase 16: apagar hábito leva o histórico de dias junto; meta, o progresso.
+  'habitos.delete',
+  'metas.delete',
 ]);
 
 export type RpcOptions = {

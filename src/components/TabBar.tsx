@@ -10,7 +10,7 @@ import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
 /** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
-export type Screen = 'home' | 'chat' | 'control' | 'rotinas' | 'conversations';
+export type Screen = 'home' | 'chat' | 'hoje' | 'control' | 'rotinas' | 'conversations';
 
 /**
  * Só destinos de verdade.
@@ -30,6 +30,8 @@ const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap
   // como o desktop sempre tratou os dois — um par de modos da mesma conversa, não duas
   // telas. E os Presets viraram um popover ancorado no botão do topo.
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
+  // Fase 16: o briefing do dia, hábitos e metas — a mesma aba Hoje do desktop.
+  { screen: 'hoje', label: 'Hoje', icon: 'sun' },
   // Guia única de controle do PC: espelho da tela aparente ao entrar, e todo o resto
   // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
   // gavetas. Antes eram duas abas separadas, Sistema e Remoto.

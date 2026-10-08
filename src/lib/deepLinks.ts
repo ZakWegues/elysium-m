@@ -9,13 +9,13 @@ import * as Linking from 'expo-linking';
  * Mesma armadilha do compartilhamento: trata o app já aberto (evento) E o app aberto
  * pelo link (URL inicial) — o segundo é o caso real do widget com o app fechado.
  */
-export type Destino = 'busca' | 'chat' | 'pc' | 'rotinas' | 'inicio';
+export type Destino = 'busca' | 'chat' | 'pc' | 'rotinas' | 'inicio' | 'hoje';
 
 export function destinoDaUrl(url: string): Destino | null {
   try {
     const p = Linking.parse(url);
     const alvo = (p.hostname || p.path || '').replace(/^\/+|\/+$/g, '');
-    if (alvo === 'busca' || alvo === 'chat' || alvo === 'pc' || alvo === 'rotinas' || alvo === 'inicio') return alvo;
+    if (alvo === 'busca' || alvo === 'chat' || alvo === 'pc' || alvo === 'rotinas' || alvo === 'inicio' || alvo === 'hoje') return alvo;
     return null;
   } catch {
     return null;

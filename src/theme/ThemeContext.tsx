@@ -31,6 +31,7 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const CHAVE_STARK = 'elysium_tema_stark_aplicado_v1';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [name, setName] = useState<ThemeName>('elisio');
@@ -51,6 +52,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         }
         const fam = resolverFamiliaEscolhida(storedFamilia);
         if (fam) setFamiliaState(fam);
+        // Fase 16: o tema Stark vira o padrão UMA vez (o Zak pediu o visual "Jarvis
+        // feminino"); escolher outro depois é respeitado.
+        AsyncStorage.getItem(CHAVE_STARK).then((feito) => {
+          if (feito) return;
+          setName('mare');
+          setFamiliaState('stark');
+          AsyncStorage.multiSet([[STORAGE_KEY, 'mare'], [FAMILIA_KEY, 'stark'], [CHAVE_STARK, '1']]).catch(() => { /* tenta de novo na próxima */ });
+        }).catch(() => { /* fica como está */ });
       })
       .catch((err) => console.error('[theme] falha lendo preferências salvas', err));
   }, []);

@@ -238,7 +238,7 @@ function Particulas({ cor, forca }: { cor: string; forca: number }) {
 
 export function AppBackground() {
   const { palette, familiaResolvida } = useTheme();
-  const noite = familiaResolvida === 'ely';
+  const noite = familiaResolvida !== 'lg';
 
   // O meio do gradiente clareia no vidro e escurece na noite. Um valor fixo deixaria uma
   // faixa clara atravessando a tela na família escura.

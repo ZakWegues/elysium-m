@@ -10,13 +10,13 @@ import { getPalette, Palette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS, Theme
  * modo do sistema, como no app. Qualquer falha cai no Crepúsculo/vidro, que é o padrão.
  */
 export async function paletaDosWidgets(): Promise<Palette> {
-  let nome: ThemeName = 'crepusculo';
-  let familia: 'lg' | 'ely' = 'lg';
+  let nome: ThemeName = 'mare';
+  let familia: 'lg' | 'ely' | 'stark' = 'stark';
   try {
     const [[, tema], [, fam]] = await AsyncStorage.multiGet(['elysium_theme', 'elysium_color_scheme']);
-    const t = tema ? (TEMAS_APOSENTADOS[tema] ?? tema) : 'crepusculo';
+    const t = tema ? (TEMAS_APOSENTADOS[tema] ?? tema) : 'mare';
     if (t === 'crepusculo' || t === 'mare' || t === 'elisio') nome = t;
-    const escolha = resolverFamiliaEscolhida(fam) ?? 'auto';
+    const escolha = resolverFamiliaEscolhida(fam) ?? 'stark';
     familia = escolha === 'auto' ? (Appearance.getColorScheme() === 'dark' ? 'ely' : 'lg') : escolha;
   } catch { /* padrão */ }
   return getPalette(nome, familia);

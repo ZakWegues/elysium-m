@@ -47,3 +47,16 @@ describe("temas", () => {
     expect(alfa(getPalette("crepusculo", "lg").glassSurface)).toBeLessThanOrEqual(0.35);
   });
 });
+
+describe('família Stark (fase 16)', async () => {
+  const { getPalette, familiaEscura, resolverFamiliaEscolhida } = await import('../src/theme/palettes');
+  it('Reator é o azul do reator, escuro, com rótulo próprio', () => {
+    const p = getPalette('mare', 'stark');
+    expect(p.primary).toBe('#3cc8f0');
+    expect(p.rotulo).toBe('Stark — Reator');
+    expect(p.blurTint).toBe('dark');
+    expect(familiaEscura('stark')).toBe(true);
+    expect(familiaEscura('lg')).toBe(false);
+    expect(resolverFamiliaEscolhida('stark')).toBe('stark');
+  });
+});

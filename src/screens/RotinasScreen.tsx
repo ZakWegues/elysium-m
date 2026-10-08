@@ -29,6 +29,18 @@ const EXEMPLOS: Partial<Rotina>[] = [
   { nome: 'Estado do PC', texto: 'como está o PC?', hora: '18:00', dias: [], entregar: ['celular'] },
 ];
 
+/**
+ * Modelos prontos (fase 16), os mesmos do desktop: as rotinas que mais se elogiam em
+ * assistentes. Um toque abre o formulário preenchido; nada é criado sem salvar.
+ */
+const MODELOS: Partial<Rotina>[] = [
+  { nome: 'Briefing da manhã', texto: 'me dá o resumo do dia', hora: '07:30', dias: [1, 2, 3, 4, 5], entregar: ['pc', 'celular'], falar: true },
+  { nome: 'Fim do expediente', texto: 'como foi meu dia? o que ficou pendente nas listas e nos hábitos?', hora: '18:30', dias: [1, 2, 3, 4, 5], entregar: ['pc', 'celular'] },
+  { nome: 'Hora de dormir', texto: 'abaixa o volume para 15', hora: '23:00', dias: [], entregar: ['pc'] },
+  { nome: 'Pausa para água', texto: 'me lembra, numa frase curta, de beber um copo de água agora', hora: '15:00', dias: [1, 2, 3, 4, 5], entregar: ['celular'] },
+  { nome: 'Revisão da semana', texto: 'como estão meus hábitos e minhas metas esta semana?', hora: '18:00', dias: [5], entregar: ['pc', 'celular'], falar: true },
+];
+
 function diasTexto(dias: number[]): string {
   if (!dias.length || dias.length === 7) return 'todos os dias';
   if (dias.length === 5 && [1, 2, 3, 4, 5].every(d => dias.includes(d))) return 'dias úteis';
@@ -156,6 +168,25 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
             <Switch value={avisos} onValueChange={mudarAvisos} trackColor={{ true: palette.primary }} />
           </View>
         </Card>
+
+        {/* Modelos prontos (fase 16): somem os que já viraram rotina, pelo nome. */}
+        {(() => {
+          const nomes = new Set(rotinas.map(x => x.nome.toLowerCase()));
+          const livres = MODELOS.filter(m => !nomes.has((m.nome ?? '').toLowerCase()));
+          if (carregando || !livres.length) return null;
+          return (
+            <>
+              <Text variant="label" color={palette.textMuted} style={styles.secao}>MODELOS PRONTOS</Text>
+              <View style={styles.chips}>
+                {livres.map((m, i) => (
+                  <Toque key={i} onPress={() => setEditando(m)} style={[styles.chip, { backgroundColor: palette.primarySoft }]}>
+                    <Text variant="caption" color={palette.primary}>+ {m.nome} · {m.hora}</Text>
+                  </Toque>
+                ))}
+              </View>
+            </>
+          );
+        })()}
 
         {/* Rotinas */}
         <Text variant="label" color={palette.textMuted} style={styles.secao}>ROTINAS</Text>

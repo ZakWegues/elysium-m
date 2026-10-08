@@ -36,16 +36,27 @@ export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
  * | mare       | `lg-tide` Maré     | `ely-ether` Éter      |
  * | elisio     | `lg-amber` Âmbar   | `ely` Campos Elísios  |
  */
-export type Familia = 'lg' | 'ely';
+export type Familia = 'lg' | 'ely' | 'stark';
 
 /** O que o usuário escolheu. `auto` acompanha o modo do aparelho. */
-export type FamiliaEscolha = 'auto' | 'lg' | 'ely';
+export type FamiliaEscolha = 'auto' | 'lg' | 'ely' | 'stark';
 
 /** Nome de cada família na tela. */
 export const ROTULO_FAMILIA: Record<Familia, string> = {
   lg: 'Vidro Líquido',
   ely: 'ELYSIUM',
+  stark: 'Stark',
 };
+
+/**
+ * As famílias escuras (fase 16). A Stark é a noite do ELYSIUM com outra paleta (azul de
+ * reator, vermelho e dourado, noite fria) e o acabamento HUD por cima — o pedido do Zak
+ * por um "Jarvis feminino, bem Tony Stark". Tudo o que perguntava "é a noite?" passa a
+ * perguntar isto, para a Stark herdar o vidro escuro sem duplicar regra.
+ */
+export function familiaEscura(f: Familia): boolean {
+  return f !== 'lg';
+}
 
 export type Palette = {
   name: ThemeName;
@@ -123,7 +134,7 @@ const neutrosClaro = {
  * senão viram linhas duras sobre superfície escura.
  */
 const neutrosEscuro = {
-  familia: 'ely' as const,
+  familia: 'ely' as Familia,
   border: 'rgba(255,255,255,0.10)',
   text: '#EEF1F6',
   textMuted: '#9AA3B2',
@@ -152,7 +163,7 @@ type Face = {
   primarySoft: string;
 };
 
-const temas: Record<ThemeName, { label: string; light: Face; dark: Face }> = {
+const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: Face }> = {
   elisio: {
     label: 'Elísio',
     light: {
@@ -162,6 +173,11 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face }> = {
     dark: {
       primary: '#d9b168', accent: '#9fd8cf', primarySoft: 'rgba(217,177,104,0.20)',
       background: '#0a0c14', surface: '#131726', surfaceRaised: '#0e1220',
+    },
+    // "Stark — Mark": o vermelho e o dourado da armadura.
+    stark: {
+      primary: '#ff5a4e', accent: '#ffc857', primarySoft: 'rgba(255,90,78,0.18)',
+      background: '#0b0607', surface: '#170c0e', surfaceRaised: '#120909',
     },
   },
   mare: {
@@ -174,6 +190,11 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face }> = {
       primary: '#a8c4d8', accent: '#7fd4c8', primarySoft: 'rgba(168,196,216,0.20)',
       background: '#080b12', surface: '#111624', surfaceRaised: '#0c101c',
     },
+    // "Stark — Reator": o azul do reator com detalhes âmbar. É o padrão da fase 16.
+    stark: {
+      primary: '#3cc8f0', accent: '#ffb547', primarySoft: 'rgba(60,200,240,0.18)',
+      background: '#05080f', surface: '#0b1220', surfaceRaised: '#08101b',
+    },
   },
   crepusculo: {
     label: 'Crepúsculo',
@@ -184,6 +205,11 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face }> = {
     dark: {
       primary: '#f0a850', accent: '#e07a9b', primarySoft: 'rgba(240,168,80,0.20)',
       background: '#0b0818', surface: '#171232', surfaceRaised: '#110d26',
+    },
+    // "Stark — Noite": azul frio e verde de terminal, para pouca luz.
+    stark: {
+      primary: '#7fb8d8', accent: '#64ffda', primarySoft: 'rgba(127,184,216,0.18)',
+      background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12',
     },
   },
 };
@@ -217,9 +243,9 @@ export function resolverNomeDeTema(bruto: string | null | undefined): ThemeName 
  * par junto da face duplicaria a cor em dois lugares para acrescentar só um texto.
  */
 const ROTULOS: Record<ThemeName, Record<Familia, string>> = {
-  elisio:     { lg: 'Vidro — Âmbar', ely: 'Campos Elísios' },
-  mare:       { lg: 'Vidro — Maré',  ely: 'Éter' },
-  crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo' },
+  elisio:     { lg: 'Vidro — Âmbar', ely: 'Campos Elísios', stark: 'Stark — Mark' },
+  mare:       { lg: 'Vidro — Maré',  ely: 'Éter',           stark: 'Stark — Reator' },
+  crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo',     stark: 'Stark — Noite' },
 };
 
 /** `#rrggbb` → [r, g, b]. Só aceita hex de 6 dígitos, que é o que as faces usam. */
@@ -254,7 +280,7 @@ function comAlfa(hex: string, alfa: number): string {
  * card < barra < gaveta < painel de texto.
  */
 function vidro(face: Face, familia: Familia) {
-  const noite = familia === 'ely';
+  const noite = familiaEscura(familia);
   const base = noite ? misturar(face.surface, face.primary, 0.14) : misturar('#FFFFFF', face.primary, 0.10);
   // 🔴 Bloco 70: a noite quase não tem desfoque (GlassFill limita a 10), então a tinta é
   // o que segura a leitura — subiu de 0,26/0,42 para 0,62/0,74. O dia baixou um pouco
@@ -272,11 +298,13 @@ function vidro(face: Face, familia: Familia) {
 
 function build(name: ThemeName, familia: Familia): Palette {
   const tema = temas[name];
-  const face = familia === 'ely' ? tema.dark : tema.light;
-  const neutros = familia === 'ely' ? neutrosEscuro : neutrosClaro;
+  const face = familia === 'stark' ? tema.stark : familia === 'ely' ? tema.dark : tema.light;
+  const neutros = familiaEscura(familia) ? { ...neutrosEscuro, familia } : neutrosClaro;
   return {
     name, label: tema.label, rotulo: ROTULOS[name][familia],
     ...neutros, ...face, ...vidro(face, familia),
+    // Stark: bordas com um fio da cor do reator, como as linhas de um HUD.
+    ...(familia === 'stark' ? { border: comAlfa(face.primary, 0.18), glassBorder: comAlfa(face.primary, 0.22) } : {}),
   };
 }
 
@@ -298,8 +326,13 @@ export const darkPalettes: Record<ThemeName, Palette> = Object.fromEntries(
   names.map(n => [n, build(n, 'ely')]),
 ) as Record<ThemeName, Palette>;
 
+/** Família Stark (fase 16). */
+export const starkPalettes: Record<ThemeName, Palette> = Object.fromEntries(
+  names.map(n => [n, build(n, 'stark')]),
+) as Record<ThemeName, Palette>;
+
 export function getPalette(name: ThemeName, familia: Familia): Palette {
-  return familia === 'ely' ? darkPalettes[name] : palettes[name];
+  return familia === 'stark' ? starkPalettes[name] : familia === 'ely' ? darkPalettes[name] : palettes[name];
 }
 
 /**
@@ -316,6 +349,7 @@ export function resolverFamiliaEscolhida(bruto: string | null | undefined): Fami
     case 'light':  return 'lg';
     case 'ely':
     case 'dark':   return 'ely';
+    case 'stark':  return 'stark';
     case 'auto':
     case 'system': return 'auto';
     default:       return null;

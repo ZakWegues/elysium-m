@@ -29,6 +29,10 @@ import { Markdown } from '../components/Markdown';
 import { paraFala, textoPuro } from '../lib/markdown';
 import * as Clipboard from 'expo-clipboard';
 
+/** Primeiro balão (fase 16, a persona da Ely): era "Pareado com IP:porta", detalhe técnico
+ * que ninguém precisava ler ao abrir o chat. O endereço continua em Ajustes → Sobre. */
+const BOAS_VINDAS = "Sistemas no ar. Pode pedir — escrevendo, segurando o microfone ou dizendo \"Ely\".";
+
 type MicStatus = 'checking' | 'ready' | 'denied';
 
 export default function ChatScreen({
@@ -71,7 +75,7 @@ export default function ChatScreen({
   /** Próximas perguntas sugeridas pelo PC depois da última resposta escrita (bloco 132). */
   const [sugestoes, setSugestoes] = useState<string[]>([]);
   const [messages, setMessages] = useState<StoredMessage[]>([
-    { id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() },
+    { id: 'welcome', from: 'reply', text: BOAS_VINDAS, ts: Date.now() },
   ]);
   const [draft, setDraft] = useState('');
   /**
@@ -143,7 +147,7 @@ export default function ChatScreen({
       sessionIdRef.current = null;
       favoriteRef.current = false;
       createdAtRef.current = Date.now();
-      setMessages([{ id: 'welcome', from: 'reply', text: `Pareado com ${pairing.activeIp}:${pairing.port}`, ts: Date.now() }]);
+      setMessages([{ id: 'welcome', from: 'reply', text: BOAS_VINDAS, ts: Date.now() }]);
     })();
   }, [sessionId, pairing.activeIp, pairing.port]);
 
@@ -858,12 +862,12 @@ export default function ChatScreen({
             { padding: tokens.spacing.md, borderTopColor: palette.glassBorder },
           ]}
         >
-        <GlassCircle size={40} onPress={() => setCameraOpen(true)} disabled={sending}>
+        <GlassCircle size={40} onPress={() => setCameraOpen(true)} disabled={sending} accessibilityLabel="Perguntar sobre uma foto">
           <Feather name="camera" size={20} color={palette.primary} />
         </GlassCircle>
         {/* Anexar fica à esquerda, colado na câmera, nos DOIS lados do switch: são os dois
             botões que trazem algo de fora para a conversa. */}
-        <GlassCircle size={40} onPress={handleAnexar} disabled={sending}>
+        <GlassCircle size={40} onPress={handleAnexar} disabled={sending} accessibilityLabel="Anexar arquivo">
           <Feather name="paperclip" size={20} color={palette.primary} />
         </GlassCircle>
         <TextInput
@@ -891,6 +895,7 @@ export default function ChatScreen({
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
           disabled={sending || micStatus !== 'ready' || faseVoz !== null}
+          accessibilityLabel="Segure para falar"
         >
           <Feather
             name="mic"
@@ -899,11 +904,11 @@ export default function ChatScreen({
           />
         </GlassCircle>
         {sending ? (
-          <GlassCircle size={40} ativo onPress={pararResposta}>
+          <GlassCircle size={40} ativo onPress={pararResposta} accessibilityLabel="Parar a resposta">
             <Feather name="square" size={17} color={palette.error} />
           </GlassCircle>
         ) : (
-          <GlassCircle size={40} ativo={!!draft.trim()} onPress={() => handleSend()} disabled={!draft.trim()}>
+          <GlassCircle size={40} ativo={!!draft.trim()} onPress={() => handleSend()} disabled={!draft.trim()} accessibilityLabel="Enviar">
             <Feather name="arrow-up" size={20} color={draft.trim() ? palette.primary : palette.textMuted} />
           </GlassCircle>
         )}

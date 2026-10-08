@@ -288,7 +288,7 @@ export default function HomeScreen({
     AsyncStorage.getItem(CHAVE_NOME).then((n) => { if (n) setNome(n); }).catch(() => {});
     callRpc(pairing, 'pairing.endpoints', {}, { timeoutMs: 5000 })
       .then((r) => {
-        const n = (r.nome ?? '').trim();
+        const n = (r.tratamento || r.nome || '').trim();
         setNome(n);
         AsyncStorage.setItem(CHAVE_NOME, n).catch(() => {});
       })

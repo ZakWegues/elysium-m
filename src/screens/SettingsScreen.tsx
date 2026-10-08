@@ -28,6 +28,7 @@ import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoC
  * Agora a pergunta é a mesma que o desktop faz, com o mesmo vocabulário.
  */
 const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeof Feather.glyphMap; nota: string }[] = [
+  { value: 'stark', label: ROTULO_FAMILIA.stark, icon: 'cpu', nota: 'HUD escuro, azul de reator — o padrão da Ely' },
   { value: 'lg', label: ROTULO_FAMILIA.lg, icon: 'droplet', nota: 'Vidro translúcido, fundo claro' },
   { value: 'ely', label: ROTULO_FAMILIA.ely, icon: 'moon', nota: 'Noite azul com luz dourada e feixes de luz' },
   { value: 'auto', label: 'Seguir o aparelho', icon: 'smartphone', nota: 'Vidro no modo claro, ELYSIUM no escuro' },
@@ -108,11 +109,12 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [rascunho, setRascunho] = useState('');
+  const [tratamento, setTratamento] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   useEffect(() => {
     callRpc(pairing, 'perfil.get')
-      .then((p) => { setPerfil(p); setRascunho(p.instrucoesPessoais); })
+      .then((p) => { setPerfil(p); setRascunho(p.instrucoesPessoais); setTratamento(p.tratamento ?? ''); })
       .catch((e) => setErro(`O PC não respondeu (ou é anterior à 1.8.0): ${errMessage(e)}`));
   }, [pairing]);
   async function gravar(patch: Partial<Perfil>) {
@@ -144,6 +146,22 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
           </Pressable>
         );
       })}
+      {/* Fase 16: a persona chama o dono pelo tratamento ("chefe"). PC antigo não tem o campo. */}
+      {perfil.tratamento !== undefined && (
+        <>
+          <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Como a Ely te chama</Text>
+          <Text variant="caption" color={palette.textMuted}>Ex.: chefe, senhor, o seu nome. Vazio = sem tratamento.</Text>
+          <TextInput
+            value={tratamento}
+            onChangeText={setTratamento}
+            onEndEditing={() => { if (tratamento.trim() !== (perfil.tratamento ?? '')) gravar({ tratamento: tratamento.trim() }); }}
+            maxLength={30}
+            placeholder="chefe"
+            placeholderTextColor={palette.textMuted}
+            style={{ color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 }}
+          />
+        </>
+      )}
       <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Como a Ely responde</Text>
       <Text variant="caption" color={palette.textMuted}>
         Em texto livre: como você quer ser tratado, o que evitar, o que sempre incluir. Vale no PC e aqui.

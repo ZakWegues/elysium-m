@@ -8,6 +8,7 @@ import PairingScreen from './src/screens/PairingScreen';
 import ChatHub from './src/screens/ChatHub';
 import ControlScreen from './src/screens/ControlScreen';
 import RotinasScreen from './src/screens/RotinasScreen';
+import HojeScreen from './src/screens/HojeScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import SpotifyPlayer from './src/screens/SpotifyPlayer';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -307,6 +308,7 @@ function AppInner() {
     else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
     else if (destino === 'pc') setScreen('control');
     else if (destino === 'rotinas') setScreen('rotinas');
+    else if (destino === 'hoje') setScreen('hoje');
     else if (destino === 'inicio') setScreen('home');
   }, []));
 
@@ -401,6 +403,7 @@ function AppInner() {
         )}
         {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
         {screen === 'rotinas' && <RotinasScreen pairing={pairing} onUnpair={handleUnpair} />}
+        {screen === 'hoje' && <HojeScreen pairing={pairing} />}
         {screen === 'conversations' && (
           <ConversationsScreen
             pairing={pairing}

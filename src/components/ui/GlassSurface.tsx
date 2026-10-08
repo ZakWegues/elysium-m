@@ -75,7 +75,7 @@ export function GlassFill({
 }) {
   const { palette, familiaResolvida } = useTheme();
   const blurTarget = useBlurTarget();
-  const noite = familiaResolvida === 'ely';
+  const noite = familiaResolvida !== 'lg';
   // Noite: blur "extremamente levinho". Dia: um pouco mais que antes, para o vidro
   // parecer espesso (o desfoque é o que dá a sensação de material).
   const forca = noite ? BLUR_NOITE : Math.min(100, Math.round(intensity * 1.25));
@@ -173,6 +173,7 @@ export function GlassCircle({
   pulsando = false,
   style,
   children,
+  accessibilityLabel,
 }: {
   size?: number;
   onPress?: () => void;
@@ -185,6 +186,8 @@ export function GlassCircle({
   pulsando?: boolean;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
+  /** Botão só de ícone precisa de nome para o leitor de tela (fase 16). */
+  accessibilityLabel?: string;
 }) {
   const { palette } = useTheme();
 
@@ -212,6 +215,9 @@ export function GlassCircle({
       onPressIn={onPressIn}
       onPressOut={onPressOut}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
       hitSlop={6}
       style={[
         {
