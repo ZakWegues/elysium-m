@@ -48,6 +48,18 @@ export type RpcMethod =
   | 'tarefas.concluir'
   | 'tarefas.reabrir'
   | 'tarefas.delete'
+  | 'hoje.ideia'
+  | 'hoje.testar'
+  | 'corpo.painel'
+  | 'corpo.dica'
+  | 'corpo.perfil'
+  | 'corpo.peso'
+  | 'treinos.save'
+  | 'treinos.importar'
+  | 'treinos.delete'
+  | 'treinos.marcar'
+  | 'corrida.marcar'
+  | 'corrida.delete'
   | 'memory.aceitar'
   | 'memory.recusar'
   | 'foco.start'
@@ -375,6 +387,34 @@ export type PainelHoje = {
   proximaRotina: { nome: string; em: number } | null;
   alertas: { titulo: string; detalhe: string; nivel: string }[];
   geradoEm: number;
+  // Fase 18 (PC 2.2+). PC antigo não manda — tudo opcional.
+  rotinasHoje?: { id: string; nome: string; em: number }[];
+  rotinasRodaram?: { id: string; nome: string; em: number; ok: boolean; resultado: string }[];
+  corpo?: PainelCorpo | null;
+  dica?: { texto: string; em: number } | null;
+  elysium?: { versao: string; novidades: string[]; paraTestar: { item: string; feito: boolean }[]; atualizacaoPronta: string | null };
+  ideia?: string | null;
+};
+
+/** Treino, nutrição e corrida (fase 18). Dados pessoais: moram no PC. */
+export type Exercicio = { nome: string; tipo: 'composto' | 'isolador'; aquecimento: number; series: number; reps: string; carga?: string; obs?: string };
+export type Treino = { id: string; nome: string; exercicios: Exercicio[]; ordem: number };
+export type PerfilCorpo = {
+  sexo?: 'masculino' | 'feminino'; idade?: number; alturaCm?: number; pesoKg?: number;
+  atividade: 'sedentario' | 'leve' | 'moderado' | 'ativo' | 'muito';
+  objetivo: 'ganhar' | 'manter' | 'perder'; foco?: string; ajusteKcal: number;
+};
+export type Corrida = { id: string; data: string; minutos: number; km?: number; doPlano: boolean };
+export type PainelCorpo = {
+  treinoHoje: { treino: Treino; feitoHoje: boolean; proximo: string | null } | null;
+  treinos: Treino[];
+  treinosNoMes: number;
+  perfil: PerfilCorpo;
+  faltaPerfil: string[];
+  meta: { kcal: number; gasto: number; corrida: number; proteinaG: number; gorduraG: number; carboG: number } | null;
+  corrida: { semana: number; sessao: number; texto: string; minutos: number; concluido: boolean; feitaHoje: boolean; ultimas: Corrida[] };
+  pesos: { data: string; kg: number }[];
+  sugestao: string | null;
 };
 
 export type EstadoFoco = {
@@ -422,6 +462,18 @@ export type RpcResults = {
   'tarefas.concluir': { tarefa: Tarefa; tarefas: Tarefa[] };
   'tarefas.reabrir': { tarefa: Tarefa; tarefas: Tarefa[] };
   'tarefas.delete': { ok: boolean; tarefas: Tarefa[] };
+  'hoje.ideia': { ideia: string };
+  'hoje.testar': { feitos: string[] };
+  'corpo.painel': PainelCorpo;
+  'corpo.dica': { dica: { texto: string; em: number } };
+  'corpo.perfil': { perfil: PerfilCorpo };
+  'corpo.peso': { perfil: PerfilCorpo };
+  'treinos.save': { treino: Treino };
+  'treinos.importar': { treinos: Treino[] };
+  'treinos.delete': { ok: boolean };
+  'treinos.marcar': { treino: Treino; painel: PainelCorpo };
+  'corrida.marcar': { corrida: Corrida; painel: PainelCorpo };
+  'corrida.delete': { ok: boolean; painel: PainelCorpo };
   'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
   'memory.aceitar': { fact: MemoryFact };
   'memory.recusar': { recusada: boolean };
@@ -581,6 +633,9 @@ export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
   // Fase 16: apagar hábito leva o histórico de dias junto; meta, o progresso.
   'habitos.delete',
   'metas.delete',
+  // Fase 18: apagar um treino leva os exercícios e as cargas; importar troca a lista toda.
+  'treinos.delete',
+  'treinos.importar',
 ]);
 
 export type RpcOptions = {

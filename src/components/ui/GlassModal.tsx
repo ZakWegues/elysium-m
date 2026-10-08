@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 import { GlassFill } from './GlassSurface';
 import { Text } from './Text';
+import { useAbaAtiva } from '../AbaViva';
 
 const SHEET_OFFSCREEN_Y = 700;
 
@@ -51,6 +52,11 @@ export function GlassModal({
   /** Continua montada durante a saída; sem isto a gaveta sumiria de um quadro pro outro. */
   const [montada, setMontada] = useState(visible);
   const sobreposicao = useContext(SobreposicaoContext);
+  // Abas vivas (08/10): a aba que tem a gaveta aberta pode ser escondida por fora (o "Ely"
+  // leva ao Chat, um widget abre outra aba). Gaveta aberta numa aba escondida deixava a barra
+  // de abas sumida em todas — então ela fecha junto.
+  const abaAtiva = useAbaAtiva();
+  useEffect(() => { if (!abaAtiva && visible) onClose(); }, [abaAtiva]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!visible || !sobreposicao) return;

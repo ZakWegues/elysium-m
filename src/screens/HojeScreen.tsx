@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { callRpc, Habito, Meta, PainelHoje, Tarefa } from '../lib/rpc';
+import { callRpc, Habito, Meta, PainelCorpo, PainelHoje, Tarefa } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { confirmDestructive } from '../lib/confirm';
@@ -11,6 +11,8 @@ import { Button, Card, GlassModal, ScreenHeader, Text } from '../components/ui';
 import { Reator } from '../components/Reator';
 import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
+import { CardCorrida, CardElysium, CardIdeia, CardNutricao, CardRotinasHoje, CardTreino, OuvirResumo } from './hoje/CardsFase18';
+import TreinoScreen from './TreinoScreen';
 
 /**
  * Hoje (fase 16, 07/10) — o briefing do dia, a mesma aba do desktop. Uma chamada só
@@ -61,6 +63,10 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
   const [novaTarefa, setNovaTarefa] = useState('');
   const [diaNova, setDiaNova] = useState<'nenhum' | 'hoje' | 'amanha'>('nenhum');
   const [horaNova, setHoraNova] = useState('');
+  /** Fase 18: o treino em tela cheia, aberto pelos cards do corpo. */
+  const [treinoAberto, setTreinoAberto] = useState(false);
+  const aplicarCorpo = useCallback((corpo: PainelCorpo) => setPainel(p => p && { ...p, corpo }), []);
+  const fecharTreino = useCallback(() => setTreinoAberto(false), []);
 
   function aplicarTarefas(tarefas: Tarefa[]) {
     setPainel(p => p && { ...p, tarefas });
@@ -226,6 +232,9 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
               </View>
             </View>
 
+            {/* Fase 18: ouvir o resumo inteiro — a fala segue ao trocar de aba ou minimizar. */}
+            <OuvirResumo pairing={pairing} />
+
             {painel.alertas.map((a, i) => (
               <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : '#f0b43c' }]}>
                 <Feather name="alert-triangle" size={16} color={a.nivel === 'erro' ? palette.error : '#f0b43c'} />
@@ -267,6 +276,17 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
                 </Pressable>
               ))}
             </Card>
+
+            {painel.corpo && (
+              <>
+                {secao('TREINO DE HOJE')}
+                <CardTreino corpo={painel.corpo} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} aoMudar={aplicarCorpo} />
+                {secao('NUTRIÇÃO')}
+                <CardNutricao corpo={painel.corpo} dica={painel.dica ?? null} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} />
+                {secao('CORRIDA')}
+                <CardCorrida corpo={painel.corpo} aoAbrir={() => setTreinoAberto(true)} />
+              </>
+            )}
 
             {secao('METAS', { rotulo: 'Meta', onPress: () => setMetaEdit({ alvo: 10 }) })}
             <Card glass style={{ gap: tokens.spacing.sm }}>
@@ -384,6 +404,27 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
               </>
             )}
 
+            {painel.rotinasHoje && (
+              <>
+                {secao('ROTINAS DE HOJE')}
+                <CardRotinasHoje painel={painel} />
+              </>
+            )}
+
+            {painel.ideia ? (
+              <>
+                {secao('IDEIA PARA HOJE')}
+                <CardIdeia ideia={painel.ideia} pairing={pairing} />
+              </>
+            ) : null}
+
+            {painel.elysium && (
+              <>
+                {secao('ELYSIUM')}
+                <CardElysium e={painel.elysium} pairing={pairing} />
+              </>
+            )}
+
             {painel.listas.length > 0 && (
               <>
                 {secao('LISTAS')}
@@ -455,6 +496,9 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
       <GlassModal title={metaEdit?.id ? 'Editar meta' : 'Nova meta'} visible={metaEdit !== null} onClose={() => setMetaEdit(null)}>
         {metaEdit && <FormMeta pairing={pairing} base={metaEdit} aoTerminar={() => { setMetaEdit(null); void carregar(); }} />}
       </GlassModal>
+      {treinoAberto && painel?.corpo && (
+        <TreinoScreen pairing={pairing} corpo={painel.corpo} onClose={fecharTreino} onMudar={aplicarCorpo} />
+      )}
     </View>
   );
 }

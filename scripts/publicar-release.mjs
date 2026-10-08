@@ -32,6 +32,11 @@ const iArq = args.indexOf("--notas-arquivo");
 if (iArq >= 0) notas = fs.readFileSync(args[iArq + 1], "utf8");
 else notas = args.filter(a => !a.startsWith("--")).join(" ");
 if (!notas.trim()) falhar("faltam as notas: npm run release -- \"o que mudou\"");
+// Fase 18 (08/10): as notas alimentam o card ELYSIUM do Hoje — "## Novidades" vira "o que
+// veio" e "## Para testar" vira o checklist. Sem as duas seções, o card fica pela metade.
+if (!/^#{1,3}\s*novidades/im.test(notas) || !/^#{1,3}\s*para testar/im.test(notas)) {
+  falhar('as notas precisam das seções "## Novidades" e "## Para testar" (o Hoje mostra as duas)');
+}
 
 if (!fs.existsSync(apk)) falhar("não achei dist-apk/elysium-m.apk — rode npm run build:local antes");
 
