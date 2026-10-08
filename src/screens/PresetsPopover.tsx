@@ -8,6 +8,7 @@ import { errMessage } from '../lib/errors';
 import { ENTRA, LAYOUT, SAI } from '../lib/motion';
 import { useTheme } from '../theme';
 import { Text } from '../components/ui';
+import { comConfirmacao } from '../lib/confirm';
 
 /**
  * Presets, agora pelo RPC.
@@ -53,11 +54,16 @@ export default function PresetsPopover({
     finally { setOcupado(false); }
   }
 
-  async function apagar(nome: string) {
-    try {
-      await callRpc(pairing, 'presets.delete', { name: nome });
-      await carregar();
-    } catch (e) { Alert.alert('Preset', errMessage(e)); }
+  function apagar(nome: string) {
+    Alert.alert('Apagar o preset?', `"${nome}" some do PC e do celular.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Apagar', style: 'destructive', onPress: async () => {
+        try {
+          await callRpc(pairing, 'presets.delete', { name: nome }, { confirmed: true });
+          await carregar();
+        } catch (e) { Alert.alert('Preset', errMessage(e)); }
+      } },
+    ]);
   }
 
   if (criando) {
@@ -145,12 +151,13 @@ function CriarPreset({
     if (!nome.trim()) { Alert.alert('Preset', 'Dê um nome ao preset.'); return; }
     if (!marcados.length) { Alert.alert('Preset', 'Escolha ao menos um programa.'); return; }
     try {
-      await callRpc(pairing, 'presets.save', {
+      const r = await comConfirmacao(confirmed => callRpc(pairing, 'presets.save', {
         name: nome.trim(),
         description: nome.trim(),
         icon: 'sliders',
         actions: marcados.map(app => ({ action: 'open_app', app_name: app })),
-      });
+      }, { confirmed }), 'Gravar o preset', 'Ele tem uma ação que desliga ou apaga algo.');
+      if (r === null) return;
       onPronto();
     } catch (e) { Alert.alert('Preset', errMessage(e)); }
   }

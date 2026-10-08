@@ -1,3 +1,4 @@
+import { ConfirmationRequiredError } from './rpc';
 /**
  * Guarda de confirmação para ações destrutivas (desligar o PC, matar processo,
  * fechar app).
@@ -60,5 +61,20 @@ export async function confirmDestructive(
     return result.success ? 'confirmed' : 'cancelled';
   } catch {
     return askWithAlert(title, message);
+  }
+}
+
+/**
+ * Para o que só é destrutivo pelo CONTEÚDO (08/10): um preset com "desligar", uma rotina que
+ * apaga. O PC responde 403 e aí sim pede-se a confirmação (biometria ou alerta) e tenta de
+ * novo confirmado. Devolve `null` se o dono cancelou.
+ */
+export async function comConfirmacao<T>(fazer: (confirmado: boolean) => Promise<T>, titulo: string, mensagem: string): Promise<T | null> {
+  try {
+    return await fazer(false);
+  } catch (e) {
+    if (!(e instanceof ConfirmationRequiredError)) throw e;
+    if ((await confirmDestructive(titulo, mensagem)) !== 'confirmed') return null;
+    return fazer(true);
   }
 }

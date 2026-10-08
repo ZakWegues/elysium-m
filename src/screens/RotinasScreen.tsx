@@ -12,6 +12,7 @@ import { useTheme } from '../theme';
 import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../components/ui';
 import { notificacoesAtivas, definirNotificacoesAtivas, pedirPermissao, sincronizarNotificacoes } from '../lib/notificacoes';
 import { useAoReativar } from '../components/AbaViva';
+import { comConfirmacao } from '../lib/confirm';
 
 /**
  * Aba Rotinas (bloco 72) — a mesma aba do desktop (bloco 68), no celular: as rotinas do
@@ -122,7 +123,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
     Alert.alert('Apagar rotina', `“${r.nome}” deixa de rodar. Continuar?`, [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Apagar', style: 'destructive', onPress: async () => {
-        try { await callRpc(pairing, 'rotinas.delete', { id: r.id }); haptica.sucesso(); carregar(); }
+        try { await callRpc(pairing, 'rotinas.delete', { id: r.id }, { confirmed: true }); haptica.sucesso(); carregar(); }
         catch (err) { falha(err, 'Não consegui apagar'); }
       } },
     ]);
@@ -301,7 +302,9 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
             onCancelar={() => setEditando(null)}
             onSalvar={async (dados) => {
               try {
-                await callRpc(pairing, 'rotinas.save', dados);
+                // Rotina que desliga, reinicia ou apaga: o PC pede confirmação (08/10).
+                const r = await comConfirmacao(confirmed => callRpc(pairing, 'rotinas.save', dados, { confirmed }), 'Gravar a rotina', 'Ela vai desligar, reiniciar ou apagar algo sozinha, sem perguntar de novo.');
+                if (r === null) return;
                 haptica.sucesso();
                 setEditando(null);
                 carregar();

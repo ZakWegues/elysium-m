@@ -558,14 +558,19 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
     }
   }
 
-  async function remove(fact: MemoryFact) {
-    try {
-      await callRpc(pairing, 'memory.remove', { id: fact.id });
-      haptica.medio();
-      setFacts(prev => prev.filter(f => f.id !== fact.id));
-    } catch (err) {
-      onError(err, 'Falha ao esquecer');
-    }
+  function remove(fact: MemoryFact) {
+    Alert.alert('Esquecer?', `A Ely deixa de saber: "${fact.text}"`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Esquecer', style: 'destructive', onPress: async () => {
+        try {
+          await callRpc(pairing, 'memory.remove', { id: fact.id }, { confirmed: true });
+          haptica.medio();
+          setFacts(prev => prev.filter(f => f.id !== fact.id));
+        } catch (err) {
+          onError(err, 'Falha ao esquecer');
+        }
+      } },
+    ]);
   }
 
   return (

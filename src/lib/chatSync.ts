@@ -56,7 +56,8 @@ async function run(pairing: Pairing): Promise<SyncResult> {
     const tombstones = await readTombstones();
     const confirmed: string[] = [];
     for (const id of tombstones) {
-      await callRpc(pairing, 'chat.delete', { id });
+      // Apagada à mão aqui no celular (com a pergunta na tela): a confirmação já foi dada.
+      await callRpc(pairing, 'chat.delete', { id }, { confirmed: true });
       confirmed.push(id);
     }
     if (confirmed.length > 0) await clearTombstones(confirmed);

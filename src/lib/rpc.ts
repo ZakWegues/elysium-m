@@ -636,6 +636,13 @@ export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
   // Fase 18: apagar um treino leva os exercícios e as cargas; importar troca a lista toda.
   'treinos.delete',
   'treinos.importar',
+  // 08/10 (PC 2.2.1+): apagar conversa, memória, tarefa, preset e rotina também
+  // passam pela trava. Quem chama já perguntou na tela e manda `confirmed: true`.
+  'chat.delete',
+  'memory.remove',
+  'tarefas.delete',
+  'presets.delete',
+  'rotinas.delete',
 ]);
 
 export type RpcOptions = {

@@ -166,8 +166,9 @@ function AppInner() {
       if (cancelled || pending.length === 0) return;
       setQueued(pending.length);
       await flushQueue(pairing, (item, reply, error) => {
-        if (error) console.warn('[fila] falhou ao reenviar', item.text, error);
-        else console.log('[fila] reenviado', item.text, '→', reply);
+        if (error) console.warn('[fila] falhou ao reenviar', error);
+        // Texto do pedido só no log de dev (08/10): o logcat do aparelho não guarda conversa.
+        else if (__DEV__) console.log('[fila] reenviado', item.text, '→', reply);
       });
       if (!cancelled) refreshQueueCount();
     })();

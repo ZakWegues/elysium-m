@@ -115,7 +115,7 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
     Alert.alert('Apagar a tarefa?', `"${t.texto}"${t.lembreteIds?.length ? ' — os avisos que faltam são cancelados.' : ''}`, [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Apagar', style: 'destructive', onPress: async () => {
-        try { aplicarTarefas((await callRpc(pairing, 'tarefas.delete', { id: t.id })).tarefas); }
+        try { aplicarTarefas((await callRpc(pairing, 'tarefas.delete', { id: t.id }, { confirmed: true })).tarefas); }
         catch (e) { Alert.alert('Não deu para apagar', errMessage(e)); }
       } },
     ]);

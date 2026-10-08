@@ -132,7 +132,7 @@ export default function BuscaPanel({
         },
         async () => {
           const r = await callRpc(pairing, 'memory.list');
-          for (const f of r.facts) lista.push({ grupo: 'memoria', icone: 'bookmark', texto: `Esquecer: ${f.text}`, executar: rpc('memory.remove', { id: f.id }, 'Esquecido.') });
+          for (const f of r.facts) lista.push({ grupo: 'memoria', icone: 'bookmark', texto: `Esquecer: ${f.text}`, executar: rpc('memory.remove', { id: f.id }, 'Esquecido.', true) });
         },
         async () => {
           // Local, de propósito: quem busca uma conversa quer achar algo que já viu, e
