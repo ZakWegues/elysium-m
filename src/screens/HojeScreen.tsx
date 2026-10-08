@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { callRpc, Habito, Meta, PainelCorpo, PainelHoje, Tarefa } from '../lib/rpc';
+import { callRpc, Habito, Meta, PainelCorpo, PainelHoje, Revisao, Tarefa } from '../lib/rpc';
+import { falar } from '../lib/falar';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { confirmDestructive } from '../lib/confirm';
@@ -202,9 +203,39 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
     ...(painel?.proximaRotina ? [{ em: painel.proximaRotina.em, icone: 'zap' as const, texto: `Rotina ${painel.proximaRotina.nome}` }] : []),
   ].sort((a, b) => a.em - b.em);
 
-  const secao = (t: string, acao?: { rotulo: string; onPress: () => void; icone?: keyof typeof Feather.glyphMap }) => (
+  // Fase 18: seções ocultáveis (toque longo no título). A lista é a mesma do PC — a chave
+  // vem do título, do mesmo jeito que o dashboard faz.
+  const ocultos = painel?.ocultos ?? [];
+  const vis = (chave: string) => !ocultos.includes(chave);
+  const chaveDe = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  async function mudarOcultos(chave: string, ocultar: boolean) {
+    try {
+      const r = await callRpc(pairing, 'hoje.ocultar', { secao: chave, ocultar });
+      setPainel(p => p && { ...p, ocultos: r.ocultos });
+    } catch (e) { Alert.alert('Hoje', errMessage(e)); }
+  }
+  function perguntarOcultar(t: string, chave: string) {
+    haptica.leve();
+    Alert.alert(`Ocultar "${t.charAt(0)}${t.slice(1).toLowerCase()}"?`, 'Some daqui e do Hoje do PC. Para mostrar de novo, use o botão no fim da página.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Ocultar', onPress: () => void mudarOcultos(chave, true) },
+    ]);
+  }
+  async function mostrarOcultos() {
+    for (const c of ocultos) await mudarOcultos(c, false);
+  }
+  const [revisao, setRevisao] = useState<Revisao | null>(null);
+  async function abrirRevisao() {
+    haptica.leve();
+    try { setRevisao(await callRpc(pairing, 'hoje.revisao', {}, { timeoutMs: 15000 })); }
+    catch (e) { Alert.alert('Revisão da semana', errMessage(e)); }
+  }
+
+  const secao = (t: string, acao?: { rotulo: string; onPress: () => void; icone?: keyof typeof Feather.glyphMap }, chave = chaveDe(t)) => (
     <View style={styles.secaoTopo}>
-      <Text variant="label" color={palette.textMuted} style={styles.secao}>{t}</Text>
+      <Pressable onLongPress={() => perguntarOcultar(t, chave)} accessibilityHint="Toque longo para ocultar a seção" hitSlop={6}>
+        <Text variant="label" color={palette.textMuted} style={styles.secao}>{t}</Text>
+      </Pressable>
       {acao && (
         <Pressable onPress={acao.onPress} hitSlop={12} accessibilityRole="button" accessibilityLabel={acao.rotulo} style={styles.secaoAcao}>
           <Feather name={acao.icone ?? 'plus'} size={15} color={palette.primary} />
@@ -239,6 +270,29 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
 
             {/* Fase 18: ouvir o resumo inteiro — a fala segue ao trocar de aba ou minimizar. */}
             <OuvirResumo pairing={pairing} />
+            <Pressable onPress={abrirRevisao} accessibilityRole="button" hitSlop={6} style={[styles.linha, { alignSelf: 'flex-start', minHeight: 40 }]}>
+              <Feather name="calendar" size={15} color={palette.primary} />
+              <Text variant="label" color={palette.primary}>{new Date().getDay() === 0 ? 'Revisão da semana (é domingo!)' : 'Revisão da semana'}</Text>
+            </Pressable>
+
+            {painel.amanha && vis('amanha') && (
+              <>
+                {secao('MEU AMANHÃ', undefined, 'amanha')}
+                <Card glass style={{ gap: 8 }}>
+                  {painel.amanha.clima && (
+                    <Text variant="caption" color={palette.textMuted}>Amanhã: {Math.round(painel.amanha.clima.min)}°–{Math.round(painel.amanha.clima.max)}°</Text>
+                  )}
+                  {painel.amanha.tarefas.length === 0 && <Text variant="caption" color={palette.textMuted}>Nada marcado para amanhã — bom momento para escolher a prioridade do dia.</Text>}
+                  {painel.amanha.tarefas.map(t => (
+                    <View key={t.id} style={styles.linha}>
+                      <Feather name="circle" size={13} color={palette.primary} />
+                      <Text variant="body" style={{ flex: 1 }}>{t.texto}</Text>
+                      <Text variant="caption" color={palette.textMuted}>{t.prazo !== undefined ? quandoTarefa(t.prazo, t.semHora).replace(/^amanhã ·? ?/, '') : ''}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            )}
 
             {painel.alertas.map((a, i) => (
               <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : '#f0b43c' }]}>
@@ -247,6 +301,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
               </Card>
             ))}
 
+            {vis('habitos-de-hoje') && (<>
             {secao('HÁBITOS DE HOJE', { rotulo: 'Hábito', onPress: () => setHabitoEdit({}) })}
             <Pressable onPress={abrirTodos} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
               <Text variant="caption" color={palette.primary}>Ver todos os hábitos e metas</Text>
@@ -282,18 +337,26 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
                 </Pressable>
               ))}
             </Card>
+            </>)}
 
             {painel.corpo && (
               <>
-                {secao('TREINO DE HOJE')}
-                <CardTreino corpo={painel.corpo} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} aoMudar={aplicarCorpo} />
-                {secao('NUTRIÇÃO')}
-                <CardNutricao corpo={painel.corpo} dica={painel.dica ?? null} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} />
-                {secao('CORRIDA')}
-                <CardCorrida corpo={painel.corpo} aoAbrir={() => setTreinoAberto(true)} />
+                {vis('treino-de-hoje') && (<>
+                  {secao('TREINO DE HOJE')}
+                  <CardTreino corpo={painel.corpo} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} aoMudar={aplicarCorpo} />
+                </>)}
+                {vis('nutricao') && (<>
+                  {secao('NUTRIÇÃO')}
+                  <CardNutricao corpo={painel.corpo} dica={painel.dica ?? null} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} />
+                </>)}
+                {vis('corrida') && (<>
+                  {secao('CORRIDA')}
+                  <CardCorrida corpo={painel.corpo} aoAbrir={() => setTreinoAberto(true)} />
+                </>)}
               </>
             )}
 
+            {vis('metas') && (<>
             {secao('METAS', { rotulo: 'Meta', onPress: () => setMetaEdit({ alvo: 10 }) })}
             <Card glass style={{ gap: tokens.spacing.sm }}>
               {painel.metas.length === 0 && <Text variant="caption" color={palette.textMuted}>Sem metas em andamento.</Text>}
@@ -316,8 +379,9 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
                 );
               })}
             </Card>
+            </>)}
 
-            {painel.tarefas && (
+            {painel.tarefas && vis('lembretes-e-tarefas') && (
               <>
                 {secao('LEMBRETES E TAREFAS', { rotulo: 'Tela cheia', icone: 'maximize-2', onPress: () => { haptica.leve(); setTarefasAbertas(true); } })}
                 <Card glass style={{ gap: 4 }}>
@@ -391,6 +455,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
               </>
             )}
 
+            {vis('agenda') && (<>
             {secao('AGENDA')}
             <Card glass style={{ gap: 8 }}>
               {painel.timers.map(t => (
@@ -409,8 +474,9 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
               ))}
               {!agenda.length && !painel.timers.length && <Text variant="caption" color={palette.textMuted}>Agenda livre hoje.</Text>}
             </Card>
+            </>)}
 
-            {painel.clima && (
+            {painel.clima && vis('clima') && (
               <>
                 {secao('CLIMA')}
                 <Card glass style={styles.linha}>
@@ -423,28 +489,28 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
               </>
             )}
 
-            {painel.rotinasHoje && (
+            {painel.rotinasHoje && vis('rotinas-de-hoje') && (
               <>
                 {secao('ROTINAS DE HOJE')}
                 <CardRotinasHoje painel={painel} />
               </>
             )}
 
-            {painel.ideia ? (
+            {painel.ideia && vis('ideia-para-hoje') ? (
               <>
                 {secao('IDEIA PARA HOJE')}
                 <CardIdeia ideia={painel.ideia} pairing={pairing} />
               </>
             ) : null}
 
-            {painel.elysium && (
+            {painel.elysium && vis('elysium') && (
               <>
                 {secao('ELYSIUM')}
                 <CardElysium e={painel.elysium} pairing={pairing} />
               </>
             )}
 
-            {painel.listas.length > 0 && (
+            {painel.listas.length > 0 && vis('listas') && (
               <>
                 {secao('LISTAS')}
                 <Card glass style={{ gap: 8 }}>
@@ -458,11 +524,20 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
               </>
             )}
 
+            {vis('manchetes') && (<>
             {secao('MANCHETES')}
             <Card glass style={{ gap: 8 }}>
               {manchetes ? <Markdown texto={manchetes} cor={palette.text} /> : <Text variant="caption" color={palette.textMuted}>Sob demanda — a busca vai à internet.</Text>}
               <Button title={buscandoManchetes ? 'Buscando…' : manchetes ? 'Buscar de novo' : 'Buscar manchetes'} variant="secondary" onPress={buscarManchetes} disabled={buscandoManchetes} />
             </Card>
+            </>)}
+
+            {ocultos.length > 0 && (
+              <Pressable onPress={() => void mostrarOcultos()} accessibilityRole="button" style={[styles.linha, { alignSelf: 'center', minHeight: 44 }]}>
+                <Feather name="eye" size={15} color={palette.primary} />
+                <Text variant="label" color={palette.primary}>Mostrar {ocultos.length} seç{ocultos.length === 1 ? 'ão oculta' : 'ões ocultas'}</Text>
+              </Pressable>
+            )}
           </>
         )}
       </ScrollView>
@@ -514,6 +589,21 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
       </GlassModal>
       <GlassModal title={metaEdit?.id ? 'Editar meta' : 'Nova meta'} visible={metaEdit !== null} onClose={() => setMetaEdit(null)}>
         {metaEdit && <FormMeta pairing={pairing} base={metaEdit} aoTerminar={() => { setMetaEdit(null); void carregar(); }} />}
+      </GlassModal>
+      <GlassModal title="Revisão da semana" visible={revisao !== null} onClose={() => setRevisao(null)}>
+        {revisao && (
+          <View style={{ gap: tokens.spacing.md }}>
+            <Text variant="body" style={{ lineHeight: 22 }}>{revisao.texto}</Text>
+            {revisao.habitos.map(h => (
+              <View key={h.nome} style={styles.linha}>
+                <Text variant="body" style={{ flex: 1 }}>{h.nome}</Text>
+                <Text variant="caption" color={palette.textMuted}>{h.feitos}/{h.dias} · força {h.forca}%</Text>
+              </View>
+            ))}
+            <Button title="Ouvir" onPress={() => { void falar(revisao.texto, pairing); }} />
+            {revisao.atrasadas.length > 0 && <Button title="Ver as tarefas" variant="secondary" onPress={() => { setRevisao(null); setTarefasAbertas(true); }} />}
+          </View>
+        )}
       </GlassModal>
       {tarefasAbertas && (
         <TarefasScreen pairing={pairing} onClose={fecharTarefas} onMudou={aplicarTarefas} />

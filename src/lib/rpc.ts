@@ -54,6 +54,8 @@ export type RpcMethod =
   | 'tarefas.reagendarAtrasadas'
   | 'tarefas.interpretar'
   | 'hoje.ideia'
+  | 'hoje.ocultar'
+  | 'hoje.revisao'
   | 'hoje.testar'
   | 'corpo.painel'
   | 'corpo.dica'
@@ -405,6 +407,16 @@ export type PainelHoje = {
   dica?: { texto: string; em: number } | null;
   elysium?: { versao: string; novidades: string[]; paraTestar: { item: string; feito: boolean }[]; atualizacaoPronta: string | null };
   ideia?: string | null;
+  /** Fase 18: "Meu amanhã" (depois das 18h) e as seções escondidas pelo dono. */
+  amanha?: { tarefas: Tarefa[]; clima: { max: number; min: number; icone: string } | null } | null;
+  ocultos?: string[];
+};
+
+export type Revisao = {
+  texto: string; concluidas: string[]; atrasadas: string[];
+  habitos: { nome: string; feitos: number; dias: number; forca: number }[];
+  metas: { titulo: string; progresso: number; alvo: number }[];
+  treinos: number; corridas: number;
 };
 
 /** Treino, nutrição e corrida (fase 18). Dados pessoais: moram no PC. */
@@ -479,6 +491,8 @@ export type RpcResults = {
   'tarefas.reagendarAtrasadas': { reagendadas: number; tarefas: Tarefa[] };
   'tarefas.interpretar': { texto: string; quando: string | null; semHora?: boolean; passou?: boolean; vespera?: boolean; rotulo?: string | null };
   'hoje.ideia': { ideia: string };
+  'hoje.ocultar': { ocultos: string[] };
+  'hoje.revisao': Revisao;
   'hoje.testar': { feitos: string[] };
   'corpo.painel': PainelCorpo;
   'corpo.dica': { dica: { texto: string; em: number } };
