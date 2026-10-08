@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import { conversaEmMarkdown } from '../lib/exportarConversa';
+import { emFluxoExterno } from '../lib/atualizacaoOta';
 import Feather from '@expo/vector-icons/Feather';
 import {
   ChatSession, deleteSession, listSessions, renameSession, toggleFavorite,
@@ -95,7 +96,7 @@ export default function ConversationsScreen({
   function compartilhar(id: string) {
     const sessao = sessions.find(x => x.id === id);
     if (!sessao) return;
-    Share.share({ title: sessao.title, message: conversaEmMarkdown(sessao) }).catch(() => {});
+    emFluxoExterno(() => Share.share({ title: sessao.title, message: conversaEmMarkdown(sessao) })).catch(() => {});
   }
 
   async function handleDelete(id: string) {

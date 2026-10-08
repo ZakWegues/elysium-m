@@ -36,6 +36,16 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
   const [habitoEdit, setHabitoEdit] = useState<Partial<Habito> | null>(null);
   const [metaEdit, setMetaEdit] = useState<Partial<Meta> | null>(null);
   const [manchetes, setManchetes] = useState<string | null>(null);
+  /**
+   * "Todos" (revisão de 07/10): a aba só mostra os hábitos que valem HOJE e as metas em
+   * andamento; sem esta lista, um hábito de seg/qua/sex não dava para editar na terça e meta
+   * concluída não dava para apagar.
+   */
+  const [todos, setTodos] = useState<{ habitos: Habito[]; metas: Meta[] } | null>(null);
+  async function abrirTodos() {
+    try { setTodos(await callRpc(pairing, 'habitos.list')); }
+    catch (e) { Alert.alert('Não consegui ler', errMessage(e)); }
+  }
   const [buscandoManchetes, setBuscandoManchetes] = useState(false);
   const [, setTique] = useState(0);
 
@@ -148,6 +158,9 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
             ))}
 
             {secao('HÁBITOS DE HOJE', { rotulo: 'Hábito', onPress: () => setHabitoEdit({}) })}
+            <Pressable onPress={abrirTodos} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
+              <Text variant="caption" color={palette.primary}>Ver todos os hábitos e metas</Text>
+            </Pressable>
             <Card glass style={{ gap: 2 }}>
               {habitos.length === 0 && <Text variant="caption" color={palette.textMuted}>Nenhum hábito para hoje. Toque em "Hábito" para criar — a Ely marca pela voz também ("marquei academia").</Text>}
               {habitos.map((h, i) => (
@@ -257,6 +270,30 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
         )}
       </ScrollView>
 
+      <GlassModal title="Hábitos e metas" visible={todos !== null} onClose={() => setTodos(null)}>
+        {todos && (
+          <View style={{ gap: tokens.spacing.sm }}>
+            <Text variant="label" color={palette.textMuted}>HÁBITOS</Text>
+            {todos.habitos.length === 0 && <Text variant="caption" color={palette.textMuted}>Nenhum hábito.</Text>}
+            {todos.habitos.map(h => (
+              <Pressable key={h.id} onPress={() => { setTodos(null); setHabitoEdit(h); }} style={[styles.linha, { minHeight: 44 }]}>
+                <Feather name="check-circle" size={16} color={palette.primary} />
+                <Text variant="body" style={{ flex: 1 }}>{h.nome}</Text>
+                <Text variant="caption" color={palette.textMuted}>{h.dias.length ? h.dias.map(d => DIAS[d]).join(' ') : 'todo dia'} · 🔥{h.sequencia}</Text>
+              </Pressable>
+            ))}
+            <Text variant="label" color={palette.textMuted} style={{ marginTop: tokens.spacing.sm }}>METAS</Text>
+            {todos.metas.length === 0 && <Text variant="caption" color={palette.textMuted}>Nenhuma meta.</Text>}
+            {todos.metas.map(m => (
+              <Pressable key={m.id} onPress={() => { setTodos(null); setMetaEdit(m); }} style={[styles.linha, { minHeight: 44 }]}>
+                <Feather name="star" size={16} color={palette.primary} />
+                <Text variant="body" style={{ flex: 1 }}>{m.titulo}</Text>
+                <Text variant="caption" color={palette.textMuted}>{m.progresso}/{m.alvo}{m.concluidaEm ? ' · concluída' : ''}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </GlassModal>
       <GlassModal title={habitoEdit?.id ? 'Editar hábito' : 'Novo hábito'} visible={habitoEdit !== null} onClose={() => setHabitoEdit(null)}>
         {habitoEdit && <FormHabito pairing={pairing} base={habitoEdit} aoTerminar={() => { setHabitoEdit(null); void carregar(); }} />}
       </GlassModal>

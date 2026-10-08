@@ -4,6 +4,7 @@ import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { falar, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
+import { emFluxoExterno } from '../lib/atualizacaoOta';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -420,10 +421,10 @@ export default function ChatScreen({
    */
   async function handleAnexar() {
     if (enviandoRef.current) return;
-    const escolha = await DocumentPicker.getDocumentAsync({
+    const escolha = await emFluxoExterno(() => DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
       copyToCacheDirectory: false,
-    });
+    }));
     if (escolha.canceled || !escolha.assets[0]) return;
     const asset = escolha.assets[0];
 

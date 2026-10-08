@@ -9,6 +9,7 @@ import {
   novidadesPendentes, situacaoAtualizacao, versaoInstalada, type SituacaoAtualizacao,
 } from '../lib/atualizacao';
 import { confirmDestructive } from '../lib/confirm';
+import { emFluxoExterno } from '../lib/atualizacaoOta';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 
@@ -68,7 +69,7 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
     haptica.medio();
     setProgresso(0);
     try {
-      await baixarEInstalar(pairing, apk, setProgresso);
+      await emFluxoExterno(() => baixarEInstalar(pairing, apk, setProgresso));
       // Chegou aqui = o instalador fechou SEM instalar (instalando, o app reinicia). Antes
       // isto vibrava "sucesso" e o cartão continuava lá sem explicação.
       haptica.aviso();
@@ -76,7 +77,7 @@ export default function AvisoAtualizacao({ pairing, modo }: { pairing: Pairing; 
         'A instalação não terminou',
         'Se o Android pediu para permitir "instalar apps desconhecidos", libere para o ELYSIUM-M e toque em "Baixar e instalar" de novo.',
         [
-          { text: 'Abrir a permissão', onPress: () => { void abrirPermissaoDeInstalar(); } },
+          { text: 'Abrir a permissão', onPress: () => { void emFluxoExterno(abrirPermissaoDeInstalar); } },
           { text: 'Tentar de novo', onPress: () => { void instalar(); } },
           { text: 'Agora não', style: 'cancel' },
         ],

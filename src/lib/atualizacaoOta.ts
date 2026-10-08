@@ -21,6 +21,21 @@ const INTERVALO_MS = 15 * 60_000;
 const FORA_PARA_APLICAR_MS = 30_000;
 
 let ultimaProcura = 0;
+
+/**
+ * Fluxos que tiram o app da frente DE PROPÓSITO (revisão de 07/10): seletor de arquivo,
+ * instalador do APK, tela de permissão, menu de compartilhar. Voltar deles não é "voltei ao
+ * app depois de um tempo" — reiniciar ali perderia o anexo ou o alerta em andamento.
+ */
+let fluxosAbertos = 0;
+let fluxoTerminouEm = 0;
+export async function emFluxoExterno<T>(acao: () => Promise<T>): Promise<T> {
+  fluxosAbertos++;
+  try { return await acao(); } finally { fluxosAbertos--; fluxoTerminouEm = Date.now(); }
+}
+function podeAplicarSozinho(): boolean {
+  return fluxosAbertos === 0 && Date.now() - fluxoTerminouEm > 60_000;
+}
 let procurando: Promise<ResultadoOta> | null = null;
 
 export type ResultadoOta = 'desligado' | 'nada' | 'baixada' | 'erro';
@@ -69,7 +84,11 @@ export function useAtualizacaoOta(): { pendente: boolean; baixando: boolean } {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'background') { saiuEm = Date.now(); return; }
       if (s !== 'active') return;
-      if (pendenteRef.current && saiuEm && Date.now() - saiuEm > FORA_PARA_APLICAR_MS) { aplicarOta(); return; }
+      // Um respiro antes de decidir: o fim do seletor/instalador chega junto com o "active".
+      if (pendenteRef.current && saiuEm && Date.now() - saiuEm > FORA_PARA_APLICAR_MS) {
+        setTimeout(() => { if (pendenteRef.current && podeAplicarSozinho()) aplicarOta(); }, 1500);
+        return;
+      }
       procurarOta();
     });
     return () => sub.remove();
