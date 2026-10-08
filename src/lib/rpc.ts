@@ -40,6 +40,7 @@ export type RpcMethod =
   | 'habitos.save'
   | 'habitos.marcar'
   | 'habitos.delete'
+  | 'habitos.pausar'
   | 'metas.save'
   | 'metas.progresso'
   | 'metas.delete'
@@ -372,6 +373,8 @@ export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; i
 export type Habito = {
   id: string; nome: string; icone: string; dias: number[]; horaLembrete?: string; marcados: string[];
   feitoHoje: boolean; valeHoje: boolean; sequencia: number; recorde: number; taxa: number; mapa: (boolean | null)[];
+  /** Fase 18 (PC 2.3+): força 0–100, folgas por semana e se hoje está congelado. */
+  forca?: number; folgasPorSemana?: number; pausadoHoje?: boolean;
 };
 export type Meta = { id: string; titulo: string; alvo: number; unidade: string; progresso: number; prazo?: string; criadaEm: number; concluidaEm?: number };
 
@@ -462,6 +465,7 @@ export type RpcResults = {
   'habitos.save': { habito: Habito };
   'habitos.marcar': { habito: Habito };
   'habitos.delete': { ok: boolean };
+  'habitos.pausar': { habito: Habito };
   'metas.save': { meta: Meta };
   'metas.progresso': { meta: Meta };
   'metas.delete': { ok: boolean };

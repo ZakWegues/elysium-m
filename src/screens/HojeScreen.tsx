@@ -14,7 +14,7 @@ import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { CardCorrida, CardElysium, CardIdeia, CardNutricao, CardRotinasHoje, CardTreino, OuvirResumo } from './hoje/CardsFase18';
 import TreinoScreen from './TreinoScreen';
 import TarefasScreen from './TarefasScreen';
-import { atrasada, mascaraHora, quandoTarefa } from '../lib/tarefasUi';
+import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
 
 /**
  * Hoje (fase 16, 07/10) — o briefing do dia, a mesma aba do desktop. Uma chamada só
@@ -276,7 +276,8 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
                   </View>
                   <View style={{ alignItems: 'center', minWidth: 44 }}>
                     <Text variant="subheading" color={palette.accent}>{h.sequencia}</Text>
-                    <Text variant="caption" color={palette.textMuted}>🔥 dias</Text>
+                    <Text variant="caption" color={palette.textMuted}>{h.pausadoHoje ? '❄ hoje' : '🔥 dias'}</Text>
+                    {h.forca !== undefined && <Text variant="caption" color={palette.textMuted} style={{ fontSize: 10 }} maxFontSizeMultiplier={1.2}>força {h.forca}%</Text>}
                   </View>
                 </Pressable>
               ))}
@@ -529,15 +530,26 @@ function FormHabito({ pairing, base, aoTerminar }: { pairing: Pairing; base: Par
   const [nome, setNome] = useState(base.nome ?? '');
   const [dias, setDias] = useState<number[]>(base.dias ?? []);
   const [hora, setHora] = useState(base.horaLembrete ?? '');
+  const [folgas, setFolgas] = useState(base.folgasPorSemana ?? 1);
   const [salvando, setSalvando] = useState(false);
   const campo = [styles.campo, { borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }];
   async function salvar() {
     if (!nome.trim()) return;
-    if (hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) { Alert.alert('Hora inválida', 'Use HH:MM, por exemplo 07:30.'); return; }
+    const h = validarHora(hora);
+    if (h === null) { Alert.alert('Hora inválida', 'Use HH:MM, por exemplo 07:30.'); return; }
     setSalvando(true);
-    try { await callRpc(pairing, 'habitos.save', { id: base.id, nome, dias, horaLembrete: hora || undefined }); haptica.sucesso(); aoTerminar(); }
+    try { await callRpc(pairing, 'habitos.save', { id: base.id, nome, dias, horaLembrete: h || undefined, folgasPorSemana: folgas }); haptica.sucesso(); aoTerminar(); }
     catch (e) { Alert.alert('Não deu para salvar', errMessage(e)); }
     finally { setSalvando(false); }
+  }
+  /** Viagem, doença: hoje não conta como falta (fase 18). */
+  async function congelar() {
+    if (!base.id) return;
+    try {
+      await callRpc(pairing, 'habitos.pausar', { id: base.id, pausar: !base.pausadoHoje });
+      haptica.sucesso();
+      aoTerminar();
+    } catch (e) { Alert.alert('Não deu para congelar', errMessage(e)); }
   }
   async function apagar() {
     if (!base.id) return;
@@ -550,7 +562,7 @@ function FormHabito({ pairing, base, aoTerminar }: { pairing: Pairing; base: Par
     <View style={{ gap: tokens.spacing.md }}>
       <TextInput value={nome} onChangeText={setNome} placeholder="Ex.: Academia, Leitura, Água" placeholderTextColor={palette.textMuted} maxLength={40} style={campo} />
       <Text variant="caption" color={palette.textMuted}>Dias (nenhum = todo dia; dia fora da lista não quebra a sequência)</Text>
-      <View style={styles.linha}>
+      <View style={[styles.linha, { flexWrap: 'wrap', gap: 6 }]}>
         {DIAS.map((d, i) => {
           const on = dias.includes(i);
           return (
@@ -561,8 +573,21 @@ function FormHabito({ pairing, base, aoTerminar }: { pairing: Pairing; base: Par
           );
         })}
       </View>
-      <TextInput value={hora} onChangeText={setHora} placeholder="Lembrar às (HH:MM) — opcional" placeholderTextColor={palette.textMuted} maxLength={5} keyboardType="numbers-and-punctuation" style={campo} />
+      <TextInput value={hora} onChangeText={v => setHora(mascaraHora(v))} placeholder="Lembrar às (HH:MM) — opcional" placeholderTextColor={palette.textMuted} maxLength={5} keyboardType="number-pad" style={campo} />
+      <Text variant="caption" color={palette.textMuted}>Folgas por semana — faltas que não quebram a sequência (a força cai um pouco, nada zera)</Text>
+      <View style={[styles.linha, { flexWrap: 'wrap', gap: 6 }]}>
+        {[0, 1, 2].map(n => {
+          const on = folgas === n;
+          return (
+            <Pressable key={n} onPress={() => setFolgas(n)} accessibilityRole="radio" accessibilityState={{ selected: on }}
+              style={[styles.chipDia, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
+              <Text variant="caption" color={on ? palette.primary : palette.textMuted}>{n === 0 ? 'Nenhuma' : n === 1 ? '1 por semana' : '2 por semana'}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       <Button title={salvando ? 'Salvando…' : base.id ? 'Salvar' : 'Criar hábito'} onPress={salvar} disabled={salvando || !nome.trim()} />
+      {base.id && <Button title={base.pausadoHoje ? 'Descongelar hoje' : '❄ Congelar hoje (viagem, doença)'} variant="secondary" onPress={congelar} />}
       {base.id && <Button title="Apagar hábito" variant="secondary" onPress={apagar} />}
     </View>
   );
