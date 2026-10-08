@@ -211,7 +211,7 @@ export default function SpotifyPlayer({
         <View style={[styles.header, { paddingHorizontal: tokens.spacing.lg }]}>
           <Feather name="music" size={18} color={SPOTIFY_GREEN} />
           <Text variant="label" style={{ flex: 1 }}>Spotify</Text>
-          <Pressable onPress={onClose} hitSlop={12}>
+          <Pressable accessibilityLabel="Fechar o player" accessibilityRole="button" onPress={onClose} hitSlop={12}>
             <Feather name="chevron-down" size={26} color={palette.textMuted} />
           </Pressable>
         </View>
@@ -279,11 +279,11 @@ export default function SpotifyPlayer({
             </View>
 
             <View style={styles.controls}>
-              <Pressable onPress={() => send('spotify.shuffle', { on: !now.shuffle })} hitSlop={8}>
+              <Pressable accessibilityLabel="Aleatório" accessibilityRole="button" onPress={() => send('spotify.shuffle', { on: !now.shuffle })} hitSlop={8}>
                 <Feather name="shuffle" size={20} color={now.shuffle ? SPOTIFY_GREEN : palette.textMuted} />
               </Pressable>
 
-              <Pressable onPress={() => send('spotify.command', { operation: 'previous' })} hitSlop={8}>
+              <Pressable accessibilityLabel="Faixa anterior" accessibilityRole="button" onPress={() => send('spotify.command', { operation: 'previous' })} hitSlop={8}>
                 <Feather name="skip-back" size={26} color={palette.text} />
               </Pressable>
 
@@ -291,7 +291,7 @@ export default function SpotifyPlayer({
                 <Feather name={now.isPlaying ? 'pause' : 'play'} size={26} color="#fff" />
               </Pressable>
 
-              <Pressable onPress={() => send('spotify.command', { operation: 'next' })} hitSlop={8}>
+              <Pressable accessibilityLabel="Próxima faixa" accessibilityRole="button" onPress={() => send('spotify.command', { operation: 'next' })} hitSlop={8}>
                 <Feather name="skip-forward" size={26} color={palette.text} />
               </Pressable>
 

@@ -121,7 +121,7 @@ export default function ChatHub({
         // texto, sem glow. Antes o histórico era um ícone solto à esquerda e os presets
         // uma bolinha com borda à direita — dois pesos para dois alvos irmãos.
         left={
-          <GlassCircle
+          <GlassCircle accessibilityLabel="Histórico"
             size={34}
             onPress={() => (modo === 'ia' ? onOpenConversations() : setHistoricoPcAberto(true))}
           >
@@ -131,7 +131,7 @@ export default function ChatHub({
         center={<SwitchModo modo={modo} onTroca={setModo} temNovidade={(naoLidos ?? 0) > 0} />}
         right={
           <View ref={botaoRef} collapsable={false}>
-            <GlassCircle size={34} ativo={presetsAberto} onPress={abrirPresets}>
+            <GlassCircle accessibilityLabel="Opções" size={34} ativo={presetsAberto} onPress={abrirPresets}>
               <Feather name="sliders" size={17} color={presetsAberto ? palette.primary : palette.textMuted} />
             </GlassCircle>
           </View>
@@ -218,7 +218,16 @@ function SwitchModo({
         style={[styles.polegar, { borderRadius: tokens.radii.full, backgroundColor: palette.surfaceRaised }, polegarStyle]}
       />
       {(['ia', 'pc'] as const).map(m => (
-        <Pressable key={m} onPress={() => trocar(m)} style={styles.lado}>
+        <Pressable
+          key={m}
+          onPress={() => trocar(m)}
+          style={styles.lado}
+          // O switch tem ~30 px de altura: o hitSlop leva o alvo aos 44 px (08/10).
+          hitSlop={{ top: 8, bottom: 8 }}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: modo === m }}
+          accessibilityLabel={m === 'ia' ? 'Conversar com a IA' : `Recados do PC${temNovidade && modo !== 'pc' ? ', com novidade' : ''}`}
+        >
           <Feather
             name={m === 'ia' ? 'cpu' : 'monitor'}
             size={13}

@@ -71,7 +71,7 @@ export function ComandosIa({ texto, pairing }: { texto: string; pairing: Pairing
               style={{ flex: 1, alignItems: 'center', padding: 11, borderRadius: tokens.radii.md, borderWidth: 1, borderColor: palette.border }}>
               <Text variant="label">Compartilhar</Text>
             </Pressable>
-            <Pressable onPress={() => setResultado(null)}
+            <Pressable accessibilityLabel="Refazer" accessibilityRole="button" onPress={() => setResultado(null)}
               style={{ alignItems: 'center', padding: 11, borderRadius: tokens.radii.md, borderWidth: 1, borderColor: palette.border }}>
               <Feather name="rotate-ccw" size={16} color={palette.textMuted} />
             </Pressable>

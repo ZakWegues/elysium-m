@@ -35,6 +35,10 @@ export function Button({
   return (
     <Pressable
       disabled={isDisabled}
+      // Fase 18: o leitor de tela anuncia "botão" e "indisponível"; ocupado também conta.
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      accessibilityLabel={title}
       style={({ pressed }) => [
         styles.base,
         {

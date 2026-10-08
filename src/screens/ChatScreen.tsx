@@ -30,6 +30,7 @@ import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 import { Markdown } from '../components/Markdown';
 import { paraFala, textoPuro } from '../lib/markdown';
 import * as Clipboard from 'expo-clipboard';
+import { avisarTokenRecusado } from '../lib/erroRpc';
 
 /** Primeiro balão (fase 16, a persona da Ely): era "Pareado com IP:porta", detalhe técnico
  * que ninguém precisava ler ao abrir o chat. O endereço continua em Ajustes → Sobre. */
@@ -390,8 +391,8 @@ export default function ChatScreen({
       // Parado pelo botão: o erro é o da conexão fechada de propósito, não um problema.
       if (paradoRef.current) return;
       if (err instanceof AuthError) {
-        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-        onUnpair();
+        // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+        avisarTokenRecusado();
         return;
       }
 
@@ -463,8 +464,8 @@ export default function ChatScreen({
       if (escolha.assets.length > arquivos.length) Alert.alert('Até 10 de cada vez', `Mandei os 10 primeiros; ${escolha.assets.length - arquivos.length} ficaram para a próxima.`);
     } catch (err) {
       if (err instanceof AuthError) {
-        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-        onUnpair();
+        // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+        avisarTokenRecusado();
         return;
       }
       Alert.alert('Falha ao enviar o arquivo', errMessage(err));
@@ -751,7 +752,7 @@ export default function ChatScreen({
         <ScreenHeader
           title="ELYSIUM-M"
           right={
-            <Pressable onPress={onOpenConversations} hitSlop={8}>
+            <Pressable accessibilityLabel="Histórico" accessibilityRole="button" onPress={onOpenConversations} hitSlop={8}>
               <Feather name="clock" size={22} color={palette.textMuted} />
             </Pressable>
           }
@@ -821,7 +822,7 @@ export default function ChatScreen({
       {/* Próximas perguntas (bloco 132): um toque pergunta. */}
       {sugestoes.length > 0 && !sending && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
-          {sugestoes.map((t) => (
+          {sugestoes.slice(0, 6).map((t) => (
             <Pressable
               key={t}
               onPress={() => { haptica.leve(); handleSend(t); }}
@@ -913,6 +914,11 @@ export default function ChatScreen({
           onSubmitEditing={() => handleSend()}
           returnKeyType="send"
           editable={!sending}
+          // Fase 18: cresce até 5 linhas — mensagem longa ficava escondida numa linha só.
+          // Enter continua enviando (submitBehavior); a quebra vem do texto colado.
+          multiline
+          submitBehavior="submit"
+          maxLength={4000}
         />
         <GlassCircle
           size={40}
@@ -1065,6 +1071,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     paddingVertical: 10,
+    // Até ~5 linhas; depois rola dentro do campo.
+    maxHeight: 120,
   },
 
 });

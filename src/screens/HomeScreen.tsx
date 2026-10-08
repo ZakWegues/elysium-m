@@ -22,6 +22,7 @@ import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
+import { avisarTokenRecusado } from '../lib/erroRpc';
 
 /** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
 const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
@@ -282,6 +283,8 @@ export default function HomeScreen({
   }, [pairing, visiveis]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  // Puxar para atualizar com o círculo de verdade (08/10): antes ficava fixo em "parado".
+  const [puxando, setPuxando] = useState(false);
   // Voltou à Início: os cards se atualizam por trás, sem sumir.
   useAoReativar(() => { void carregar(); });
 
@@ -301,8 +304,8 @@ export default function HomeScreen({
 
   function tratarErro(err: unknown, contexto: string) {
     if (err instanceof AuthError) {
-      Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-      onUnpair();
+      // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+      avisarTokenRecusado();
       return;
     }
     Alert.alert(contexto, errMessage(err));
@@ -434,10 +437,10 @@ export default function HomeScreen({
           <View style={styles.linhaStatus}>
             {/* 08/10: o microfone que mostrava a escuta do "Ely" saiu do topo — o Zak o lia como a
                 mão livre que ele pediu para tirar. O estado da escuta continua em Ajustes → Voz. */}
-            <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
+            <GlassCircle accessibilityLabel="Buscar" size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
               <Feather name="search" size={16} color={palette.textMuted} />
             </GlassCircle>
-            <Pressable
+            <Pressable accessibilityLabel="Opções" accessibilityRole="button"
               onPress={() => setEditando(v => !v)}
               hitSlop={10}
               style={{ marginLeft: 6, marginRight: 4 }}
@@ -453,7 +456,8 @@ export default function HomeScreen({
 
       <ScrollView
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={carregar} tintColor={palette.primary} />}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={puxando} onRefresh={async () => { setPuxando(true); try { await carregar(); } finally { setPuxando(false); } }} tintColor={palette.primary} colors={[palette.primary]} />}
         // Só para de rolar enquanto um arrasto está REALMENTE em curso. Antes isto era
         // `!editando`, o que matava a rolagem durante toda a personalização e tornava
         // impossível chegar nos cards de baixo. Ver o comentário em `CardArrastavel`.
@@ -513,10 +517,10 @@ export default function HomeScreen({
                     </Text>
                   </Pressable>
 
-                  <Pressable onPress={() => alternarFixo(id)} hitSlop={8} style={styles.iconeCfg}>
+                  <Pressable accessibilityLabel="Fixar o card" accessibilityRole="button" onPress={() => alternarFixo(id)} hitSlop={8} style={styles.iconeCfg}>
                     <Feather name="bookmark" size={15} color={fixo ? palette.accent : palette.textMuted} />
                   </Pressable>
-                  <Pressable
+                  <Pressable accessibilityLabel="Mover o card para cima" accessibilityRole="button"
                     onPress={() => mover(pos, pos - 1)}
                     disabled={!ligado || fixo || pos <= 0}
                     hitSlop={8}
@@ -524,7 +528,7 @@ export default function HomeScreen({
                   >
                     <Feather name="chevron-up" size={17} color={palette.textMuted} />
                   </Pressable>
-                  <Pressable
+                  <Pressable accessibilityLabel="Mover o card para baixo" accessibilityRole="button"
                     onPress={() => mover(pos, pos + 1)}
                     disabled={!ligado || fixo || pos < 0 || pos >= visiveis.length - 1}
                     hitSlop={8}

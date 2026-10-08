@@ -24,6 +24,7 @@ import { useTheme } from '../theme';
 import TrackpadFullscreen from './TrackpadFullscreen';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
 import { useAbaAtiva } from '../components/AbaViva';
+import { avisarTokenRecusado } from '../lib/erroRpc';
 import {
   Button, Card, GlassCircle, GlassModal, MetricBar, ScreenHeader, Text, Toque,
 } from '../components/ui';
@@ -93,8 +94,8 @@ export default function ControlScreen({
 
   const handleError = useCallback<ErrorHandler>((err, context) => {
     if (err instanceof AuthError) {
-      Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-      onUnpair();
+      // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+      avisarTokenRecusado();
       return;
     }
     haptica.erro();
@@ -108,7 +109,7 @@ export default function ControlScreen({
     <View style={{ flex: 1 }}>
       <ScreenHeader title="PC" />
 
-      <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
         <MirrorPanel pairing={pairing} onError={handleError} />
 
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}
@@ -360,7 +361,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
             <Feather name="eye" size={14} color={palette.primary} />
             <Text variant="label" color={palette.primary}>O que ele viu</Text>
             <View style={{ flex: 1 }} />
-            <Pressable onPress={() => setAnswer(null)} hitSlop={10}>
+            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => setAnswer(null)} hitSlop={10}>
               <Feather name="x" size={16} color={palette.textMuted} />
             </Pressable>
           </View>
@@ -433,7 +434,7 @@ function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
           ))}
         </View>
         <View style={[styles.divisor, { backgroundColor: palette.glassBorder }]} />
-        <GlassCircle size={38} onPress={() => { haptica.leve(); volume(vol?.mudo ? 'unmute' : 'mute'); }}>
+        <GlassCircle accessibilityLabel="Silenciar" size={38} onPress={() => { haptica.leve(); volume(vol?.mudo ? 'unmute' : 'mute'); }}>
           <Feather name="volume-x" size={16} color={vol?.mudo ? palette.error : palette.textMuted} />
         </GlassCircle>
       </View>
@@ -449,10 +450,10 @@ function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHand
         </View>
       ) : (
         <View style={[styles.grupoMidia, { justifyContent: 'center' }]}>
-          <GlassCircle size={38} onPress={() => { haptica.leve(); volume('down'); }}>
+          <GlassCircle accessibilityLabel="Abaixar o volume" size={38} onPress={() => { haptica.leve(); volume('down'); }}>
             <Feather name="volume-1" size={16} color={palette.primary} />
           </GlassCircle>
-          <GlassCircle size={38} onPress={() => { haptica.leve(); volume('up'); }}>
+          <GlassCircle accessibilityLabel="Aumentar o volume" size={38} onPress={() => { haptica.leve(); volume('up'); }}>
             <Feather name="volume-2" size={16} color={palette.primary} />
           </GlassCircle>
         </View>
@@ -512,7 +513,7 @@ function PainelLembretes({ pairing, onError }: { pairing: Pairing; onError: Erro
               {r.kind === 'weekly' ? 'toda semana ' : ''}{formatDue(r.dueAt)}
             </Text>
           </View>
-          <Pressable onPress={() => cancel(r)} hitSlop={10}>
+          <Pressable accessibilityLabel="Cancelar o lembrete" accessibilityRole="button" onPress={() => cancel(r)} hitSlop={10}>
             <Feather name="x-circle" size={20} color={palette.error} />
           </Pressable>
         </View>
@@ -636,7 +637,7 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
             },
           ]}
         />
-        <Pressable
+        <Pressable accessibilityLabel="Adicionar" accessibilityRole="button"
           onPress={add}
           style={[styles.sendBtn, { borderRadius: tokens.radii.md, backgroundColor: palette.primary }]}
         >
@@ -796,7 +797,7 @@ function PainelProcessos({ pairing, onError }: { pairing: Pairing; onError: Erro
             style={{ flex: 1, color: palette.text, paddingVertical: 0 }}
           />
         </View>
-        <Pressable onPress={load} hitSlop={8}>
+        <Pressable accessibilityLabel="Atualizar" accessibilityRole="button" onPress={load} hitSlop={8}>
           <Feather name="refresh-cw" size={18} color={palette.textMuted} />
         </Pressable>
       </View>
@@ -822,7 +823,7 @@ function PainelProcessos({ pairing, onError }: { pairing: Pairing; onError: Erro
               PID {proc.pid} · {proc.cpu}% CPU · {proc.ramMB} MB{proc.isSystem ? ' · sistema' : ''}
             </Text>
           </View>
-          <Pressable onPress={() => kill(proc)} hitSlop={10}>
+          <Pressable accessibilityLabel="Encerrar o processo" accessibilityRole="button" onPress={() => kill(proc)} hitSlop={10}>
             <Feather name="x-circle" size={20} color={palette.error} />
           </Pressable>
         </View>
@@ -1138,7 +1139,7 @@ function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: Erro
                   {busyKey === a.key
                     ? <ActivityIndicator size="small" color={palette.primary} />
                     : (
-                      <Pressable onPress={() => close(a)} hitSlop={8}>
+                      <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => close(a)} hitSlop={8}>
                         <Feather name="x" size={14} color={palette.error} />
                       </Pressable>
                     )}
@@ -1160,7 +1161,7 @@ function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: Erro
           {busyKey === app.key ? (
             <ActivityIndicator size="small" color={palette.primary} />
           ) : (
-            <Pressable onPress={() => close(app)} hitSlop={10}>
+            <Pressable accessibilityLabel="Fechar o programa" accessibilityRole="button" onPress={() => close(app)} hitSlop={10}>
               <Feather name="x-circle" size={20} color={palette.error} />
             </Pressable>
           )}

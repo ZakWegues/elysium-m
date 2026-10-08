@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View, RefreshControl } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { MOV } from '../lib/motion';
 import Feather from '@expo/vector-icons/Feather';
@@ -13,6 +13,7 @@ import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../componen
 import { notificacoesAtivas, definirNotificacoesAtivas, pedirPermissao, sincronizarNotificacoes } from '../lib/notificacoes';
 import { useAoReativar } from '../components/AbaViva';
 import { comConfirmacao } from '../lib/confirm';
+import { avisarTokenRecusado } from '../lib/erroRpc';
 
 /**
  * Aba Rotinas (bloco 72) — a mesma aba do desktop (bloco 68), no celular: as rotinas do
@@ -73,8 +74,8 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
 
   const falha = useCallback((err: unknown, contexto: string) => {
     if (err instanceof AuthError) {
-      Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-      onUnpair();
+      // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+      avisarTokenRecusado();
       return;
     }
     haptica.erro();
@@ -129,10 +130,18 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
     ]);
   }
 
-  async function cancelarLembrete(l: Reminder) {
-    try { await callRpc(pairing, 'reminders.cancel', { id: l.id }); haptica.medio(); carregar(); }
-    catch (err) { falha(err, 'Não consegui cancelar'); }
+  /** Cancelar pergunta antes (08/10): o X ficava colado no texto e cancelava num toque. */
+  function cancelarLembrete(l: Reminder) {
+    Alert.alert('Cancelar o lembrete?', `"${l.text}" não vai mais tocar.`, [
+      { text: 'Manter', style: 'cancel' },
+      { text: 'Cancelar lembrete', style: 'destructive', onPress: async () => {
+        try { await callRpc(pairing, 'reminders.cancel', { id: l.id }); haptica.medio(); carregar(); }
+        catch (err) { falha(err, 'Não consegui cancelar'); }
+      } },
+    ]);
   }
+  const [atualizando, setAtualizando] = useState(false);
+  async function puxar() { setAtualizando(true); try { await carregar(); } finally { setAtualizando(false); } }
 
   async function mudarAvisos(v: boolean) {
     setAvisos(v);
@@ -155,8 +164,17 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
         )}
       />
 
-      <ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: 120 }}>
-        {erro && <Text variant="caption" color={palette.error}>{erro}</Text>}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: 120 }}
+        refreshControl={<RefreshControl refreshing={atualizando} onRefresh={puxar} tintColor={palette.primary} colors={[palette.primary]} />}
+      >
+        {erro && (
+          <View style={{ gap: 8 }}>
+            <Text variant="caption" color={palette.error}>{erro}</Text>
+            <Button title="Tentar de novo" variant="secondary" onPress={() => void carregar()} />
+          </View>
+        )}
         {carregando && <ActivityIndicator color={palette.primary} />}
 
         {/* Avisos neste celular */}
@@ -268,7 +286,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
                 <Text variant="body">{l.text}</Text>
                 <Text variant="caption" color={palette.textMuted}>{quando(l.dueAt)}{l.kind === 'weekly' ? ' · toda semana' : ''}</Text>
               </View>
-              <Pressable onPress={() => cancelarLembrete(l)} hitSlop={10}>
+              <Pressable onPress={() => cancelarLembrete(l)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Cancelar o lembrete ${l.text}`} style={{ minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' }}>
                 <Feather name="x-circle" size={20} color={palette.error} />
               </Pressable>
             </View>

@@ -69,7 +69,7 @@ export function ScreenHeader({
         <View style={styles.direita}>
           {right}
           {!semAjustes && abrirAjustes && (
-            <GlassCircle size={32} onPress={abrirAjustes}>
+            <GlassCircle accessibilityLabel="Ajustes" size={32} onPress={abrirAjustes}>
               <Feather name="settings" size={17} color={palette.textMuted} />
             </GlassCircle>
           )}

@@ -21,6 +21,7 @@ import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
+import { avisarTokenRecusado } from '../lib/erroRpc';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -81,8 +82,8 @@ export default function MailboxScreen({
       }
     } catch (err) {
       if (err instanceof AuthError) {
-        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-        onUnpair();
+        // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+        avisarTokenRecusado();
         return;
       }
       console.error('[mailbox] falha ao atualizar', err);
@@ -251,8 +252,8 @@ export default function MailboxScreen({
       await refresh();
     } catch (err) {
       if (err instanceof AuthError) {
-        Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');
-        onUnpair();
+        // 401 não despareia mais sozinho (08/10) — ver lib/erroRpc.ts.
+        avisarTokenRecusado();
         return;
       }
       Alert.alert('Falha ao enviar', errMessage(err));
@@ -436,16 +437,16 @@ export default function MailboxScreen({
             <Text variant="caption" color={palette.primary} numberOfLines={1} style={{ flex: 1 }}>
               {attachment.name}
             </Text>
-            <Pressable onPress={() => setAttachment(null)} hitSlop={8}>
+            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => setAttachment(null)} hitSlop={8}>
               <Feather name="x" size={14} color={palette.primary} />
             </Pressable>
           </View>
         )}
         <View style={styles.composerRow}>
-          <GlassCircle onPress={handlePaste}>
+          <GlassCircle accessibilityLabel="Colar da área de transferência" onPress={handlePaste}>
             <Feather name="clipboard" size={20} color={palette.primary} />
           </GlassCircle>
-          <GlassCircle onPress={handleAttach}>
+          <GlassCircle accessibilityLabel="Anexar arquivo" onPress={handleAttach}>
             <Feather name="paperclip" size={20} color={palette.primary} />
           </GlassCircle>
           <TextInput
@@ -456,7 +457,7 @@ export default function MailboxScreen({
             placeholderTextColor={palette.textMuted}
             editable={!sending}
           />
-          <GlassCircle
+          <GlassCircle accessibilityLabel="Enviar"
             ativo
             onPress={handleSend}
             disabled={sending || (!draft.trim() && !attachment)}

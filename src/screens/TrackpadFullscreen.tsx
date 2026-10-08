@@ -148,7 +148,7 @@ export default function TrackpadFullscreen({
       >
         <View style={[styles.header, { paddingHorizontal: tokens.spacing.lg }]}>
           <Text variant="subheading">Trackpad</Text>
-          <Pressable onPress={onClose} hitSlop={12}>
+          <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={onClose} hitSlop={12}>
             <Feather name="x" size={24} color={palette.textMuted} />
           </Pressable>
         </View>
@@ -194,7 +194,7 @@ export default function TrackpadFullscreen({
             >
               <Text variant="label" color={palette.primary}>Esquerdo</Text>
             </Pressable>
-            <Pressable
+            <Pressable accessibilityLabel="Clique do meio" accessibilityRole="button"
               onPress={() => click('middle')}
               style={[styles.midBtn, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}
             >
@@ -252,7 +252,7 @@ export default function TrackpadFullscreen({
                 },
               ]}
             />
-            <Pressable
+            <Pressable accessibilityLabel="Enter" accessibilityRole="button"
               onPress={sendText}
               style={[styles.sendBtn, { borderRadius: tokens.radii.md, backgroundColor: palette.primary }]}
             >

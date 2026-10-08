@@ -161,7 +161,7 @@ export default function MailboxHistorico({
         semAjustes
         title="Conversas do PC"
         left={
-          <Pressable onPress={onFechar} hitSlop={8}>
+          <Pressable accessibilityLabel="Voltar" accessibilityRole="button" onPress={onFechar} hitSlop={8}>
             <Feather name="chevron-left" size={22} color={palette.text} />
           </Pressable>
         }
@@ -169,10 +169,10 @@ export default function MailboxHistorico({
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             {sincronizando
               ? <ActivityIndicator size="small" color={palette.primary} />
-              : <Pressable onPress={sincronizar} hitSlop={8}>
+              : <Pressable accessibilityLabel="Atualizar" accessibilityRole="button" onPress={sincronizar} hitSlop={8}>
                   <Feather name="refresh-cw" size={17} color={palette.textMuted} />
                 </Pressable>}
-            <Pressable onPress={() => setSoFavoritos(v => !v)} hitSlop={8}>
+            <Pressable accessibilityLabel="Favoritar" accessibilityRole="button" onPress={() => setSoFavoritos(v => !v)} hitSlop={8}>
               <Feather name="star" size={18} color={soFavoritos ? palette.accent : palette.textMuted} />
             </Pressable>
           </View>
@@ -213,17 +213,17 @@ export default function MailboxHistorico({
               </Pressable>
             )}
 
-            <Pressable
+            <Pressable accessibilityLabel="Renomear" accessibilityRole="button"
               onPress={() => { setRascunho(s.title); setRenomeando(s.id); }}
               hitSlop={8}
               style={{ marginRight: 10 }}
             >
               <Feather name="edit-2" size={17} color={palette.textMuted} />
             </Pressable>
-            <Pressable onPress={() => favoritar(s)} hitSlop={8} style={{ marginRight: 10 }}>
+            <Pressable accessibilityLabel="Favoritar" accessibilityRole="button" onPress={() => favoritar(s)} hitSlop={8} style={{ marginRight: 10 }}>
               <Feather name="star" size={18} color={s.favorite ? palette.accent : palette.border} />
             </Pressable>
-            <Pressable onPress={() => apagar(s)} hitSlop={8}>
+            <Pressable accessibilityLabel="Apagar" accessibilityRole="button" onPress={() => apagar(s)} hitSlop={8}>
               <Feather name="trash-2" size={17} color={palette.textMuted} />
             </Pressable>
           </Card>
@@ -245,7 +245,7 @@ export default function MailboxHistorico({
             style={{ flex: 1, color: palette.text, fontSize: 14, paddingVertical: 0 }}
           />
           {busca.length > 0 && (
-            <Pressable onPress={() => setBusca('')} hitSlop={8}>
+            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => setBusca('')} hitSlop={8}>
               <Feather name="x" size={15} color={palette.textMuted} />
             </Pressable>
           )}

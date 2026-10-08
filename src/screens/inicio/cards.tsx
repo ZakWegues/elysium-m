@@ -221,7 +221,7 @@ function Lembretes({
           placeholderTextColor={palette.textMuted}
           style={[styles.campo, { width: 68, textAlign: 'center', color: palette.text, borderColor: palette.glassBorder, borderRadius: tokens.radii.md }]}
         />
-        <Pressable onPress={enviar} style={[styles.botaoIcone, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
+        <Pressable accessibilityLabel="Enviar" accessibilityRole="button" onPress={enviar} style={[styles.botaoIcone, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
           <Feather name="check" size={16} color={palette.primary} />
         </Pressable>
       </View>
@@ -273,7 +273,7 @@ function Listas({ listas, pairing, recarregar }: { listas: ListaPc[] | null; pai
                 <Feather name={i.feito ? 'check-square' : 'square'} size={18} color={i.feito ? palette.success : palette.textMuted} />
               </Pressable>
               <Text variant="body" style={{ flex: 1, textDecorationLine: i.feito ? 'line-through' : 'none', opacity: i.feito ? 0.55 : 1 }}>{i.texto}</Text>
-              <Pressable hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'listas.remove', { listaId: l.id, itemId: i.id }))}>
+              <Pressable accessibilityLabel="Tirar o item da lista" accessibilityRole="button" hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'listas.remove', { listaId: l.id, itemId: i.id }))}>
                 <Feather name="x" size={15} color={palette.textMuted} />
               </Pressable>
             </View>
@@ -326,7 +326,7 @@ function Timers({ estado, pairing, recarregar }: { estado: { lista: TimerPc[]; d
         <View key={t.id} style={styles.linhaSaude}>
           <Text variant="subheading" style={{ fontVariant: ['tabular-nums'] }}>{contagem(t.fimEm - estado.diferenca - agora)}</Text>
           <Text variant="body" color={palette.textMuted} style={{ flex: 1 }} numberOfLines={1}>{t.nome || 'timer'}</Text>
-          <Pressable hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'timers.cancel', { id: t.id }))}>
+          <Pressable accessibilityLabel="Cancelar o timer" accessibilityRole="button" hitSlop={6} disabled={ocupado} onPress={() => agir(() => callRpc(pairing, 'timers.cancel', { id: t.id }))}>
             <Feather name="x" size={16} color={palette.textMuted} />
           </Pressable>
         </View>
@@ -387,11 +387,11 @@ function Aprendi({ lista, pairing, recarregar }: { lista: { id: string; text: st
       {lista.map(s => (
         <View key={s.id} style={[styles.linhaSaude, { opacity: ocupado === s.id ? 0.5 : 1 }]}>
           <Text variant="body" style={{ flex: 1 }}>{s.text}</Text>
-          <Pressable onPress={() => decidir(s.id, true)} disabled={!!ocupado} hitSlop={6}
+          <Pressable accessibilityLabel="Guardar na memória" accessibilityRole="button" onPress={() => decidir(s.id, true)} disabled={!!ocupado} hitSlop={6}
             style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
             <Feather name="check" size={15} color={palette.primary} />
           </Pressable>
-          <Pressable onPress={() => decidir(s.id, false)} disabled={!!ocupado} hitSlop={6}
+          <Pressable accessibilityLabel="Não guardar" accessibilityRole="button" onPress={() => decidir(s.id, false)} disabled={!!ocupado} hitSlop={6}
             style={[styles.botaoSaude, { borderRadius: tokens.radii.md, backgroundColor: palette.errorSoft }]}>
             <Feather name="x" size={15} color={palette.error} />
           </Pressable>
@@ -646,10 +646,10 @@ function Energia({
               borderColor: palette.glassBorder, color: palette.text,
             }]}
           />
-          <Pressable onPress={confirmarHora} style={[styles.botaoIcone, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
+          <Pressable accessibilityLabel="Confirmar a hora" accessibilityRole="button" onPress={confirmarHora} style={[styles.botaoIcone, { borderRadius: tokens.radii.md, backgroundColor: palette.primarySoft }]}>
             <Feather name="check" size={16} color={palette.primary} />
           </Pressable>
-          <Pressable onPress={() => { setAbrindoHora(false); setHoraTexto(''); }} style={styles.botaoIcone}>
+          <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => { setAbrindoHora(false); setHoraTexto(''); }} style={styles.botaoIcone}>
             <Feather name="x" size={16} color={palette.textMuted} />
           </Pressable>
         </View>

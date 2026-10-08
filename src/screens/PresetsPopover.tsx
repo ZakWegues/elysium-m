@@ -92,7 +92,7 @@ export default function PresetsPopover({
               {p.actions} {p.actions === 1 ? 'ação' : 'ações'}
             </Text>
           </Pressable>
-          <Pressable
+          <Pressable accessibilityLabel="Fechar" accessibilityRole="button"
             onPress={() => Alert.alert('Apagar preset', `Apagar "${p.name}"?`, [
               { text: 'Cancelar', style: 'cancel' },
               { text: 'Apagar', style: 'destructive', onPress: () => apagar(p.name) },

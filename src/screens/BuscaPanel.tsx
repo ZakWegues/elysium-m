@@ -200,7 +200,7 @@ export default function BuscaPanel({
         />
         {carregando && <ActivityIndicator size="small" color={palette.primary} />}
         {!!consulta && (
-          <Pressable onPress={() => setConsulta('')} hitSlop={8}>
+          <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => setConsulta('')} hitSlop={8}>
             <Feather name="x" size={16} color={palette.textMuted} />
           </Pressable>
         )}

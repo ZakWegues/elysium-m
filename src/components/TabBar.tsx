@@ -201,6 +201,7 @@ export function TabBar({
               indice={i}
               progresso={progresso}
               badge={badges?.[tab.screen] ?? 0}
+              ativo={tab.screen === active}
               onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
             />
           ))}
@@ -220,12 +221,15 @@ export function TabBar({
  * aba acender aos poucos enquanto o dedo passa por cima dela, em vez de acender no fim.
  */
 function Aba({
-  tab, indice, progresso, badge, onPress,
+  tab, indice, progresso, badge,
+  ativo, onPress,
 }: {
   tab: (typeof TABS)[number];
   indice: number;
   progresso: SharedValue<number>;
   badge: number;
+  /** Fase 18: para o leitor de tela anunciar "selecionada". */
+  ativo?: boolean;
   onPress: () => void;
 }) {
   const { palette } = useTheme();
@@ -236,17 +240,23 @@ function Aba({
   });
 
   return (
-    <Pressable style={styles.tab} onPress={onPress}>
+    <Pressable
+      style={styles.tab}
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: !!ativo }}
+      accessibilityLabel={`${tab.label}${badge > 0 ? `, ${badge} não lido${badge === 1 ? '' : 's'}` : ''}`}
+    >
       <View style={styles.camadas}>
         <View style={styles.camada}>
           <Feather name={tab.icon} size={22} color={palette.textMuted} />
-          <Text variant="caption" color={palette.textMuted} style={styles.label}>
+          <Text variant="caption" color={palette.textMuted} style={styles.label} maxFontSizeMultiplier={1.2} numberOfLines={1}>
             {tab.label}
           </Text>
         </View>
         <Animated.View style={[styles.camada, styles.camadaAcesa, aceso]}>
           <Feather name={tab.icon} size={22} color={palette.primary} />
-          <Text variant="caption" color={palette.primary} style={styles.label}>
+          <Text variant="caption" color={palette.primary} style={styles.label} maxFontSizeMultiplier={1.2} numberOfLines={1}>
             {tab.label}
           </Text>
         </Animated.View>

@@ -295,8 +295,8 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
             )}
 
             {painel.alertas.map((a, i) => (
-              <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : '#f0b43c' }]}>
-                <Feather name="alert-triangle" size={16} color={a.nivel === 'erro' ? palette.error : '#f0b43c'} />
+              <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : palette.accent }]}>
+                <Feather name="alert-triangle" size={16} color={a.nivel === 'erro' ? palette.error : palette.accent} />
                 <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>{a.titulo}</Text> — {a.detalhe}</Text>
               </Card>
             ))}

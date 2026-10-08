@@ -105,7 +105,7 @@ export default function CameraAsk({
       >
         <View style={[styles.header, { paddingHorizontal: tokens.spacing.lg }]}>
           <Text variant="subheading">{shot ? 'Perguntar sobre a foto' : 'Fotografar'}</Text>
-          <Pressable onPress={close} hitSlop={12}>
+          <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={close} hitSlop={12}>
             <Feather name="x" size={24} color={palette.textMuted} />
           </Pressable>
         </View>

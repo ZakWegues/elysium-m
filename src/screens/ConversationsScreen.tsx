@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View, Alert } from 'react-native';
 import { conversaEmMarkdown } from '../lib/exportarConversa';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
 import Feather from '@expo/vector-icons/Feather';
@@ -99,10 +99,16 @@ export default function ConversationsScreen({
     emFluxoExterno(() => Share.share({ title: sessao.title, message: conversaEmMarkdown(sessao) })).catch(() => {});
   }
 
-  async function handleDelete(id: string) {
-    await deleteSession(id);
-    await refresh();
-    sync();
+  /** Apagar pergunta antes (08/10): a lixeira ficava a 8 px do compartilhar e não tinha volta. */
+  function handleDelete(id: string, titulo: string) {
+    Alert.alert('Apagar a conversa?', `"${titulo}" some deste celular e do PC.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Apagar', style: 'destructive', onPress: async () => {
+        await deleteSession(id);
+        await refresh();
+        sync();
+      } },
+    ]);
   }
 
   return (
@@ -114,10 +120,10 @@ export default function ConversationsScreen({
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             {syncing
               ? <ActivityIndicator size="small" color={palette.primary} />
-              : <Pressable onPress={sync} hitSlop={8}>
+              : <Pressable accessibilityLabel="Atualizar" accessibilityRole="button" onPress={sync} hitSlop={8}>
                   <Feather name="refresh-cw" size={18} color={palette.textMuted} />
                 </Pressable>}
-            <Pressable onPress={onBack} hitSlop={8}>
+            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={onBack} hitSlop={8}>
               <Feather name="x" size={22} color={palette.textMuted} />
             </Pressable>
           </View>
@@ -136,7 +142,7 @@ export default function ConversationsScreen({
             style={{ flex: 1, color: palette.text, fontSize: 14, paddingVertical: 0 }}
           />
           {consulta ? (
-            <Pressable onPress={() => setConsulta('')} hitSlop={8}><Feather name="x" size={16} color={palette.textMuted} /></Pressable>
+            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => setConsulta('')} hitSlop={8}><Feather name="x" size={16} color={palette.textMuted} /></Pressable>
           ) : null}
         </View>
 
@@ -197,14 +203,14 @@ export default function ConversationsScreen({
                   </Text>
                 </Pressable>
               )}
-              <Pressable
+              <Pressable accessibilityLabel="Renomear" accessibilityRole="button"
                 onPress={() => { setRascunho(session.title); setRenomeando(session.id); }}
                 hitSlop={12}
                 style={{ marginRight: 8 }}
               >
                 <Feather name="edit-2" size={17} color={palette.textMuted} />
               </Pressable>
-              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={12} style={{ marginRight: 8 }}>
+              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={12} style={{ marginRight: 8 }} accessibilityRole="button" accessibilityLabel={session.favorite ? 'Tirar dos favoritos' : 'Favoritar'}>
                 <Feather name="star" size={20} color={session.favorite ? '#F5A623' : palette.border} />
               </Pressable>
               <Pressable
@@ -215,7 +221,7 @@ export default function ConversationsScreen({
               >
                 <Feather name="share-2" size={18} color={palette.textMuted} />
               </Pressable>
-              <Pressable onPress={() => handleDelete(session.id)} hitSlop={12}>
+              <Pressable onPress={() => handleDelete(session.id, session.title)} hitSlop={12} style={{ marginLeft: 12 }} accessibilityRole="button" accessibilityLabel="Apagar a conversa">
                 <Feather name="trash-2" size={20} color={palette.textMuted} />
               </Pressable>
             </Card>

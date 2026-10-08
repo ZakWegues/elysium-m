@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, AppState, InteractionManager, StyleSheet, Vie
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import PairingScreen from './src/screens/PairingScreen';
 import ChatHub from './src/screens/ChatHub';
 import ControlScreen from './src/screens/ControlScreen';
@@ -150,6 +150,7 @@ function AppInner() {
   const { status, recheck, scanning, scanProgress, runScan, hasTunnel } =
     useConnection(pairing, handlePairingUpdate);
   const keyboard = useKeyboard();
+  const insets = useSafeAreaInsets();
 
   const refreshQueueCount = useCallback(async () => {
     setQueued((await listQueue()).length);
@@ -471,6 +472,9 @@ function AppInner() {
       </TelaAnimada>
       {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area
           que cada ScreenHeader já aplica. */}
+      {/* Sem a barra de abas (gaveta aberta), os avisos ficavam debaixo da barra de gestos do
+          Android: o recuo da área segura entra só nesse caso (08/10). */}
+      <View style={{ paddingBottom: !keyboard.visible && sobreposicoes > 0 ? insets.bottom : 0 }}>
       <ConnectionBanner
         status={status}
         queued={queued}
@@ -481,6 +485,7 @@ function AppInner() {
         onScan={runScan}
       />
       <AvisoOta pendente={ota.pendente} />
+      </View>
       {/* Sai de cena enquanto o usuário digita: com o teclado aberto sobra pouca
           altura, e a barra empurraria a caixa de texto pra fora da vista. */}
       {!keyboard.visible && sobreposicoes === 0 && (
