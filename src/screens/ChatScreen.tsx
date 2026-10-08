@@ -31,6 +31,7 @@ import { Markdown } from '../components/Markdown';
 import { paraFala, textoPuro } from '../lib/markdown';
 import * as Clipboard from 'expo-clipboard';
 import { avisarTokenRecusado } from '../lib/erroRpc';
+import { VozAoVivo } from '../components/VozAoVivo';
 
 /** Primeiro balão (fase 16, a persona da Ely): era "Pareado com IP:porta", detalhe técnico
  * que ninguém precisava ler ao abrir o chat. O endereço continua em Ajustes → Sobre. */
@@ -114,6 +115,10 @@ export default function ChatScreen({
   // Medição de nível ligada: é o que o pedido depois do "Ely" usa para saber quando a pessoa
   // parou de falar. No aperta-e-fala não muda nada.
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  /** Volume da voz, 0–1, para a animação do microfone (08/10). */
+  const nivelVoz = useSharedValue(0);
+  /** Áudio enviado, resposta ainda não começou: a animação mostra "pensando". */
+  const [pensandoVoz, setPensandoVoz] = useState(false);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
   const listRef = useRef<FlatList<StoredMessage>>(null);
   // Começa SEMPRE em null, mesmo recebendo um sessionId. Inicializar com a prop fazia a
@@ -537,6 +542,7 @@ export default function ChatScreen({
   /** Manda um áudio gravado e escreve a resposta em pedaços. Devolve null se falhou. */
   async function enviarAudio(uri: string): Promise<{ reply: string; transcricao: string } | null> {
     setSending(true);
+    setPensandoVoz(true);
     setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)', ts: Date.now() }]);
     let transcricao = '';
     try {
@@ -545,7 +551,7 @@ export default function ChatScreen({
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply } = await conn.sendAudio(uri, bolha.onChunk, (transcript) => {
+      const { reply } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
@@ -558,6 +564,7 @@ export default function ChatScreen({
       return null;
     } finally {
       setSending(false);
+      setPensandoVoz(false);
       bolhaAtualRef.current = null;
     }
   }
@@ -600,6 +607,20 @@ export default function ChatScreen({
 
   /** Fase do pedido por voz, para a faixa acima do campo. `null` = nenhum em andamento. */
   const [faseVoz, setFaseVoz] = useState<'ouvindo' | 'pensando' | null>(null);
+  // O medidor do gravador alimenta a animação enquanto ela ouve (segurando o mic ou depois do "Ely").
+  const ouvindoAgora = recording || faseVoz === 'ouvindo';
+  useEffect(() => {
+    if (!ouvindoAgora) { nivelVoz.value = 0; return; }
+    const t = setInterval(() => {
+      try {
+        // dBFS: fala perto do celular fica entre −30 e −10; silêncio, abaixo de −50.
+        const db = recorder.getStatus().metering ?? -160;
+        nivelVoz.value = Math.max(0, Math.min(1, (db + 55) / 45));
+      } catch { /* gravador entre estados */ }
+    }, 70);
+    return () => clearInterval(t);
+  }, [ouvindoAgora, recorder, nivelVoz]);
+
   const turnoRef = useRef(false);
 
   /**
@@ -866,6 +887,11 @@ export default function ChatScreen({
         </View>
       )}
 
+      <VozAoVivo
+        fase={ouvindoAgora ? 'ouvindo' : pensandoVoz || faseVoz === 'pensando' ? 'pensando' : null}
+        nivel={nivelVoz}
+        acima={faseVoz ? 128 : 86}
+      />
       {faseVoz && (
         <View style={[styles.faixaVoz, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
           <Feather name={faseVoz === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />

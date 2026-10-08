@@ -495,6 +495,7 @@ const CATEGORY_LABEL: Record<PushCategory, string> = {
   reminder: 'Lembretes',
   anomaly: 'Alertas do PC',
   mailbox: 'Caixa de recados',
+  pc: 'ELYSIUM fechou ou PC desligou',
 };
 
 function PushSection({ pairing }: { pairing: Pairing }) {

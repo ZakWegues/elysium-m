@@ -23,6 +23,7 @@ import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
+import { EstadoPcLinha } from '../components/EstadoPc';
 
 /** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
 const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
@@ -466,12 +467,18 @@ export default function HomeScreen({
         {/* A saudação do desktop (bloco 33), aqui também: a Início precisa dizer de cara
             que é a Início, e o estado do PC merece uma frase, não só um ponto no canto. */}
         {!editando && (
-          <View style={{ paddingHorizontal: 4, paddingBottom: 2 }}>
-            <Text variant="caption" color={palette.textMuted}>
-              {online ? 'PC online' : 'PC fora de alcance'}
-              {dados.lembretes.length > 0 ? ` · ${dados.lembretes.length} lembrete${dados.lembretes.length > 1 ? 's' : ''} pendente${dados.lembretes.length > 1 ? 's' : ''}` : ''}
-              {dados.clima ? ` · ${Math.round(dados.clima.temperatura)}° lá fora` : ''}
-            </Text>
+          <View style={{ paddingBottom: 2 }}>
+            {/* 08/10: o estado do ELYSIUM no PC (na tela, minimizado, bandeja, fechado,
+                desligado), com os detalhes num toque. */}
+            <EstadoPcLinha />
+            {(dados.lembretes.length > 0 || dados.clima) && (
+              <Text variant="caption" color={palette.textMuted} style={{ paddingHorizontal: 4 }}>
+                {[
+                  dados.lembretes.length > 0 ? `${dados.lembretes.length} lembrete${dados.lembretes.length > 1 ? 's' : ''} pendente${dados.lembretes.length > 1 ? 's' : ''}` : '',
+                  dados.clima ? `${Math.round(dados.clima.temperatura)}° lá fora` : '',
+                ].filter(Boolean).join(' · ')}
+              </Text>
+            )}
           </View>
         )}
 

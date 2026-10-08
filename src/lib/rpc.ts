@@ -8,6 +8,7 @@
 
 import { baseUrl, Pairing } from './pairing';
 import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
+import type { EstadoAppPc } from './estadoPc';
 
 /** O desktop recusa (403) métodos destrutivos sem este header. */
 export class ConfirmationRequiredError extends Error {}
@@ -148,6 +149,7 @@ export type RpcMethod =
   | 'mailbox.sessions.ackDeleted'
   | 'mailbox.messages.delete'
   | 'pairing.endpoints'
+  | 'pc.estado'
   // Entraram na fase 3. Os quatro de preset existem porque o `presetsStore` do desktop
   // nunca tinha sido exposto: até aqui a tela de presets montava "executa o preset X" e
   // mandava para o LLM, que é lento e pode errar num comando já conhecido.
@@ -243,7 +245,7 @@ export type Reminder = {
   firedAt?: number;
 };
 
-export type PushCategory = 'reminder' | 'anomaly' | 'mailbox';
+export type PushCategory = 'reminder' | 'anomaly' | 'mailbox' | 'pc';
 
 export type PushPrefs = {
   muted: PushCategory[];
@@ -607,6 +609,7 @@ export type RpcResults = {
   'notify.pending': { entregas: Entrega[] };
   'notify.history': { entregas: Entrega[] };
   'notify.ack': { acked: number };
+  'pc.estado': { estado: EstadoAppPc | null };
   'pairing.endpoints': {
     endpoints: string[];
     /** Existe caminho de fora da rede de casa (Tailscale/ZeroTier no PC). */

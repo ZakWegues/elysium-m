@@ -11,6 +11,7 @@ import { AppState } from 'react-native';
 import { Pairing, resolveActiveEndpoint, scanSubnet, UnauthorizedError } from './pairing';
 import { callRpc } from './rpc';
 import { backoffDelay } from './http';
+import { registrarConexao, registrarEstadoApp } from './estadoPc';
 
 export type ConnectionStatus = 'checking' | 'online' | 'offline' | 'unauthorized';
 
@@ -83,11 +84,18 @@ export function useConnection(
           onPairingUpdate(refreshed);
         }
         setStatusAndRef('online');
+        registrarConexao(true);
         attemptRef.current = 0;
+        // Em que pé está o app no PC (janela, bandeja, tela bloqueada). PC anterior à 2.5 não
+        // tem o método: fica só o "online".
+        callRpc(refreshed, 'pc.estado', {}, { timeoutMs: 6000 })
+          .then(r => { if (r.estado) registrarEstadoApp(r.estado); })
+          .catch(() => {});
         return true;
       }
 
       setStatusAndRef('offline');
+      registrarConexao(false);
       return false;
     } catch (err) {
       if (err instanceof UnauthorizedError) {
@@ -98,6 +106,7 @@ export function useConnection(
       }
       // Outro erro inesperado: tratar como offline.
       setStatusAndRef('offline');
+      registrarConexao(false);
       return false;
     }
   }, [onPairingUpdate, refreshEndpoints, setStatusAndRef]);

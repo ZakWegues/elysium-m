@@ -28,7 +28,8 @@ import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
 import { useShareIntent } from './src/lib/shareIntent';
 import { MOV, tempo } from './src/lib/motion';
-import { ligarSincronizacaoEmPrimeiroPlano, pedirPermissao } from './src/lib/notificacoes';
+import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedirPermissao } from './src/lib/notificacoes';
+import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/estadoPc';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
 import * as QuickActions from 'expo-quick-actions';
@@ -195,6 +196,16 @@ function AppInner() {
     atualizarWidgetEstado(pairing).catch(() => {});
     return ligarSincronizacaoEmPrimeiroPlano(pairing);
   }, [pairing]);
+
+  // Em que pé está o ELYSIUM do PC (08/10): o gravado deste PC e os avisos que chegaram por
+  // push ("fechado", "desligando") enquanto o app estava fechado.
+  const idPc = pairing ? idDoPc(pairing) : null;
+  useEffect(() => {
+    if (!idPc) return;
+    carregarEstadoPc(true).catch(() => {});
+    return ouvirAvisosDoPc();
+  }, [idPc]);
+  const estadoPc = useEstadoPc();
 
   const refreshMailboxBadge = useCallback(async () => {
     if (!pairing) return;
@@ -481,6 +492,7 @@ function AppInner() {
         scanning={scanning}
         scanProgress={scanProgress}
         hasTunnel={hasTunnel}
+        motivo={status === 'offline' || estadoPc.online === false ? descreverEstadoPc(estadoPc) : null}
         onRetry={recheck}
         onScan={runScan}
       />

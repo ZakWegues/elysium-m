@@ -1,6 +1,7 @@
 import { Pairing } from './pairing';
 import { openAuthedWebSocket, streamUrl } from './ws';
 import { backoffDelay } from './http';
+import { receberFrameEstado } from './estadoPc';
 
 export type TelemetryFrame = Record<string, unknown> & { type: 'telemetry' };
 export type TelemetryStatus = 'connecting' | 'open' | 'closed';
@@ -40,6 +41,8 @@ export function openTelemetryStream(
       }
       if (data.type === 'telemetry') {
         onSnapshot(data as TelemetryFrame);
+      } else if (data.type === 'pc.estado') {
+        receberFrameEstado(data);
       }
     };
 

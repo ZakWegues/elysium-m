@@ -4,6 +4,7 @@ import { Pairing } from './pairing';
 import { openAuthedWebSocket, streamUrl } from './ws';
 import { receberEntrega } from './notificacoes';
 import type { Entrega } from './rpc';
+import { receberFrameEstado } from './estadoPc';
 
 import type { Fonte } from './chatHistoryStore';
 
@@ -116,6 +117,8 @@ export function openVoiceConnection(
       if (data.id && data.titulo) {
         receberEntrega({ id: data.id, tipo: data.tipo ?? 'aviso', titulo: data.titulo, corpo: data.corpo ?? '', em: data.em ?? Date.now(), ref: data.ref }, pairing).catch(() => {});
       }
+    } else if (data.type === 'pc.estado') {
+      receberFrameEstado(data as Record<string, unknown>);
     } else if (data.type === 'error') {
       console.error('[voice-ws] servidor retornou erro', data.error);
       settlePending((p) => p.reject(new Error(`Falha do servidor: ${data.error ?? 'erro sem mensagem'}`)));

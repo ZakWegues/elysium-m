@@ -7,6 +7,7 @@ import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 import type { ConnectionStatus } from '../lib/useConnection';
 import { MOV } from '../lib/motion';
+import type { Descricao } from '../lib/estadoPc';
 
 /**
  * Faixa fina no topo quando o PC não está respondendo. Fica invisível no caminho
@@ -18,6 +19,7 @@ export function ConnectionBanner({
   scanning,
   scanProgress,
   hasTunnel,
+  motivo,
   onRetry,
   onScan,
 }: {
@@ -27,14 +29,18 @@ export function ConnectionBanner({
   scanProgress: number;
   /** null = nunca conseguimos perguntar ao PC. */
   hasTunnel: boolean | null;
+  /** Por que o PC parou (08/10): "ELYSIUM fechado no PC · há 5 min", "PC em suspensão". */
+  motivo?: Descricao | null;
   onRetry: () => void;
   onScan: () => void;
 }) {
   const { palette, tokens } = useTheme();
 
-  if (status === 'online' && queued === 0) return null;
+  // O PC avisou que fechou/vai dormir: a faixa aparece já, sem esperar a sonda descobrir.
+  const avisado = !!motivo && motivo.titulo !== 'PC sem resposta' && status === 'online';
+  if (status === 'online' && queued === 0 && !avisado) return null;
 
-  const offline = status === 'offline';
+  const offline = status === 'offline' || avisado;
   const unauthorized = status === 'unauthorized';
   // Tokens formais da escala glass L2
   const isError = offline || unauthorized;
@@ -50,7 +56,9 @@ export function ConnectionBanner({
     // Com túnel no PC, a causa mais comum fora de casa é o Tailscale do CELULAR ter caído
     // (o HyperOS mata o app e o ícone de VPN continua na barra — §12). Dizer isso, com o
     // botão que abre o app dele, em vez de mandar procurar o problema no PC (bloco 122).
-    const base = hasTunnel === false
+    // Quando o PC disse por que parou (ou o último estado dá uma pista), essa é a frase.
+    const sabido = motivo && motivo.titulo !== 'PC sem resposta' ? `${motivo.titulo}${motivo.detalhe ? ` · ${motivo.detalhe}` : ''}` : null;
+    const base = sabido ? sabido : hasTunnel === false
       ? 'Sem acesso remoto — só funciona na rede de casa'
       : hasTunnel ? 'PC fora de alcance — fora de casa? confira o Tailscale' : 'PC fora do ar';
     label = queued > 0 ? `${base} · ${queued} na fila` : base;

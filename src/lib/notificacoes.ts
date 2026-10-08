@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { loadPairing, Pairing } from './pairing';
 import { callRpc, Entrega, Reminder } from './rpc';
+import { registrarEncerramentoPc, type MotivoEncerramento } from './estadoPc';
 
 /**
  * Notificações LOCAIS do celular — o que chega mesmo sem push pela nuvem (bloco 72).
@@ -65,6 +66,30 @@ async function modulo(): Promise<Notifications | null> {
     })();
   }
   return moduloPromise;
+}
+
+// ── avisos do PC por push (08/10) ────────────────────────────────────────────
+
+function aplicarAvisoDoPc(d: unknown): void {
+  const x = d as { category?: string; estadoPc?: string; em?: number } | undefined;
+  if (x?.category === 'pc' && typeof x.estadoPc === 'string') registrarEncerramentoPc(x.estadoPc as MotivoEncerramento, Number(x.em) || Date.now());
+}
+
+/** O push "ELYSIUM fechado / PC desligando" que já está na gaveta (chegou com o app fechado). */
+async function lerAvisosDoPc(): Promise<void> {
+  const N = await modulo();
+  if (!N) return;
+  try { for (const n of await N.getPresentedNotificationsAsync()) aplicarAvisoDoPc(n.request.content.data); } catch { /* sem permissão */ }
+}
+
+/** Liga a escuta dos avisos do PC: o que chegar com o app aberto e o que já estiver na gaveta. */
+export function ouvirAvisosDoPc(): () => void {
+  let sub: { remove(): void } | undefined;
+  let parado = false;
+  modulo().then(N => { if (N && !parado) sub = N.addNotificationReceivedListener(n => aplicarAvisoDoPc(n.request.content.data)); }).catch(() => {});
+  lerAvisosDoPc();
+  const app = AppState.addEventListener('change', s => { if (s === 'active') lerAvisosDoPc(); });
+  return () => { parado = true; sub?.remove(); app.remove(); };
 }
 
 /** Pede a permissão uma vez. Devolve false no Expo Go ou se o usuário negou. */
