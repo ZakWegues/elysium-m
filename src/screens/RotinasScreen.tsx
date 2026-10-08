@@ -11,6 +11,7 @@ import { haptica } from '../lib/haptica';
 import { useTheme } from '../theme';
 import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../components/ui';
 import { notificacoesAtivas, definirNotificacoesAtivas, pedirPermissao, sincronizarNotificacoes } from '../lib/notificacoes';
+import { useAoReativar } from '../components/AbaViva';
 
 /**
  * Aba Rotinas (bloco 72) — a mesma aba do desktop (bloco 68), no celular: as rotinas do
@@ -99,6 +100,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
   }, [pairing, falha]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  useAoReativar(() => { void carregar(); });
   useEffect(() => { notificacoesAtivas().then(setAvisos); }, []);
 
   async function alternar(r: Rotina, ativa: boolean) {

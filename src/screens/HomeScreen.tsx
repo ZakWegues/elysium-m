@@ -21,6 +21,7 @@ import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizac
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
+import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 
 /** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
 const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
@@ -115,8 +116,10 @@ export default function HomeScreen({
     return () => clearInterval(t);
   }, [agendado]);
 
-  useEffect(() => openTelemetryStream(pairing, setTelemetria, setStatus),
-    [pairing.activeIp, pairing.port, pairing.token]);
+  // Aba escondida (08/10, abas vivas) não segura um WebSocket de telemetria aberto à toa.
+  const ativa = useAbaAtiva();
+  useEffect(() => (ativa ? openTelemetryStream(pairing, setTelemetria, setStatus) : undefined),
+    [ativa, pairing.activeIp, pairing.port, pairing.token]);
 
   // ── ordem gravada
   useEffect(() => {
@@ -279,6 +282,8 @@ export default function HomeScreen({
   }, [pairing, visiveis]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  // Voltou à Início: os cards se atualizam por trás, sem sumir.
+  useAoReativar(() => { void carregar(); });
 
   // O nome da saudação vem da config do PC (fase 13): dado pessoal fica nos dados do app,
   // nunca no código. Guardado no aparelho para a saudação funcionar sem rede.

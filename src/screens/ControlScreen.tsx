@@ -23,6 +23,7 @@ import { findMetric } from '../lib/telemetryFormat';
 import { useTheme } from '../theme';
 import TrackpadFullscreen from './TrackpadFullscreen';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
+import { useAbaAtiva } from '../components/AbaViva';
 import {
   Button, Card, GlassCircle, GlassModal, MetricBar, ScreenHeader, Text, Toque,
 } from '../components/ui';
@@ -232,12 +233,14 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
     return () => { stopped.current = true; };
   }, [pairing]);
 
+  // Espelho só com a aba PC à vista (08/10): escondida, a aba fica montada mas não captura.
+  const ativa = useAbaAtiva();
   useEffect(() => {
-    if (!live) return;
+    if (!live || !ativa) return;
     grab();
     const timer = setInterval(grab, REFRESH_MS);
     return () => clearInterval(timer);
-  }, [live, grab]);
+  }, [live, ativa, grab]);
 
   /**
    * O PC captura a tela de novo e manda para o modelo de visão. Não reaproveitamos o
@@ -621,9 +624,10 @@ function PainelMonitor({ pairing }: { pairing: Pairing }) {
   const [discos, setDiscos] = useState<DiskEntry[]>([]);
   const [pesados, setPesados] = useState<ProcessEntry[]>([]);
 
+  const ativa = useAbaAtiva();
   useEffect(
-    () => openTelemetryStream(pairing, setSnapshot, setStatus),
-    [pairing.activeIp, pairing.port, pairing.token],
+    () => (ativa ? openTelemetryStream(pairing, setSnapshot, setStatus) : undefined),
+    [ativa, pairing.activeIp, pairing.port, pairing.token],
   );
 
   useEffect(() => {

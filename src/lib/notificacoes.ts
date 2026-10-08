@@ -215,3 +215,58 @@ export function ligarSincronizacaoEmPrimeiroPlano(pairing: Pairing): () => void 
   if (AppState.currentState === 'active') ligar();
   return () => { desligar(); sub.remove(); };
 }
+
+// ── "Ely falando" fora do app (08/10) ────────────────────────────────────────────
+// Só para a voz do APARELHO: a do PC toca por um player que já ganha a notificação de mídia
+// do Android. O `expo-speech` fala minimizado mas sem controle nenhum; este aviso fixo, num
+// canal silencioso, dá o "Parar" sem abrir o app.
+const CANAL_FALA = 'elysium-fala';
+const CATEGORIA_FALA = 'ely-fala';
+let falaPronta: Promise<boolean> | null = null;
+let aoPararFala: (() => void) | null = null;
+
+/** Mostra (ou tira) o aviso. Devolve se ficou mostrado. Nunca lança. */
+export async function avisoDeFala(id: string, mostrar: boolean, aoParar?: () => void): Promise<boolean> {
+  const N = await modulo();
+  if (!N) return false;
+  try {
+    if (!mostrar) { await N.dismissNotificationAsync(id); return false; }
+    if (aoParar) aoPararFala = aoParar;
+    if (!falaPronta) {
+      falaPronta = (async () => {
+        if (Platform.OS === 'android') {
+          await N.setNotificationChannelAsync(CANAL_FALA, {
+            name: 'Ely falando',
+            description: 'Aparece enquanto a Ely fala com a voz do celular, com o botão Parar.',
+            importance: N.AndroidImportance.LOW,
+            sound: null,
+          });
+        }
+        await N.setNotificationCategoryAsync(CATEGORIA_FALA, [
+          { identifier: 'parar', buttonTitle: 'Parar', options: { opensAppToForeground: false } },
+        ]);
+        N.addNotificationResponseReceivedListener((r) => {
+          if (r.notification.request.content.categoryIdentifier !== CATEGORIA_FALA) return;
+          if (r.actionIdentifier === 'parar') aoPararFala?.();
+        });
+        return true;
+      })().catch(() => { falaPronta = null; return false; });
+    }
+    if (!(await falaPronta)) return false;
+    await N.scheduleNotificationAsync({
+      identifier: id,
+      content: {
+        title: 'Ely está falando',
+        body: 'Toque em Parar para calar.',
+        categoryIdentifier: CATEGORIA_FALA,
+        sticky: true,
+        autoDismiss: false,
+        ...(Platform.OS === 'android' ? { channelId: CANAL_FALA } : {}),
+      },
+      trigger: null,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}

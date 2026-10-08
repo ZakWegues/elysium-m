@@ -33,6 +33,7 @@ export default function ChatHub({
   naoLidos,
   /** Compartilhar do Android cai aqui já no lado dos recados. */
   modoInicial,
+  pedidoModo,
   perguntaPendente,
   onPerguntaEnviada,
   pedidoVoz,
@@ -45,6 +46,8 @@ export default function ChatHub({
   onOpenConversations: () => void;
   naoLidos?: number;
   modoInicial?: 'ia' | 'pc';
+  /** Cada pedido de lado (compartilhar, abrir conversa) é um número novo — ver App.tsx. */
+  pedidoModo?: number;
   /** Texto vindo da busca da Início, para o chat da IA enviar assim que abrir. */
   perguntaPendente?: string | null;
   onPerguntaEnviada?: () => void;
@@ -55,6 +58,8 @@ export default function ChatHub({
   const { palette, tokens } = useTheme();
   const [modo, setModo] = useState<'ia' | 'pc'>(modoInicial ?? 'ia');
   useEffect(() => { if (pedidoVoz?.n) setModo('ia'); }, [pedidoVoz?.n]);
+  // O Chat continua montado entre as abas (08/10): o lado pedido de fora vale a cada pedido.
+  useEffect(() => { if (pedidoModo && modoInicial) setModo(modoInicial); }, [pedidoModo]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * Cada lado tem o seu histórico, e o botão de relógio abre o do lado em que você está.
    *

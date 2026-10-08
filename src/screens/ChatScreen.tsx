@@ -5,6 +5,7 @@ import AnimatedReanimated, {
 } from 'react-native-reanimated';
 import { falar, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
+import { useAbaAtiva } from '../components/AbaViva';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -700,8 +701,17 @@ export default function ChatScreen({
   }
 
   // Sair da tela (ou trocar de conversa) cancela o pedido: microfone aberto sem ninguém
-  // olhando para a tela é exatamente o que ninguém quer.
-  useEffect(() => () => { turnoRef.current = false; pararDeFalar(); liberarMicrofone('gravar'); }, []);
+  // olhando para a tela é exatamente o que ninguém quer. A FALA não para (08/10): o Zak
+  // pediu para a Ely seguir falando ao trocar de aba — quem cala é a pílula "Ely falando".
+  useEffect(() => () => { turnoRef.current = false; liberarMicrofone('gravar'); }, []);
+  // Com as abas vivas o Chat não desmonta ao trocar de aba — fica escondido. Escondido no
+  // meio da ESCUTA, o pedido é cancelado como antes; pensando ou falando, segue.
+  const ativa = useAbaAtiva();
+  useEffect(() => {
+    if (ativa || faseVoz !== 'ouvindo') return;
+    turnoRef.current = false;
+    liberarMicrofone('gravar');
+  }, [ativa, faseVoz]);
 
   // "Ely" ouvido (bloco 129): um pedido — o colado na palavra, ou o próximo que a pessoa
   // falar. Um respiro antes de gravar: o reconhecedor acabou de soltar o microfone.

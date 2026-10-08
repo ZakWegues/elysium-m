@@ -10,6 +10,7 @@ import { useTheme } from '../theme';
 import { Button, Card, GlassModal, ScreenHeader, Text } from '../components/ui';
 import { Reator } from '../components/Reator';
 import { Markdown } from '../components/Markdown';
+import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 
 /**
  * Hoje (fase 16, 07/10) — o briefing do dia, a mesma aba do desktop. Uma chamada só
@@ -135,12 +136,16 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
     return () => sub.remove();
   }, [carregar]);
 
-  // Contagem dos timers ao vivo, só com timer correndo.
+  // Voltou ao Hoje (08/10, abas vivas): mostra o que tinha e atualiza por trás.
+  useAoReativar(() => { void carregar(); });
+  const ativa = useAbaAtiva();
+
+  // Contagem dos timers ao vivo, só com timer correndo e a aba à vista.
   useEffect(() => {
-    if (!painel?.timers.length) return;
+    if (!painel?.timers.length || !ativa) return;
     const t = setInterval(() => setTique(n => n + 1), 1000);
     return () => clearInterval(t);
-  }, [painel?.timers.length]);
+  }, [painel?.timers.length, ativa]);
 
   async function puxar() {
     setAtualizando(true);

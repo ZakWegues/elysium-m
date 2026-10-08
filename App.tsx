@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, InteractionManager, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
@@ -38,7 +38,9 @@ import { falar } from './src/lib/falar';
 import { aoMudarPalavra, DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
 import { useMicrofoneLivre } from './src/lib/microfone';
 import { ComandosIa } from './src/components/ComandosIa';
-import { BotaoInterromper } from './src/components/BotaoInterromper';
+import { FalaFlutuante } from './src/components/FalaFlutuante';
+import { AbaViva } from './src/components/AbaViva';
+import { Aba, abasMontadas, mesmasAbas } from './src/lib/abas';
 import { AvisoOta } from './src/components/AvisoOta';
 import { useAtualizacaoOta } from './src/lib/atualizacaoOta';
 import { atualizarWidgetEstado } from './src/widgets/handler';
@@ -76,7 +78,10 @@ function AppInner() {
   const [mailboxUnread, setMailboxUnread] = useState(0);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
   /** Em qual lado do switch o Chat abre — o compartilhamento do Android força o lado do PC. */
-  const [modoChat, setModoChat] = useState<'ia' | 'pc'>('ia');
+  // Com o Chat vivo (08/10) o lado não pode vir só da montagem: cada pedido é um `n` novo, e o
+  // ChatHub troca de lado ao ver o número mudar — mesmo que o lado pedido seja o mesmo de antes.
+  const [pedidoModo, setPedidoModo] = useState<{ modo: 'ia' | 'pc'; n: number }>({ modo: 'ia', n: 0 });
+  const setModoChat = useCallback((modo: 'ia' | 'pc') => setPedidoModo(p => ({ modo, n: p.n + 1 })), []);
   /** Texto que a busca da Início mandou para o chat; o ChatScreen envia ao abrir e limpa. */
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
   /** "Elysium" ouvido (bloco 129): cada disparo é um `n` novo para o Chat ouvir um pedido. */
@@ -95,6 +100,22 @@ function AppInner() {
     const tirar = aoMudarPalavra(setPalavraOn);
     return () => { sub.remove(); tirar(); };
   }, []);
+  // Abas vivas (08/10): cada aba monta na primeira visita e fica montada — ver lib/abas.ts.
+  const [montadas, setMontadas] = useState<Set<Aba>>(() => new Set<Aba>(['home']));
+  useEffect(() => {
+    setMontadas(m => { const n = abasMontadas(m, screen); return mesmasAbas(m, n) ? m : n; });
+  }, [screen]);
+  // As de uso diário montam logo depois do primeiro quadro: a primeira visita ao Hoje e ao
+  // Chat também é instantânea, sem disputar o arranque com a Início.
+  useEffect(() => {
+    if (!pairing) return;
+    const h = InteractionManager.runAfterInteractions(() => {
+      setMontadas(m => { const n = abasMontadas(m, screen, true); return mesmasAbas(m, n) ? m : n; });
+    });
+    return () => h.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairing]);
+
   /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
   const [pedidoBusca, setPedidoBusca] = useState(0);
 
@@ -391,50 +412,57 @@ function AppInner() {
         <AppBackground />
       </BlurTargetProvider>
       <TelaAnimada key={idDoPc(pairing)} chave={screen}>
-        {screen === 'home' && (
-          <HomeScreen
-            pairing={pairing}
-            onNavigate={setScreen}
-            onOpenPlayer={() => setPlayerOpen(true)}
-            onOpenConversation={(id) => { setActiveSessionId(id); setModoChat('ia'); setScreen('chat'); }}
-            onPerguntar={(texto) => { setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat'); }}
-            onAbrirCaixa={() => { setModoChat('pc'); setScreen('chat'); }}
-            onUnpair={handleUnpair}
-            pedidoBusca={pedidoBusca}
-          />
+        {montadas.has('home') && (
+          <AbaViva ativa={screen === 'home'}>
+            <HomeScreen
+              pairing={pairing}
+              onNavigate={setScreen}
+              onOpenPlayer={() => setPlayerOpen(true)}
+              onOpenConversation={(id) => { setActiveSessionId(id); setModoChat('ia'); setScreen('chat'); }}
+              onPerguntar={(texto) => { setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat'); }}
+              onAbrirCaixa={() => { setModoChat('pc'); setScreen('chat'); }}
+              onUnpair={handleUnpair}
+              pedidoBusca={pedidoBusca}
+            />
+          </AbaViva>
         )}
-        {screen === 'control' && <ControlScreen pairing={pairing} onUnpair={handleUnpair} />}
-        {screen === 'rotinas' && <RotinasScreen pairing={pairing} onUnpair={handleUnpair} />}
-        {screen === 'hoje' && <HojeScreen pairing={pairing} />}
+        {montadas.has('control') && <AbaViva ativa={screen === 'control'}><ControlScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
+        {montadas.has('rotinas') && <AbaViva ativa={screen === 'rotinas'}><RotinasScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
+        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} /></AbaViva>}
         {screen === 'conversations' && (
-          <ConversationsScreen
-            pairing={pairing}
-            onSelect={(id) => {
-              setActiveSessionId(id);
-              setScreen('chat');
-            }}
-            onNew={() => {
-              setActiveSessionId(null);
-              setScreen('chat');
-            }}
-            onBack={() => setScreen('chat')}
-          />
+          <AbaViva ativa>
+            <ConversationsScreen
+              pairing={pairing}
+              onSelect={(id) => {
+                setActiveSessionId(id);
+                setScreen('chat');
+              }}
+              onNew={() => {
+                setActiveSessionId(null);
+                setScreen('chat');
+              }}
+              onBack={() => setScreen('chat')}
+            />
+          </AbaViva>
         )}
         {/* Chat e Caixa moram no mesmo destino, escolhidos por um switch. Ver ChatHub. */}
-        {screen === 'chat' && (
-          <ChatHub
-            pairing={pairing}
-            onUnpair={handleUnpair}
-            sessionId={activeSessionId}
-            onSessionChange={setActiveSessionId}
-            onOpenConversations={() => setScreen('conversations')}
-            naoLidos={mailboxUnread}
-            modoInicial={modoChat}
-            perguntaPendente={perguntaPendente}
-            onPerguntaEnviada={() => setPerguntaPendente(null)}
-            pedidoVoz={pedidoVoz}
-            onPedidoVozTratado={() => setPedidoVoz(null)}
-          />
+        {montadas.has('chat') && (
+          <AbaViva ativa={screen === 'chat'}>
+            <ChatHub
+              pairing={pairing}
+              onUnpair={handleUnpair}
+              sessionId={activeSessionId}
+              onSessionChange={setActiveSessionId}
+              onOpenConversations={() => setScreen('conversations')}
+              naoLidos={mailboxUnread}
+              modoInicial={pedidoModo.modo}
+              pedidoModo={pedidoModo.n}
+              perguntaPendente={perguntaPendente}
+              onPerguntaEnviada={() => setPerguntaPendente(null)}
+              pedidoVoz={pedidoVoz}
+              onPedidoVozTratado={() => setPedidoVoz(null)}
+            />
+          </AbaViva>
         )}
       </TelaAnimada>
       {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area
@@ -454,7 +482,7 @@ function AppInner() {
       {!keyboard.visible && sobreposicoes === 0 && (
         <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
-      <BotaoInterromper />
+      <FalaFlutuante />
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />

@@ -8,7 +8,7 @@ import { haptica } from '../../lib/haptica';
 import { TelemetryFrame } from '../../lib/telemetry';
 import { findMetric } from '../../lib/telemetryFormat';
 import { errMessage } from '../../lib/errors';
-import { falar, pararDeFalar } from '../../lib/falar';
+import { falar, pararDeFalar, useFala } from '../../lib/falar';
 import { useTheme } from '../../theme';
 import { SpotifyBar } from '../SpotifyPlayer';
 import { MetricBar, Text } from '../../components/ui';
@@ -346,13 +346,17 @@ function Timers({ estado, pairing, recarregar }: { estado: { lista: TimerPc[]; d
 
 function Hoje({ texto, pairing }: { texto: string | null; pairing: Pairing }) {
   const { palette, tokens } = useTheme();
-  const [falando, setFalando] = useState(false);
+  // O botão olha a fala GLOBAL (08/10): ela segue ao trocar de aba, e voltar à Início com o
+  // resumo ainda sendo lido mostra "Parar", não um "Ouvir" que começaria de novo.
+  const fala = useFala();
+  const [meu, setMeu] = useState(false);
+  const falando = meu && fala.falando;
   if (!texto) return <Text variant="caption" color={palette.textMuted}>O PC não respondeu (ou é anterior à 1.7.1).</Text>;
   async function ouvir() {
     haptica.leve();
-    if (falando) { pararDeFalar(); setFalando(false); return; }
-    setFalando(true);
-    try { await falar(texto!, pairing); } finally { setFalando(false); }
+    if (falando) { pararDeFalar(); return; }
+    setMeu(true);
+    try { await falar(texto!, pairing); } finally { setMeu(false); }
   }
   return (
     <View style={{ gap: tokens.spacing.sm }}>
