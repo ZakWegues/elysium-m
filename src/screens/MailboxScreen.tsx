@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useAbaAtiva } from '../components/AbaViva';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import { File } from 'expo-file-system';
@@ -102,10 +103,13 @@ export default function MailboxScreen({
     })();
   }, [refresh, sessionId]);
 
+  // Com o Chat escondido (abas vivas), a Caixa não consulta o PC a cada 15 s à toa.
+  const ativa = useAbaAtiva();
   useEffect(() => {
+    if (!ativa) return;
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, ativa]);
 
   /**
    * 🔴 A conversa abria no MEIO, não na última mensagem.

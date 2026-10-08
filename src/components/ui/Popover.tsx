@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BackHandler, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useAbaAtiva } from '../AbaViva';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
@@ -67,6 +68,10 @@ export default function Popover({
    * notar: com o painel aberto, voltar SAI DO APP em vez de fechar o painel. Mesma
    * providência da gaveta em `GlassModal`.
    */
+  // Popover aberto numa aba que foi escondida (abas vivas) fecha — senão seguraria o botão
+  // voltar das outras abas.
+  const abaAtiva = useAbaAtiva();
+  useEffect(() => { if (!abaAtiva && visible) onClose(); }, [abaAtiva]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!visible) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {

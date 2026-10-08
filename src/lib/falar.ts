@@ -290,14 +290,18 @@ function tocarArquivo(arquivo: File, texto: string, minha: number): Promise<void
       if (s.playing !== tocando) {
         const pausadoPorFora = tocando && !s.playing;
         tocando = s.playing;
-        if (pausadoPorFora && !estado.pausada) { if (teto) { clearTimeout(teto); teto = null; } publicar({ pausada: true }); }
+        // Pausa de fora (notificação, fone, OUTRO APP pegando o áudio numa ligação): a promessa
+        // não pode ficar pendente para sempre segurando o microfone — um teto longo (10 min)
+        // encerra a fala esquecida.
+        if (pausadoPorFora && !estado.pausada) { if (teto) clearTimeout(teto); teto = setTimeout(terminar, 10 * 60_000); publicar({ pausada: true }); }
         else if (s.playing && estado.pausada) { armarTeto(); publicar({ pausada: false }); }
       }
     });
     try {
       este.setActiveForLockScreen(true, { title: 'Ely está falando', artist: 'ELYSIUM', albumTitle: trechoParaMostrar(texto, 80) }, { showSeekForward: false, showSeekBackward: false });
     } catch { /* sem controles nesta versão: toca do mesmo jeito */ }
-    este.play();
+    // Pausada no intervalo entre duas partes: a parte nova nasce pausada, como a pílula mostra.
+    if (estado.pausada) { if (teto) { clearTimeout(teto); teto = null; } } else este.play();
   });
 }
 
@@ -365,17 +369,22 @@ function falarFrase(frase: string, voz: string | null, minha: number): Promise<b
 // A voz do PC tem a notificação de mídia do `expo-audio`. A do aparelho (sem PC) continua
 // falando minimizada, mas sem controle nenhum: este aviso fixo, com o botão Parar, cobre isso.
 const ID_AVISO = 'ely-falando';
-let avisoMostrado = false;
+/**
+ * A promessa do "mostrar" fica guardada: tirar o aviso espera ela terminar. Sem isso, parar a
+ * fala logo no começo tirava um aviso que ainda nem existia — ele aparecia logo depois e ficava
+ * fixo (a revisão pegou).
+ */
+let avisoPendente: Promise<boolean> | null = null;
 async function mostrarAvisoDaVozDoAparelho(): Promise<void> {
-  try {
-    const { avisoDeFala } = await import('./notificacoes');
-    avisoMostrado = await avisoDeFala(ID_AVISO, true, pararDeFalar);
-  } catch { /* sem notificação: fala do mesmo jeito */ }
+  avisoPendente = import('./notificacoes').then(({ avisoDeFala }) => avisoDeFala(ID_AVISO, true, pararDeFalar)).catch(() => false);
+  await avisoPendente;
 }
 async function tirarAvisoDaVozDoAparelho(): Promise<void> {
-  if (!avisoMostrado) return;
-  avisoMostrado = false;
+  const p = avisoPendente;
+  if (!p) return;
+  avisoPendente = null;
   try {
+    if (!(await p)) return;
     const { avisoDeFala } = await import('./notificacoes');
     await avisoDeFala(ID_AVISO, false);
   } catch { /* some sozinho ao fechar o app */ }

@@ -305,8 +305,10 @@ function LinhaTarefa({ t, aoTocarCirculo, aoEditar, aoConcluirRapido, aoAdiar, a
         </View>
       )}
       onSwipeableOpen={(direcao) => {
-        // "left" = as ações da esquerda abriram (o dedo foi para a direita): conclui.
-        if (String(direcao).toLowerCase() === 'left') { fechar(); aoConcluirRapido(); }
+        // No RNGH 2.32, abrir as ações da ESQUERDA (o dedo foi para a direita, a linha andou
+        // para a direita) chega como "right" — é o Concluir. "left" é o painel Adiar/Apagar,
+        // que só abre e espera o toque (a revisão pegou a comparação invertida).
+        if (String(direcao).toLowerCase() === 'right') { fechar(); aoConcluirRapido(); }
       }}
     >
       <View style={[styles.item, { backgroundColor: palette.background, borderBottomColor: palette.border }]}>
@@ -403,7 +405,8 @@ function EditorTarefa({ pairing, base, aoTerminar, aoApagar }: {
   const diaInicial = base?.prazo !== undefined ? new Date(base.prazo) : null;
   const [texto, setTexto] = useState(base?.texto ?? '');
   const [dia, setDia] = useState<Date | null>(diaInicial && dias.some(d => d.data.toDateString() === diaInicial.toDateString()) ? new Date(diaInicial.getFullYear(), diaInicial.getMonth(), diaInicial.getDate()) : diaInicial);
-  const [hora, setHora] = useState(base?.prazo !== undefined && !base.semHora ? `${String(new Date(base.prazo).getHours()).padStart(2, '0')}:${String(new Date(base.prazo).getMinutes()).padStart(2, '0')}` : '');
+  const horaInicial = base?.prazo !== undefined && !base.semHora ? `${String(new Date(base.prazo).getHours()).padStart(2, '0')}:${String(new Date(base.prazo).getMinutes()).padStart(2, '0')}` : '';
+  const [hora, setHora] = useState(horaInicial);
   const [estrela, setEstrela] = useState(base?.prioridade === 'alta');
   const [repete, setRepete] = useState<'nao' | 'diaria' | 'semanal'>(base?.repete ?? 'nao');
   const [ressalva, setRessalva] = useState(base?.ressalva ?? '');
@@ -423,7 +426,9 @@ function EditorTarefa({ pairing, base, aoTerminar, aoApagar }: {
         await aoTerminar(r.tarefas);
         return;
       }
-      const mudouData = quando !== montarQuando(diaInicial, base.prazo !== undefined && !base.semHora ? hora : '') || (base.prazo === undefined) !== !quando;
+      // Compara com a hora ORIGINAL (a revisão pegou: comparando com a do estado, trocar só a
+      // hora — ou tirar a hora — nunca contava como mudança e era descartado).
+      const mudouData = quando !== montarQuando(diaInicial, horaInicial);
       const r = await callRpc(pairing, 'tarefas.editar', {
         id: base.id,
         texto: texto.trim(),

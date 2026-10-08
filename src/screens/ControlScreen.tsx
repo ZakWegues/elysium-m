@@ -540,6 +540,7 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
   const visiveis = busca.trim() ? facts.filter(f => semAcento(f.text).includes(semAcento(busca.trim()))) : facts;
   async function salvarEdicao() {
     const f = editando;
+    if (!f) return; // o blur depois do submit não grava de novo
     const texto = textoEdicao.trim();
     setEditando(null);
     if (!f || !texto || texto === f.text) return;
@@ -603,7 +604,7 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
       {visiveis.map(f => (
         editando?.id === f.id ? (
           <View key={f.id} style={[styles.procRow, { gap: 8 }]}>
-            <TextInput value={textoEdicao} onChangeText={setTextoEdicao} autoFocus maxLength={200} onSubmitEditing={salvarEdicao} onBlur={salvarEdicao} multiline
+            <TextInput value={textoEdicao} onChangeText={setTextoEdicao} autoFocus maxLength={200} onSubmitEditing={salvarEdicao} onBlur={salvarEdicao} multiline submitBehavior="blurAndSubmit"
               style={[styles.input, { borderRadius: tokens.radii.md, borderColor: palette.primary, color: palette.text, backgroundColor: palette.surface }]} />
           </View>
         ) : (

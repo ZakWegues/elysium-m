@@ -39,6 +39,20 @@ export default function TreinoScreen({ pairing, corpo: inicial, onClose, onMudar
   const [feitos, setFeitos] = useState<Record<string, number[]>>({});
   const [editando, setEditando] = useState<{ treino: Treino; indice: number | null } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  /** Sem treino nenhum, o "+" cria o treino (a revisão pegou: antes o toque era ignorado). */
+  const [criandoTreino, setCriandoTreino] = useState(false);
+  const [nomeTreino, setNomeTreino] = useState('');
+  async function criarTreino() {
+    const nome = nomeTreino.trim();
+    if (!nome) return;
+    try {
+      const r = await callRpc(pairing, 'treinos.save', { nome, exercicios: [], ordem: corpo.treinos.length });
+      setCriandoTreino(false); setNomeTreino('');
+      await recarregar();
+      setSelecionado(r.treino.id);
+      setEditando({ treino: r.treino, indice: null });
+    } catch (e) { Alert.alert('Treino', errMessage(e)); }
+  }
   const sobreposicao = useContext(SobreposicaoContext);
 
   // Tela cheia por cima do Hoje: a barra de abas sai (como numa gaveta) e o voltar fecha.
@@ -92,7 +106,7 @@ export default function TreinoScreen({ pairing, corpo: inicial, onClose, onMudar
           <Feather name="arrow-left" size={22} color={palette.text} />
         </Pressable>
         <Text variant="heading" style={{ flex: 1 }}>Treino</Text>
-        <Pressable onPress={() => treino && setEditando({ treino, indice: null })} hitSlop={12} accessibilityRole="button" accessibilityLabel="Adicionar exercício" style={styles.voltar}>
+        <Pressable onPress={() => (treino ? setEditando({ treino, indice: null }) : setCriandoTreino(true))} hitSlop={12} accessibilityRole="button" accessibilityLabel={treino ? 'Adicionar exercício' : 'Criar treino'} style={styles.voltar}>
           <Feather name="plus" size={22} color={palette.primary} />
         </Pressable>
       </View>
@@ -142,7 +156,10 @@ export default function TreinoScreen({ pairing, corpo: inicial, onClose, onMudar
             </View>
           </Card>
         ) : (
-          <Card glass><Text variant="caption" color={palette.textMuted}>Nenhum treino ainda — toque no + para criar o primeiro exercício.</Text></Card>
+          <Card glass style={{ gap: 10 }}>
+            <Text variant="caption" color={palette.textMuted}>Nenhum treino ainda.</Text>
+            <Button title="Criar o primeiro treino" onPress={() => setCriandoTreino(true)} />
+          </Card>
         )}
 
         <Nutricao corpo={corpo} pairing={pairing} recarregar={recarregar} />
@@ -150,6 +167,13 @@ export default function TreinoScreen({ pairing, corpo: inicial, onClose, onMudar
         <Perfil corpo={corpo} pairing={pairing} recarregar={recarregar} />
       </ScrollView>
 
+      <GlassModal title="Novo treino" visible={criandoTreino} onClose={() => setCriandoTreino(false)}>
+        <View style={{ gap: tokens.spacing.sm }}>
+          <TextInput value={nomeTreino} onChangeText={setNomeTreino} placeholder="Nome (ex.: Treino A)" placeholderTextColor={palette.textMuted} maxLength={40} autoFocus
+            style={[styles.campo, { borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]} />
+          <Button title="Criar e adicionar exercícios" onPress={() => void criarTreino()} disabled={!nomeTreino.trim()} />
+        </View>
+      </GlassModal>
       <GlassModal title={editando?.indice === null ? 'Novo exercício' : 'Editar exercício'} visible={editando !== null} onClose={() => setEditando(null)}>
         {editando && (
           <FormExercicio
@@ -188,7 +212,8 @@ function FormExercicio({ pairing, treino, indice, aoTerminar }: { pairing: Pairi
   function salvar() {
     if (!nome.trim()) { Alert.alert('Falta o nome', 'Dê um nome ao exercício.'); return; }
     // Em branco = o padrão do tipo (composto 2 aquec. + 3×4–6; isolador 3×10–12), decidido no PC.
-    const novo: Partial<Exercicio> = { nome: nome.trim(), aquecimento: numero(aquec), series: numero(ser), reps: reps.trim() || undefined, carga: carga.trim() || undefined, obs: obs.trim() || undefined };
+    // Mantém o que o formulário não mostra (o tipo): edita por cima do exercício original.
+    const novo: Partial<Exercicio> = { ...(base ?? {}), nome: nome.trim(), aquecimento: numero(aquec), series: numero(ser), reps: reps.trim() || undefined, carga: carga.trim() || undefined, obs: obs.trim() || undefined };
     const lista: Partial<Exercicio>[] = [...treino.exercicios];
     if (indice === null) lista.push(novo); else lista[indice] = novo;
     void gravar(lista);

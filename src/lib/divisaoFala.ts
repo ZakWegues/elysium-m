@@ -24,7 +24,7 @@ export function frasesDe(texto: string): string[] {
  * (texto sem pontuação) é cortada no último espaço antes dele — melhor uma pausa no meio da
  * frase que a fala cortada.
  */
-export function partesDaFala(texto: string, max = 1800): string[] {
+export function partesDaFala(texto: string, max = 1400): string[] {
   const partes: string[] = [];
   let atual = '';
   const fechar = () => { if (atual) partes.push(atual); atual = ''; };
