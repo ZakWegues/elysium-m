@@ -404,8 +404,6 @@ export type PainelHoje = {
   // Fase 18 (PC 2.2+). PC antigo não manda — tudo opcional.
   rotinasHoje?: { id: string; nome: string; em: number }[];
   rotinasRodaram?: { id: string; nome: string; em: number; ok: boolean; resultado: string }[];
-  corpo?: PainelCorpo | null;
-  dica?: { texto: string; em: number } | null;
   elysium?: { versao: string; novidades: string[]; paraTestar: { item: string; feito: boolean }[]; atualizacaoPronta: string | null };
   ideia?: string | null;
   /** Fase 18: "Meu amanhã" (depois das 18h) e as seções escondidas pelo dono. */

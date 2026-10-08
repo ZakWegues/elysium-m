@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { callRpc, Habito, Meta, PainelCorpo, PainelHoje, Revisao, Tarefa } from '../lib/rpc';
+import { callRpc, Habito, Meta, PainelHoje, Revisao, Tarefa } from '../lib/rpc';
 import { falar } from '../lib/falar';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
@@ -12,8 +12,7 @@ import { Button, Card, GlassModal, ScreenHeader, Text } from '../components/ui';
 import { Reator } from '../components/Reator';
 import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
-import { CardCorrida, CardElysium, CardIdeia, CardNutricao, CardRotinasHoje, CardTreino, OuvirResumo } from './hoje/CardsFase18';
-import TreinoScreen from './TreinoScreen';
+import { CardElysium, CardIdeia, CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
 import TarefasScreen from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
 
@@ -61,10 +60,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
   const [tarefasAbertas, setTarefasAbertas] = useState(false);
   const fecharTarefas = useCallback(() => setTarefasAbertas(false), []);
   useEffect(() => { if (pedidoTarefas) setTarefasAbertas(true); }, [pedidoTarefas]);
-  /** Fase 18: o treino em tela cheia, aberto pelos cards do corpo. */
-  const [treinoAberto, setTreinoAberto] = useState(false);
-  const aplicarCorpo = useCallback((corpo: PainelCorpo) => setPainel(p => p && { ...p, corpo }), []);
-  const fecharTreino = useCallback(() => setTreinoAberto(false), []);
 
   function aplicarTarefas(tarefas: Tarefa[]) {
     setPainel(p => p && { ...p, tarefas });
@@ -339,23 +334,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
             </Card>
             </>)}
 
-            {painel.corpo && (
-              <>
-                {vis('treino-de-hoje') && (<>
-                  {secao('TREINO DE HOJE')}
-                  <CardTreino corpo={painel.corpo} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} aoMudar={aplicarCorpo} />
-                </>)}
-                {vis('nutricao') && (<>
-                  {secao('NUTRIÇÃO')}
-                  <CardNutricao corpo={painel.corpo} dica={painel.dica ?? null} pairing={pairing} aoAbrir={() => setTreinoAberto(true)} />
-                </>)}
-                {vis('corrida') && (<>
-                  {secao('CORRIDA')}
-                  <CardCorrida corpo={painel.corpo} aoAbrir={() => setTreinoAberto(true)} />
-                </>)}
-              </>
-            )}
-
             {vis('metas') && (<>
             {secao('METAS', { rotulo: 'Meta', onPress: () => setMetaEdit({ alvo: 10 }) })}
             <Card glass style={{ gap: tokens.spacing.sm }}>
@@ -607,9 +585,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
       </GlassModal>
       {tarefasAbertas && (
         <TarefasScreen pairing={pairing} onClose={fecharTarefas} onMudou={aplicarTarefas} />
-      )}
-      {treinoAberto && painel?.corpo && (
-        <TreinoScreen pairing={pairing} corpo={painel.corpo} onClose={fecharTreino} onMudar={aplicarCorpo} />
       )}
     </View>
   );

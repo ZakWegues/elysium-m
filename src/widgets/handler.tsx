@@ -4,7 +4,7 @@ import { loadPairing, Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { paletaDosWidgets } from './tema';
 import { ClimaWidget, EstadoPc, FocoWidget, RotinasWidget, SaudeWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetFoco, WidgetRotinas, WidgetSaude } from './widgets';
-import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TarefasWidget, TimersWidget, TreinoWidget, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTarefas, WidgetTimers, WidgetTreino } from './widgetsStark';
+import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TarefasWidget, TimersWidget, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTarefas, WidgetTimers } from './widgetsStark';
 import { atrasada, quandoTarefa } from '../lib/tarefasUi';
 
 /**
@@ -33,7 +33,6 @@ export const WIDGET_MUSICA = 'Musica';
 export const WIDGET_LISTAS = 'Listas';
 // Fase 18.
 export const WIDGET_TAREFAS = 'Tarefas';
-export const WIDGET_TREINO = 'Treino';
 
 /**
  * O aviso curto embaixo do widget quando algo falha (08/10): antes era a mensagem crua do
@@ -183,17 +182,6 @@ async function lerTarefas(pairing: Pairing | null, aviso?: string): Promise<Tare
       tarefas: tarefas.map(t => ({ id: t.id, texto: t.texto, atrasada: atrasada(t), quando: t.prazo !== undefined ? quandoTarefa(t.prazo, t.semHora) : undefined })),
     };
   } catch { return { online: false, tarefas: [], total: 0, aviso }; }
-}
-
-async function lerTreino(pairing: Pairing | null, aviso?: string): Promise<TreinoWidget> {
-  if (!pairing) return { online: false, exercicios: [] };
-  try {
-    const c = await callRpc(pairing, 'corpo.painel', {}, { timeoutMs: 10000 });
-    let dica: string | undefined;
-    try { dica = (await callRpc(pairing, 'corpo.dica', {}, { timeoutMs: 10000 })).dica.texto; } catch { /* sem dica */ }
-    const th = c.treinoHoje;
-    return { online: true, aviso, nome: th?.treino.nome, feito: th?.feitoHoje, exercicios: th?.treino.exercicios.map(e => e.nome) ?? [], kcal: c.meta?.kcal, proteina: c.meta?.proteinaG, dica };
-  } catch { return { online: false, exercicios: [], aviso }; }
 }
 
 async function lerListas(pairing: Pairing | null, aviso?: string): Promise<ListasWidget> {
@@ -348,17 +336,6 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       return;
     }
 
-    case WIDGET_TREINO: {
-      const pairing = await loadPairing();
-      let aviso: string | undefined;
-      if (widgetAction === 'WIDGET_CLICK' && clickAction === 'TREINO' && pairing) {
-        try { const r = await callRpc(pairing, 'treinos.marcar', { feito: true }, { timeoutMs: 8000 }); aviso = `${r.treino.nome} concluído 💪`; }
-        catch (err) { aviso = avisoDeErro(err); }
-      }
-      renderWidget(<WidgetTreino p={p} t={await lerTreino(pairing, aviso)} />);
-      return;
-    }
-
     case WIDGET_LISTAS: {
       const pairing = await loadPairing();
       let aviso: string | undefined;
@@ -412,7 +389,6 @@ export async function atualizarWidgetEstado(pairing: Pairing | null): Promise<vo
     [WIDGET_MUSICA, async () => <WidgetMusica p={await paletaDosWidgets()} m={await lerMusica(pairing)} />],
     [WIDGET_LISTAS, async () => <WidgetListas p={await paletaDosWidgets()} l={await lerListas(pairing)} />],
     [WIDGET_TAREFAS, async () => <WidgetTarefas p={await paletaDosWidgets()} t={await lerTarefas(pairing)} />],
-    [WIDGET_TREINO, async () => <WidgetTreino p={await paletaDosWidgets()} t={await lerTreino(pairing)} />],
   ];
   for (const [nome, montar] of novos) {
     try { const el = await montar(); await requestWidgetUpdate({ widgetName: nome, renderWidget: () => el }); } catch { /* idem */ }

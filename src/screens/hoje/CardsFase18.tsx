@@ -5,7 +5,7 @@ import Feather from '@expo/vector-icons/Feather';
 import * as Application from 'expo-application';
 import * as Updates from 'expo-updates';
 import { Pairing } from '../../lib/pairing';
-import { callRpc, PainelCorpo, PainelHoje } from '../../lib/rpc';
+import { callRpc, PainelHoje } from '../../lib/rpc';
 import { errMessage } from '../../lib/errors';
 import { haptica } from '../../lib/haptica';
 import { falar, pararDeFalar, useFala } from '../../lib/falar';
@@ -15,8 +15,8 @@ import { Card, Text } from '../../components/ui';
 /**
  * Os cards da fase 18 (08/10) no Hoje do celular — o Zak pediu o resumo "com tudo que já tá
  * e mais um pouco": ouvir o resumo inteiro (a fala segue ao trocar de aba e com o app
- * minimizado), treino da vez, nutrição com a dica que se renova num toque, a corrida, as
- * rotinas de hoje, uma ideia para o dia e o card ELYSIUM (versões, o que veio, o que testar).
+ * minimizado), as rotinas de hoje, uma ideia para o dia e o card ELYSIUM (versões, o que
+ * veio, o que testar). Treino e nutrição ficam de fora: a Ely responde quando se pergunta.
  *
  * Tudo opcional: PC anterior à 2.2 não manda esses campos e os cards simplesmente não aparecem.
  */
@@ -56,126 +56,9 @@ export function OuvirResumo({ pairing }: { pairing: Pairing }) {
       {buscando ? <ActivityIndicator color={palette.primary} size="small" /> : <Feather name={falando ? 'square' : 'volume-2'} size={18} color={palette.primary} />}
       <View style={{ flex: 1 }}>
         <Text variant="label" color={palette.primary}>{falando ? 'Parar o resumo' : buscando ? 'Preparando o resumo…' : 'Ouvir o resumo do dia'}</Text>
-        <Text variant="caption" color={palette.textMuted}>{falando ? 'Pode trocar de aba ou minimizar — ela continua.' : 'Clima, tarefas, rotinas, treino, dica, novidades e uma ideia.'}</Text>
+        <Text variant="caption" color={palette.textMuted}>{falando ? 'Pode trocar de aba ou minimizar — ela continua.' : 'Clima, tarefas, rotinas, novidades e uma ideia.'}</Text>
       </View>
     </Pressable>
-  );
-}
-
-export function CardTreino({ corpo, pairing, aoAbrir, aoMudar }: { corpo: PainelCorpo; pairing: Pairing; aoAbrir: () => void; aoMudar: (c: PainelCorpo) => void }) {
-  const { palette, tokens } = useTheme();
-  const [ocupado, setOcupado] = useState(false);
-  const th = corpo.treinoHoje;
-  async function concluir() {
-    if (!th) return;
-    haptica.medio();
-    setOcupado(true);
-    try {
-      const r = await callRpc(pairing, 'treinos.marcar', { feito: !th.feitoHoje });
-      if (!th.feitoHoje) haptica.sucesso();
-      aoMudar(r.painel);
-    } catch (e) { Alert.alert('Treino', errMessage(e)); }
-    finally { setOcupado(false); }
-  }
-  if (!th) {
-    return (
-      <Card glass style={{ gap: 8 }}>
-        <Text variant="caption" color={palette.textMuted}>Nenhum treino cadastrado ainda.</Text>
-        <Pressable onPress={aoAbrir} style={[styles.botao, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}><Text variant="label" color={palette.primary}>Cadastrar treinos</Text></Pressable>
-      </Card>
-    );
-  }
-  return (
-    <Card glass style={{ gap: 10 }}>
-      <Pressable onPress={aoAbrir} accessibilityRole="button" accessibilityLabel={`Abrir ${th.treino.nome}`} style={{ gap: 6 }}>
-        <View style={styles.linha}>
-          <View style={{ flex: 1 }}>
-            <Text variant="subheading" color={th.feitoHoje ? palette.primary : palette.text}>{th.treino.nome}{th.feitoHoje ? ' ✓' : ''}</Text>
-            <Text variant="caption" color={palette.textMuted}>{th.feitoHoje ? 'Feito hoje' : 'O da vez'}{th.proximo ? ` · depois: ${th.proximo}` : ''} · {corpo.treinosNoMes} no mês</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={palette.textMuted} />
-        </View>
-        <Text variant="caption" color={palette.text} numberOfLines={2}>{th.treino.exercicios.map(e => e.nome).join(' · ')}</Text>
-      </Pressable>
-      <Pressable
-        onPress={concluir}
-        disabled={ocupado}
-        accessibilityRole="button"
-        style={[styles.botao, { backgroundColor: th.feitoHoje ? 'transparent' : palette.primary, borderWidth: th.feitoHoje ? 1 : 0, borderColor: palette.border, borderRadius: tokens.radii.md, opacity: ocupado ? 0.6 : 1 }]}
-      >
-        <Feather name={th.feitoHoje ? 'rotate-ccw' : 'check'} size={16} color={th.feitoHoje ? palette.textMuted : palette.background} />
-        <Text variant="label" color={th.feitoHoje ? palette.textMuted : palette.background}>{th.feitoHoje ? 'Desmarcar' : 'Concluir treino'}</Text>
-      </Pressable>
-    </Card>
-  );
-}
-
-export function CardNutricao({ corpo, dica: dicaInicial, pairing, aoAbrir }: { corpo: PainelCorpo; dica: { texto: string } | null; pairing: Pairing; aoAbrir: () => void }) {
-  const { palette, tokens } = useTheme();
-  const [dica, setDica] = useState(dicaInicial?.texto ?? null);
-  const [trocando, setTrocando] = useState(false);
-  // Dica nova do painel (outra hora) substitui a local.
-  const [vista, setVista] = useState(dicaInicial?.texto);
-  if (dicaInicial?.texto !== vista) { setVista(dicaInicial?.texto); setDica(dicaInicial?.texto ?? null); }
-  async function outra() {
-    haptica.leve();
-    setTrocando(true);
-    try { setDica((await callRpc(pairing, 'corpo.dica', { nova: true }, { timeoutMs: 15000 })).dica.texto); }
-    catch (e) { Alert.alert('Dica', errMessage(e)); }
-    finally { setTrocando(false); }
-  }
-  const m = corpo.meta;
-  return (
-    <Card glass style={{ gap: 10 }}>
-      {m ? (
-        <Pressable onPress={aoAbrir} accessibilityRole="button" accessibilityLabel={`Meta de ${m.kcal} calorias. Abrir`} style={{ gap: 4 }}>
-          <View style={[styles.linha, { alignItems: 'baseline' }]}>
-            <Text variant="heading" color={palette.primary}>{m.kcal}</Text>
-            <Text variant="caption" color={palette.textMuted}>kcal hoje{m.corrida ? ` (com ${m.corrida} da corrida)` : ''}</Text>
-          </View>
-          <Text variant="caption" color={palette.text}>{m.proteinaG} g proteína · {m.carboG} g carbo · {m.gorduraG} g gordura</Text>
-        </Pressable>
-      ) : (
-        <Pressable onPress={aoAbrir} style={{ gap: 4 }}>
-          <Text variant="caption" color={palette.textMuted}>Para a meta faltam: {corpo.faltaPerfil.join(', ')}.</Text>
-          <Text variant="label" color={palette.primary}>Completar o perfil</Text>
-        </Pressable>
-      )}
-      {corpo.sugestao ? <Text variant="caption" color={palette.accent}>{corpo.sugestao}</Text> : null}
-      {dica ? (
-        <Pressable
-          onPress={outra}
-          disabled={trocando}
-          accessibilityRole="button"
-          accessibilityLabel={`Dica: ${dica}. Toque para outra`}
-          style={[styles.dica, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}
-        >
-          <Feather name="zap" size={15} color={palette.primary} style={{ marginTop: 2 }} />
-          {/* A troca é uma animação: a dica velha some, a nova entra — o toque "gera" algo. */}
-          <Animated.View key={dica} entering={FadeIn.duration(260)} exiting={FadeOut.duration(140)} style={{ flex: 1, opacity: trocando ? 0.35 : 1 }}>
-            <Text variant="caption" color={palette.text}>{dica}</Text>
-          </Animated.View>
-        </Pressable>
-      ) : null}
-      <Text variant="caption" color={palette.textMuted} style={{ fontSize: 10 }}>Orientação geral — não substitui nutricionista.</Text>
-    </Card>
-  );
-}
-
-export function CardCorrida({ corpo, aoAbrir }: { corpo: PainelCorpo; aoAbrir: () => void }) {
-  const { palette } = useTheme();
-  const c = corpo.corrida;
-  return (
-    <Card glass style={{ gap: 4 }}>
-      <Pressable onPress={aoAbrir} accessibilityRole="button" accessibilityLabel="Abrir a corrida" style={{ gap: 4 }}>
-        <View style={styles.linha}>
-          <Text variant="label" color={palette.accent} style={{ flex: 1, letterSpacing: 1.2 }}>{c.concluido ? 'PLANO CONCLUÍDO' : `SEMANA ${c.semana} · SESSÃO ${c.sessao}/3`}</Text>
-          {c.feitaHoje && <Text variant="caption" color={palette.primary}>✓ hoje</Text>}
-        </View>
-        <Text variant="body">{c.texto}</Text>
-        <Text variant="caption" color={palette.textMuted}>~{c.minutos} min · toque para anotar</Text>
-      </Pressable>
-    </Card>
   );
 }
 

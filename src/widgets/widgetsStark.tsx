@@ -202,7 +202,7 @@ export function WidgetListas({ p, l }: { p: Palette; l: ListasWidget }) {
   );
 }
 
-// ── Fase 18 (08/10): Tarefas e Treino de hoje ─────────────────────────────────
+// ── Fase 18 (08/10): Tarefas ─────────────────────────────────────────────────
 
 export type TarefasWidget = { online: boolean; tarefas: { id: string; texto: string; quando?: string; atrasada?: boolean }[]; total: number; aviso?: string };
 
@@ -232,32 +232,6 @@ export function WidgetTarefas({ p, t }: { p: Palette; t: TarefasWidget }) {
         </FlexWidget>
       ))}
       {t.total > 4 ? <TextWidget text={`+${t.total - 4} na lista`} style={{ fontSize: 10, color: c(p.textMuted) }} /> : null}
-      {t.aviso ? <TextWidget text={t.aviso} style={{ fontSize: 10, color: c(p.textMuted) }} maxLines={1} truncate="END" /> : null}
-    </FlexWidget>
-  );
-}
-
-export type TreinoWidget = { online: boolean; nome?: string; feito?: boolean; exercicios: string[]; kcal?: number; proteina?: number; dica?: string; aviso?: string };
-
-/** Treino de hoje (4×2): o treino da vez, "Concluir", a meta de calorias e a dica. */
-export function WidgetTreino({ p, t }: { p: Palette; t: TreinoWidget }) {
-  return (
-    <FlexWidget style={{ ...painel(p), height: 'match_parent', width: 'match_parent', flexDirection: 'column', padding: 12, flexGap: 4 }}>
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent' }}>
-        <FlexWidget style={{ flex: 1, flexDirection: 'column' }} clickAction="OPEN_URI" clickActionData={{ uri: 'elysium://hoje' }}>
-          <Rotulo p={p} texto="Treino de hoje" />
-          <TextWidget text={t.online ? (t.nome ? `${t.nome}${t.feito ? ' ✓' : ''}` : 'Sem treino cadastrado') : 'PC fora de alcance'} style={{ fontSize: 15, fontWeight: 'bold', color: c(t.feito ? p.primary : p.text) }} maxLines={1} truncate="END" />
-        </FlexWidget>
-        {t.online && t.nome && !t.feito ? (
-          <FlexWidget style={{ paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: c(p.primary), alignItems: 'center', justifyContent: 'center' }}
-            clickAction="TREINO" clickActionData={{ feito: '1' }} accessibilityLabel="Concluir o treino">
-            <TextWidget text="Concluir" style={{ fontSize: 12, fontWeight: 'bold', color: c(p.onPrimary) }} />
-          </FlexWidget>
-        ) : null}
-      </FlexWidget>
-      {t.exercicios.length ? <TextWidget text={t.exercicios.slice(0, 4).join(' · ')} style={{ fontSize: 11, color: c(p.textMuted) }} maxLines={2} truncate="END" /> : null}
-      {t.kcal ? <TextWidget text={`Meta: ${t.kcal} kcal · ${t.proteina ?? '?'} g de proteína`} style={{ fontSize: 12, color: c(p.text) }} maxLines={1} /> : null}
-      {t.dica ? <TextWidget text={`💡 ${t.dica}`} style={{ fontSize: 11, color: c(p.accent) }} maxLines={2} truncate="END" /> : null}
       {t.aviso ? <TextWidget text={t.aviso} style={{ fontSize: 10, color: c(p.textMuted) }} maxLines={1} truncate="END" /> : null}
     </FlexWidget>
   );

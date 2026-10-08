@@ -277,19 +277,6 @@
               "maxResizeHeight": "300dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
-            },
-            {
-              "name": "Treino",
-              "label": "ELYSIUM — Treino de hoje",
-              "description": "O treino da vez, a meta de calorias e a dica.",
-              "minWidth": "250dp",
-              "minHeight": "110dp",
-              "targetCellWidth": 4,
-              "targetCellHeight": 2,
-              "maxResizeWidth": "500dp",
-              "maxResizeHeight": "300dp",
-              "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
             }
           ]
         }
