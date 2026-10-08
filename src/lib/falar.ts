@@ -85,6 +85,23 @@ export async function ligarLerRespostasEscritas(ligar: boolean): Promise<void> {
   try { await AsyncStorage.setItem(CHAVE_LER, ligar ? '1' : '0'); } catch { /* fica só na memória */ }
 }
 
+/**
+ * Fala antecipada (fase 19): no pedido por voz, a Ely começa a falar na primeira frase pronta.
+ * Ligada por padrão; tem interruptor em Ajustes → Voz porque foi feita sem poder ouvir.
+ */
+const CHAVE_ANTECIPADA = 'elysium_fala_antecipada_v1';
+let antecipada: boolean | null = null;
+export async function falaAntecipadaLigada(): Promise<boolean> {
+  if (antecipada === null) {
+    try { antecipada = (await AsyncStorage.getItem(CHAVE_ANTECIPADA)) !== '0'; } catch { antecipada = true; }
+  }
+  return antecipada;
+}
+export async function ligarFalaAntecipada(ligar: boolean): Promise<void> {
+  antecipada = ligar;
+  try { await AsyncStorage.setItem(CHAVE_ANTECIPADA, ligar ? '1' : '0'); } catch { /* fica só na memória */ }
+}
+
 export async function ligarVozDoPc(ligar: boolean): Promise<void> {
   preferencia = ligar;
   try { await AsyncStorage.setItem(CHAVE, ligar ? '1' : '0'); } catch { /* fica só na memória */ }
@@ -182,19 +199,90 @@ let geracao = 0;
 export async function falar(texto: string, pairing: Pairing | null): Promise<void> {
   const t = texto.trim();
   if (!t) return;
+  await falarDaFonte(fonteDeLista(partesDaFala(t)), trechoParaMostrar(t), pairing);
+}
+
+/**
+ * De onde vêm as partes da fala. Uma lista pronta (a resposta inteira) ou um fluxo que vai
+ * recebendo frases enquanto a resposta chega (fase 19, `abrirFalaAntecipada`). `null` = acabou.
+ */
+interface FontePartes {
+  proxima(): Promise<string | null>;
+  /** Quantas partes se conhecem até agora (para o "parte 2 de 3" da pílula). */
+  conhecidas(): number;
+}
+
+function fonteDeLista(partes: string[]): FontePartes {
+  let i = 0;
+  return { proxima: async () => (i < partes.length ? partes[i++] : null), conhecidas: () => partes.length };
+}
+
+async function falarDaFonte(fonte: FontePartes, trecho: string, pairing: Pairing | null): Promise<void> {
   pararDeFalar();
   const minha = geracao;
   // Bloco 129: enquanto fala, a palavra "Ely" não escuta — ouviria a própria voz. Pausada
   // também segura o microfone: ao retomar, a voz voltaria a sair com a escuta ligada.
   ocuparMicrofone('falar');
-  publicar({ falando: true, pausada: false, trecho: trechoParaMostrar(t), parte: 1, total: 1 });
-  try { await falarAgora(t, pairing, minha); } finally {
+  publicar({ falando: true, pausada: false, trecho, parte: 1, total: 1 });
+  try { await falarAgora(fonte, pairing, minha); } finally {
     if (minha === geracao) {
       controle = null;
       liberarMicrofone('falar');
       publicar(PARADA);
     }
   }
+}
+
+/**
+ * Fala que começa ANTES de a resposta terminar (fase 19, bloco 189). O pedido por voz
+ * esperava a resposta inteira chegar pelo WebSocket para só então pedir o MP3 ao PC: numa
+ * explicação, segundos de silêncio com o texto já na tela. Agora quem recebe os pedaços vai
+ * entregando frases prontas (`adicionar`), e a primeira começa a tocar enquanto o modelo
+ * ainda escreve o resto. `fechar` entrega o que faltou e devolve a promessa do fim da fala.
+ *
+ * A fala só começa na primeira frase — abrir não para a fala anterior à toa.
+ */
+export interface FalaAntecipada {
+  adicionar(frase: string): void;
+  fechar(resto: string): Promise<void>;
+}
+
+export function abrirFalaAntecipada(pairing: Pairing | null): FalaAntecipada {
+  const fila: string[] = [];
+  let acabou = false;
+  let conhecidas = 0;
+  let acordar: ((v: string | null) => void) | null = null;
+  let fim: Promise<void> | null = null;
+
+  const entregar = () => {
+    if (!acordar) return;
+    if (fila.length) { const a = acordar; acordar = null; a(fila.shift()!); }
+    else if (acabou) { const a = acordar; acordar = null; a(null); }
+  };
+  const fonte: FontePartes = {
+    proxima: () => {
+      if (fila.length) return Promise.resolve(fila.shift()!);
+      if (acabou) return Promise.resolve(null);
+      return new Promise<string | null>((r) => {
+        acordar = r;
+        // "Interromper" enquanto espera a próxima frase: ninguém fica pendurado.
+        terminarAtual = () => { if (acordar === r) { acordar = null; r(null); } };
+      });
+    },
+    conhecidas: () => conhecidas,
+  };
+  const empurrar = (texto: string) => {
+    for (const p of partesDaFala(texto)) { fila.push(p); conhecidas++; }
+    if (!fim && fila.length) fim = falarDaFonte(fonte, trechoParaMostrar(fila[0]), pairing);
+    entregar();
+  };
+  return {
+    adicionar: (frase) => { if (!acabou) empurrar(frase.trim()); },
+    fechar: (resto) => {
+      if (!acabou) { empurrar(resto.trim()); acabou = true; entregar(); }
+      return fim ?? Promise.resolve();
+    },
+  };
 }
 
 /** Modo de áudio para tocar com o app minimizado e ganhar a notificação de mídia. */
@@ -219,41 +307,52 @@ async function baixarParte(texto: string, pairing: Pairing): Promise<File> {
   return arquivo;
 }
 
-async function falarAgora(t: string, pairing: Pairing | null, minha: number): Promise<void> {
+async function falarAgora(fonte: FontePartes, pairing: Pairing | null, minha: number): Promise<void> {
+  // Partes que pegamos da fonte e não chegaram a tocar: viram a voz do aparelho se a do PC falhar.
+  const sobra: string[] = [];
   if (pairing && (await vozDoPcLigada())) {
-    const partes = partesDaFala(t);
-    let tocouAlguma = false;
+    let atual: string | null = null;
     try {
       await prepararModo();
-      // A primeira parte baixa antes de tocar; da segunda em diante, a próxima já vem
-      // baixando enquanto a atual toca.
-      let proxima: Promise<File> | null = baixarParte(partes[0], pairing);
-      for (let i = 0; i < partes.length; i++) {
-        const arquivo = await proxima!;
+      // Cada parte começa a baixar assim que existe; a próxima é pedida enquanto a atual toca.
+      // Numa lista, "existe" é já; no fluxo (fala antecipada), é quando a frase fecha.
+      const pedir = () => fonte.proxima().then((texto) => {
+        if (texto === null) return null;
+        const arquivo = baixarParte(texto, pairing);
+        // Uma falha baixando a PRÓXIMA não pode virar rejeição solta enquanto esta toca.
+        arquivo.catch(() => {});
+        return { texto, arquivo };
+      });
+      let parte = await pedir();
+      let n = 0;
+      while (parte) {
+        atual = parte.texto;
+        const arquivo = await parte.arquivo;
         // Interrompida (ou trocada por outra fala) durante o download: não toca.
         if (minha !== geracao) { try { arquivo.delete(); } catch { /* cache */ } return; }
-        proxima = i + 1 < partes.length ? baixarParte(partes[i + 1], pairing) : null;
-        // Uma falha baixando a PRÓXIMA não pode virar rejeição solta enquanto esta toca.
-        proxima?.catch(() => {});
-        publicar({ trecho: trechoParaMostrar(partes[i]), parte: i + 1, total: partes.length });
-        tocouAlguma = true;
-        await tocarArquivo(arquivo, partes[i], minha);
+        const seguinte = pedir();
+        n++;
+        publicar({ trecho: trechoParaMostrar(parte.texto), parte: n, total: Math.max(n, fonte.conhecidas()) });
+        await tocarArquivo(arquivo, parte.texto, minha);
         if (minha !== geracao) return;
+        atual = null;
+        parte = await seguinte;
       }
       return;
     } catch {
       // Falhou antes de sair som: cai na voz do aparelho com o texto inteiro. Falhou no meio:
       // o resto vai pela voz do aparelho, sem repetir o que já foi dito.
       if (minha !== geracao) return;
-      if (tocouAlguma) {
-        const ditas = estado.parte;
-        t = partes.slice(ditas).join(' ');
-        if (!t) return;
-      }
+      if (atual) sobra.push(atual);
     }
   }
   if (minha !== geracao) return;
-  await falarComVozDoAparelho(t, minha);
+  for (let p = await fonte.proxima(); p !== null; p = await fonte.proxima()) {
+    if (minha !== geracao) return;
+    sobra.push(p);
+  }
+  const t = sobra.join(' ');
+  if (t) await falarComVozDoAparelho(t, minha);
 }
 
 /** Toca um MP3 até o fim (ou até alguém parar), com a notificação de mídia ligada. */

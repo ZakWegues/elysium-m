@@ -17,7 +17,7 @@ import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text, Toque } from '../components/ui';
-import { falar, lerRespostasEscritas, ligarLerRespostasEscritas, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
+import { falaAntecipadaLigada, falar, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 
 /**
@@ -433,8 +433,9 @@ function VozSection({ pairing }: { pairing: Pairing }) {
   const [doPc, setDoPc] = useState(true);
   const [palavra, setPalavra] = useState(true);
   const [ler, setLer] = useState(true);
+  const [antecipada, setAntecipada] = useState(true);
   const estado = useEstadoPalavra();
-  useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); lerRespostasEscritas().then(setLer); }, []);
+  useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); lerRespostasEscritas().then(setLer); falaAntecipadaLigada().then(setAntecipada); }, []);
   const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
     { valor: true, rotulo: 'Voz do PC', nota: 'A mesma voz neural da caixa de som do PC (escolhida em Ajustes → Voz lá). Sem PC, cai na do celular.', icone: 'monitor' },
     { valor: false, rotulo: 'Voz do celular', nota: 'A voz do Android. Funciona sem o PC, mas soa mais robótica.', icone: 'smartphone' },
@@ -460,7 +461,17 @@ function VozSection({ pairing }: { pairing: Pairing }) {
             Quando você digita, ela também fala o começo da resposta. Pedidos por voz sempre respondem falando.
           </Text>
         </View>
-        <Switch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} trackColor={{ true: palette.primary }} />
+        <Switch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} trackColor={{ true: palette.primary }} accessibilityLabel="Ler respostas digitadas" />
+      </View>
+      <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+        <Feather name="fast-forward" size={17} color={antecipada ? palette.primary : palette.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body">Começar a falar antes de terminar</Text>
+          <Text variant="caption" color={palette.textMuted}>
+            No pedido por voz, ela fala a primeira frase assim que fica pronta. Se a fala picotar, desligue.
+          </Text>
+        </View>
+        <Switch value={antecipada} onValueChange={(v) => { setAntecipada(v); ligarFalaAntecipada(v); }} trackColor={{ true: palette.primary }} accessibilityLabel="Começar a falar antes de terminar" />
       </View>
       {palavra && (
         <Text variant="caption" color={estado.fase === 'falhou' ? palette.error : palette.textMuted}>

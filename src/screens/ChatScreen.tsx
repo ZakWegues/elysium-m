@@ -3,7 +3,8 @@ import { Alert, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, 
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
-import { falar, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
+import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
+import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
 import { useAbaAtiva } from '../components/AbaViva';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
@@ -536,29 +537,63 @@ export default function ChatScreen({
       return;
     }
     const r = await enviarAudio(uri);
-    if (r) speakReply(r.reply);
+    if (r) void falarResposta(r);
+  }
+
+  /**
+   * Fase 19: com a fala antecipada, parte da resposta já saiu enquanto chegava — aqui só vai o
+   * resto. Sem ela (ou se nada fechou frase a tempo), a resposta inteira, como sempre.
+   */
+  function falarResposta(r: { reply: string; fala: FalaAntecipada | null; jaFalado: string }): Promise<void> {
+    if (r.fala) return r.fala.fechar(restoParaFalar(r.reply, r.jaFalado));
+    return falar(r.reply, pairing);
+  }
+
+  /**
+   * Os pedaços da resposta viram frases para a voz (fase 19). O `chunk` do WebSocket traz o
+   * texto ACUMULADO; o fatiador quer só o que é novo. Se o acumulado não continuar o anterior
+   * (o servidor reescreveu), a antecipação para ali — o resto sai inteiro no fim.
+   */
+  function antecipador(fala: FalaAntecipada | null) {
+    const fatiador = criarFatiador();
+    let anterior = '';
+    let jaFalado = '';
+    let desviou = false;
+    return {
+      aoPedaco(parcial: string) {
+        if (!fala || desviou) return;
+        if (!parcial.startsWith(anterior)) { desviou = true; return; }
+        for (const frase of fatiador.push(parcial.slice(anterior.length))) { jaFalado += ` ${frase}`; fala.adicionar(frase); }
+        anterior = parcial;
+      },
+      jaFalado: () => jaFalado,
+    };
   }
 
   /** Manda um áudio gravado e escreve a resposta em pedaços. Devolve null se falhou. */
-  async function enviarAudio(uri: string): Promise<{ reply: string; transcricao: string } | null> {
+  async function enviarAudio(uri: string): Promise<{ reply: string; transcricao: string; fala: FalaAntecipada | null; jaFalado: string } | null> {
     setSending(true);
     setPensandoVoz(true);
     setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)', ts: Date.now() }]);
     let transcricao = '';
+    const fala = (await falaAntecipadaLigada()) ? abrirFalaAntecipada(pairing) : null;
+    const ant = antecipador(fala);
     try {
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); }, (transcript) => {
+      const { reply } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
-      if (paradoRef.current) return null;
+      if (paradoRef.current) { void fala?.fechar(''); return null; }
       bolha.fechar(reply);
-      return { reply, transcricao };
+      return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
+      // O que já foi dito fica; a fala termina na frase em que estava.
+      void fala?.fechar('');
       setEscrevendoId(null);
       if (!paradoRef.current) pushError(errMessage(err));
       return null;
@@ -655,18 +690,21 @@ export default function ChatScreen({
   }
 
   /** Pedido falado que já veio em texto (colado no "Ely"): mesma conversa, sem gravar. */
-  async function enviarTextoFalado(texto: string): Promise<string | null> {
+  async function enviarTextoFalado(texto: string): Promise<{ reply: string; fala: FalaAntecipada | null; jaFalado: string } | null> {
     setSending(true);
     setMessages((prev) => [...prev, { id: `me-voz-${Date.now()}`, from: 'me', text: texto, ts: Date.now() }]);
+    const fala = (await falaAntecipadaLigada()) ? abrirFalaAntecipada(pairing) : null;
+    const ant = antecipador(fala);
     try {
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
       bolhaAtualRef.current = bolha;
-      const { reply } = await conn.sendText(texto, bolha.onChunk);
-      if (paradoRef.current) return null;
+      const { reply } = await conn.sendText(texto, (parcial) => { bolha.onChunk(parcial); ant.aoPedaco(parcial); });
+      if (paradoRef.current) { void fala?.fechar(''); return null; }
       bolha.fechar(reply);
-      return reply;
+      return { reply, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
+      void fala?.fechar('');
       setEscrevendoId(null);
       if (!paradoRef.current) pushError(errMessage(err));
       return null;
@@ -684,7 +722,7 @@ export default function ChatScreen({
     try {
       // O reconhecedor do "Ely" acabou de ser abortado; um respiro para ele soltar o microfone.
       await new Promise((r) => setTimeout(r, 300));
-      let resposta: string | null = null;
+      let resposta: { reply: string; fala: FalaAntecipada | null; jaFalado: string } | null = null;
       if (pedidoColado) {
         setFaseVoz('pensando');
         resposta = await enviarTextoFalado(pedidoColado);
@@ -701,12 +739,13 @@ export default function ChatScreen({
         setFaseVoz('pensando');
         const r = await enviarAudio(g.uri);
         linha = resumoRodada({ numero: 1, ...g, caracteres: r ? r.transcricao.trim().length : null });
-        resposta = r?.reply ?? null;
+        resposta = r;
       }
       setFaseVoz(null);
       liberarMicrofone('gravar');
       // A fala tem o botão "Interromper" do App (02/10); aqui só espera ela acabar.
-      if (resposta && turnoRef.current) await falar(resposta, pairing);
+      if (resposta && turnoRef.current) await falarResposta(resposta);
+      else void resposta?.fala?.fechar('');
     } catch (err) {
       pushError(`Voz: ${errMessage(err)}`);
     } finally {
