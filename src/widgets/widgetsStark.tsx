@@ -105,6 +105,7 @@ export function WidgetHabitos({ p, h }: { p: Palette; h: HabitosWidget }) {
       </FlexWidget>
       {!h.online ? <TextWidget text="PC fora de alcance" style={{ fontSize: 11, color: c(p.textMuted) }} /> : null}
       {h.online && !h.habitos.length ? <TextWidget text="Nenhum hábito para hoje — crie na aba Hoje." style={{ fontSize: 11, color: c(p.textMuted) }} maxLines={2} /> : null}
+      {h.habitos.length > 4 ? <TextWidget text={`+${h.habitos.length - 4} no app`} style={{ fontSize: 10, color: c(p.textMuted) }} /> : null}
       {h.habitos.slice(0, 4).map(x => (
         <FlexWidget
           key={x.id}
@@ -138,6 +139,7 @@ export function WidgetTimers({ p, t }: { p: Palette; t: TimersWidget }) {
       {t.timers.slice(0, 2).map((x, i) => (
         <TextWidget key={i} text={`${x.nome || 'Timer'} · até ${x.fimEm}`} style={{ fontSize: 12, color: c(p.text) }} maxLines={1} truncate="END" />
       ))}
+      {t.timers.length > 2 ? <TextWidget text={`+${t.timers.length - 2} correndo`} style={{ fontSize: 10, color: c(p.textMuted) }} /> : null}
       <FlexWidget style={{ flex: 1 }} />
       <FlexWidget style={{ flexDirection: 'row', flexGap: 6, width: 'match_parent' }}>
         {[5, 10, 25].map(m => (
@@ -196,6 +198,67 @@ export function WidgetListas({ p, l }: { p: Palette; l: ListasWidget }) {
         </FlexWidget>
       ))}
       {l.aviso ? <TextWidget text={l.aviso} style={{ fontSize: 10, color: c(p.textMuted) }} maxLines={1} truncate="END" /> : null}
+    </FlexWidget>
+  );
+}
+
+// ── Fase 18 (08/10): Tarefas e Treino de hoje ─────────────────────────────────
+
+export type TarefasWidget = { online: boolean; tarefas: { id: string; texto: string; quando?: string; atrasada?: boolean }[]; total: number; aviso?: string };
+
+/** Tarefas (4×2): as próximas; tocar no círculo conclui; "+" e o título abrem a tela cheia. */
+export function WidgetTarefas({ p, t }: { p: Palette; t: TarefasWidget }) {
+  return (
+    <FlexWidget style={{ ...painel(p), height: 'match_parent', width: 'match_parent', flexDirection: 'column', padding: 12, flexGap: 3 }}>
+      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent' }}>
+        <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} clickAction="OPEN_URI" clickActionData={{ uri: 'elysium://tarefas' }}>
+          <Rotulo p={p} texto="Tarefas" />
+          <TextWidget text={t.online ? `  ${t.total} aberta${t.total === 1 ? '' : 's'}` : ''} style={{ fontSize: 11, color: c(p.textMuted) }} />
+        </FlexWidget>
+        <FlexWidget style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: c(p.primary), alignItems: 'center', justifyContent: 'center' }}
+          clickAction="OPEN_URI" clickActionData={{ uri: 'elysium://tarefas' }} accessibilityLabel="Nova tarefa">
+          <TextWidget text="+" style={{ fontSize: 18, fontWeight: 'bold', color: c(p.onPrimary) }} />
+        </FlexWidget>
+      </FlexWidget>
+      {!t.online ? <TextWidget text="PC fora de alcance" style={{ fontSize: 11, color: c(p.textMuted) }} /> : null}
+      {t.online && !t.tarefas.length ? <TextWidget text="Nada pendente. Diga à Ely “tenho prova sexta”." style={{ fontSize: 11, color: c(p.textMuted) }} maxLines={2} /> : null}
+      {t.tarefas.slice(0, 4).map(x => (
+        <FlexWidget key={x.id} style={{ flexDirection: 'row', alignItems: 'center', flexGap: 8, width: 'match_parent', paddingVertical: 3 }}>
+          <FlexWidget style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: c(p.primary) }}
+            clickAction="TAREFA" clickActionData={{ id: x.id }} accessibilityLabel={`Concluir ${x.texto}`} />
+          <TextWidget text={x.texto} style={{ fontSize: 13, color: c(p.text) }} maxLines={1} truncate="END" />
+          <FlexWidget style={{ flex: 1 }} />
+          <TextWidget text={x.quando ?? ''} style={{ fontSize: 10, color: c(x.atrasada ? p.error : p.textMuted) }} />
+        </FlexWidget>
+      ))}
+      {t.total > 4 ? <TextWidget text={`+${t.total - 4} na lista`} style={{ fontSize: 10, color: c(p.textMuted) }} /> : null}
+      {t.aviso ? <TextWidget text={t.aviso} style={{ fontSize: 10, color: c(p.textMuted) }} maxLines={1} truncate="END" /> : null}
+    </FlexWidget>
+  );
+}
+
+export type TreinoWidget = { online: boolean; nome?: string; feito?: boolean; exercicios: string[]; kcal?: number; proteina?: number; dica?: string; aviso?: string };
+
+/** Treino de hoje (4×2): o treino da vez, "Concluir", a meta de calorias e a dica. */
+export function WidgetTreino({ p, t }: { p: Palette; t: TreinoWidget }) {
+  return (
+    <FlexWidget style={{ ...painel(p), height: 'match_parent', width: 'match_parent', flexDirection: 'column', padding: 12, flexGap: 4 }}>
+      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent' }}>
+        <FlexWidget style={{ flex: 1, flexDirection: 'column' }} clickAction="OPEN_URI" clickActionData={{ uri: 'elysium://hoje' }}>
+          <Rotulo p={p} texto="Treino de hoje" />
+          <TextWidget text={t.online ? (t.nome ? `${t.nome}${t.feito ? ' ✓' : ''}` : 'Sem treino cadastrado') : 'PC fora de alcance'} style={{ fontSize: 15, fontWeight: 'bold', color: c(t.feito ? p.primary : p.text) }} maxLines={1} truncate="END" />
+        </FlexWidget>
+        {t.online && t.nome && !t.feito ? (
+          <FlexWidget style={{ paddingHorizontal: 12, height: 32, borderRadius: 16, backgroundColor: c(p.primary), alignItems: 'center', justifyContent: 'center' }}
+            clickAction="TREINO" clickActionData={{ feito: '1' }} accessibilityLabel="Concluir o treino">
+            <TextWidget text="Concluir" style={{ fontSize: 12, fontWeight: 'bold', color: c(p.onPrimary) }} />
+          </FlexWidget>
+        ) : null}
+      </FlexWidget>
+      {t.exercicios.length ? <TextWidget text={t.exercicios.slice(0, 4).join(' · ')} style={{ fontSize: 11, color: c(p.textMuted) }} maxLines={2} truncate="END" /> : null}
+      {t.kcal ? <TextWidget text={`Meta: ${t.kcal} kcal · ${t.proteina ?? '?'} g de proteína`} style={{ fontSize: 12, color: c(p.text) }} maxLines={1} /> : null}
+      {t.dica ? <TextWidget text={`💡 ${t.dica}`} style={{ fontSize: 11, color: c(p.accent) }} maxLines={2} truncate="END" /> : null}
+      {t.aviso ? <TextWidget text={t.aviso} style={{ fontSize: 10, color: c(p.textMuted) }} maxLines={1} truncate="END" /> : null}
     </FlexWidget>
   );
 }

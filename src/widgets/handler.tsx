@@ -4,7 +4,8 @@ import { loadPairing, Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { paletaDosWidgets } from './tema';
 import { ClimaWidget, EstadoPc, FocoWidget, RotinasWidget, SaudeWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetFoco, WidgetRotinas, WidgetSaude } from './widgets';
-import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TimersWidget, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTimers } from './widgetsStark';
+import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TarefasWidget, TimersWidget, TreinoWidget, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTarefas, WidgetTimers, WidgetTreino } from './widgetsStark';
+import { atrasada, quandoTarefa } from '../lib/tarefasUi';
 
 /**
  * O handler dos widgets (bloco 73). Roda em segundo plano, sem UI, sempre que o Android
@@ -30,6 +31,21 @@ export const WIDGET_HABITOS = 'Habitos';
 export const WIDGET_TIMERS = 'Timers';
 export const WIDGET_MUSICA = 'Musica';
 export const WIDGET_LISTAS = 'Listas';
+// Fase 18.
+export const WIDGET_TAREFAS = 'Tarefas';
+export const WIDGET_TREINO = 'Treino';
+
+/**
+ * O aviso curto embaixo do widget quando algo falha (08/10): antes era a mensagem crua do
+ * erro cortada em 50 letras ("Não deu: Network request failed…"). Agora diz o que importa.
+ */
+function avisoDeErro(err: unknown): string {
+  const m = String((err as Error)?.message ?? err ?? '');
+  if (/network|timeout|tempo|abort|failed to fetch|econn/i.test(m)) return 'PC fora de alcance';
+  if (/401|token/i.test(m)) return 'Pareie de novo no app';
+  if (/404|desconhecido|não existe/i.test(m)) return 'Atualize o ELYSIUM do PC';
+  return 'Não deu agora — tente no app';
+}
 
 function agora(): string {
   return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -158,6 +174,28 @@ async function lerMusica(pairing: Pairing | null, aviso?: string): Promise<Music
   } catch { return { online: false, aviso }; }
 }
 
+async function lerTarefas(pairing: Pairing | null, aviso?: string): Promise<TarefasWidget> {
+  if (!pairing) return { online: false, tarefas: [], total: 0 };
+  try {
+    const { tarefas } = await callRpc(pairing, 'tarefas.list', { filtro: 'abertas' }, { timeoutMs: 10000 });
+    return {
+      online: true, aviso, total: tarefas.length,
+      tarefas: tarefas.map(t => ({ id: t.id, texto: t.texto, atrasada: atrasada(t), quando: t.prazo !== undefined ? quandoTarefa(t.prazo, t.semHora) : undefined })),
+    };
+  } catch { return { online: false, tarefas: [], total: 0, aviso }; }
+}
+
+async function lerTreino(pairing: Pairing | null, aviso?: string): Promise<TreinoWidget> {
+  if (!pairing) return { online: false, exercicios: [] };
+  try {
+    const c = await callRpc(pairing, 'corpo.painel', {}, { timeoutMs: 10000 });
+    let dica: string | undefined;
+    try { dica = (await callRpc(pairing, 'corpo.dica', {}, { timeoutMs: 10000 })).dica.texto; } catch { /* sem dica */ }
+    const th = c.treinoHoje;
+    return { online: true, aviso, nome: th?.treino.nome, feito: th?.feitoHoje, exercicios: th?.treino.exercicios.map(e => e.nome) ?? [], kcal: c.meta?.kcal, proteina: c.meta?.proteinaG, dica };
+  } catch { return { online: false, exercicios: [], aviso }; }
+}
+
 async function lerListas(pairing: Pairing | null, aviso?: string): Promise<ListasWidget> {
   if (!pairing) return { online: false, itens: [] };
   try {
@@ -180,7 +218,7 @@ async function executarAcao(acao: string, pairing: Pairing | null): Promise<stri
       default: return 'Ação desconhecida';
     }
   } catch (err) {
-    return `Não deu: ${(err as Error).message}`.slice(0, 60);
+    return avisoDeErro(err);
   }
 }
 
@@ -236,7 +274,7 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
         try {
           if (acao === 'parar') { await callRpc(pairing, 'foco.stop', {}, { timeoutMs: 8000 }); aviso = 'Foco encerrado'; }
           else { await callRpc(pairing, 'foco.start', { minutos: Number(acao) || 25 }, { timeoutMs: 8000 }); aviso = 'Foco começou'; }
-        } catch (err) { aviso = `Não deu: ${(err as Error).message}`.slice(0, 50); }
+        } catch (err) { aviso = avisoDeErro(err); }
       }
       renderWidget(<WidgetFoco p={p} f={await lerFoco(pairing, aviso)} />);
       return;
@@ -266,7 +304,7 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
         try {
           const r = await callRpc(pairing, 'habitos.marcar', { id: String(clickActionData?.id ?? ''), feito: !clickActionData?.feito }, { timeoutMs: 8000 });
           aviso = r.habito.feitoHoje ? `${r.habito.nome}: ${r.habito.sequencia} 🔥` : `${r.habito.nome} desmarcado`;
-        } catch (err) { aviso = `Não deu: ${(err as Error).message}`.slice(0, 50); }
+        } catch (err) { aviso = avisoDeErro(err); }
       }
       renderWidget(<WidgetHabitos p={p} h={await lerHabitos(pairing, aviso)} />);
       return;
@@ -278,7 +316,7 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       if (widgetAction === 'WIDGET_CLICK' && clickAction === 'TIMER' && pairing) {
         const minutos = Number(clickActionData?.minutos) || 5;
         try { await callRpc(pairing, 'timers.start', { minutos }, { timeoutMs: 8000 }); aviso = `Timer de ${minutos} min`; }
-        catch (err) { aviso = `Não deu: ${(err as Error).message}`.slice(0, 50); }
+        catch (err) { aviso = avisoDeErro(err); }
       }
       renderWidget(<WidgetTimers p={p} t={await lerTimers(pairing, aviso)} />);
       return;
@@ -290,11 +328,34 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       if (widgetAction === 'WIDGET_CLICK' && clickAction === 'MIDIA' && pairing) {
         const op = String(clickActionData?.op ?? 'play');
         try { await callRpc(pairing, 'media.control', { operation: op }, { timeoutMs: 8000 }); }
-        catch (err) { aviso = `Não deu: ${(err as Error).message}`.slice(0, 50); }
+        catch (err) { aviso = avisoDeErro(err); }
         // O Spotify leva um instante para trocar de faixa: lê depois de um respiro.
         await new Promise(r => setTimeout(r, 900));
       }
       renderWidget(<WidgetMusica p={p} m={await lerMusica(pairing, aviso)} />);
+      return;
+    }
+
+    // ── Fase 18 ──
+    case WIDGET_TAREFAS: {
+      const pairing = await loadPairing();
+      let aviso: string | undefined;
+      if (widgetAction === 'WIDGET_CLICK' && clickAction === 'TAREFA' && pairing) {
+        try { await callRpc(pairing, 'tarefas.concluir', { id: String(clickActionData?.id ?? '') }, { timeoutMs: 8000 }); aviso = 'Concluída ✓'; }
+        catch (err) { aviso = avisoDeErro(err); }
+      }
+      renderWidget(<WidgetTarefas p={p} t={await lerTarefas(pairing, aviso)} />);
+      return;
+    }
+
+    case WIDGET_TREINO: {
+      const pairing = await loadPairing();
+      let aviso: string | undefined;
+      if (widgetAction === 'WIDGET_CLICK' && clickAction === 'TREINO' && pairing) {
+        try { const r = await callRpc(pairing, 'treinos.marcar', { feito: true }, { timeoutMs: 8000 }); aviso = `${r.treino.nome} concluído 💪`; }
+        catch (err) { aviso = avisoDeErro(err); }
+      }
+      renderWidget(<WidgetTreino p={p} t={await lerTreino(pairing, aviso)} />);
       return;
     }
 
@@ -303,7 +364,7 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       let aviso: string | undefined;
       if (widgetAction === 'WIDGET_CLICK' && clickAction === 'ITEM' && pairing) {
         try { await callRpc(pairing, 'listas.toggle', { listaId: String(clickActionData?.lista ?? ''), itemId: String(clickActionData?.item ?? ''), feito: true }, { timeoutMs: 8000 }); aviso = 'Marcado'; }
-        catch (err) { aviso = `Não deu: ${(err as Error).message}`.slice(0, 50); }
+        catch (err) { aviso = avisoDeErro(err); }
       }
       renderWidget(<WidgetListas p={p} l={await lerListas(pairing, aviso)} />);
       return;
@@ -350,6 +411,8 @@ export async function atualizarWidgetEstado(pairing: Pairing | null): Promise<vo
     [WIDGET_TIMERS, async () => <WidgetTimers p={await paletaDosWidgets()} t={await lerTimers(pairing)} />],
     [WIDGET_MUSICA, async () => <WidgetMusica p={await paletaDosWidgets()} m={await lerMusica(pairing)} />],
     [WIDGET_LISTAS, async () => <WidgetListas p={await paletaDosWidgets()} l={await lerListas(pairing)} />],
+    [WIDGET_TAREFAS, async () => <WidgetTarefas p={await paletaDosWidgets()} t={await lerTarefas(pairing)} />],
+    [WIDGET_TREINO, async () => <WidgetTreino p={await paletaDosWidgets()} t={await lerTreino(pairing)} />],
   ];
   for (const [nome, montar] of novos) {
     try { const el = await montar(); await requestWidgetUpdate({ widgetName: nome, renderWidget: () => el }); } catch { /* idem */ }
