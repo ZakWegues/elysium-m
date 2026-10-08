@@ -10,3 +10,4 @@ export { BlurTargetProvider, useBlurTarget } from './BlurTarget';
 export { default as Popover } from './Popover';
 export { Toque } from './Toque';
 export { Esqueleto } from './Esqueleto';
+export { Snackbar, useDesfazer, type EstadoDesfazer } from './Snackbar';

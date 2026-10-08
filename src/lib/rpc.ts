@@ -48,6 +48,10 @@ export type RpcMethod =
   | 'tarefas.concluir'
   | 'tarefas.reabrir'
   | 'tarefas.delete'
+  | 'tarefas.editar'
+  | 'tarefas.adiar'
+  | 'tarefas.reagendarAtrasadas'
+  | 'tarefas.interpretar'
   | 'hoje.ideia'
   | 'hoje.testar'
   | 'corpo.painel'
@@ -372,7 +376,11 @@ export type Habito = {
 export type Meta = { id: string; titulo: string; alvo: number; unidade: string; progresso: number; prazo?: string; criadaEm: number; concluidaEm?: number };
 
 /** Tarefa da lista (fase 17): os lembretes viram afazeres, com ressalva ao concluir. */
-export type Tarefa = { id: string; texto: string; prazo?: number; lembreteIds?: string[]; feita: boolean; feitaEm?: number; ressalva?: string; criadaEm: number; origem: 'manual' | 'lembrete' };
+export type Tarefa = {
+  id: string; texto: string; prazo?: number; lembreteIds?: string[]; feita: boolean; feitaEm?: number; ressalva?: string; criadaEm: number; origem: 'manual' | 'lembrete';
+  /** Fase 18 (PC 2.3+): compromisso sem hora ("dia todo"), estrela e repetição. */
+  semHora?: boolean; prioridade?: 'alta'; repete?: 'diaria' | 'semanal';
+};
 
 /** O briefing do dia (`hoje.painel`, fase 16). */
 export type PainelHoje = {
@@ -458,10 +466,14 @@ export type RpcResults = {
   'metas.progresso': { meta: Meta };
   'metas.delete': { ok: boolean };
   'tarefas.list': { tarefas: Tarefa[] };
-  'tarefas.criar': { tarefas: Tarefa[]; mensagem: string };
-  'tarefas.concluir': { tarefa: Tarefa; tarefas: Tarefa[] };
+  'tarefas.criar': { tarefas: Tarefa[]; mensagem: string; tarefa?: Tarefa };
+  'tarefas.concluir': { tarefa: Tarefa; tarefas: Tarefa[]; proxima?: Tarefa };
   'tarefas.reabrir': { tarefa: Tarefa; tarefas: Tarefa[] };
   'tarefas.delete': { ok: boolean; tarefas: Tarefa[] };
+  'tarefas.editar': { tarefa: Tarefa; tarefas: Tarefa[] };
+  'tarefas.adiar': { tarefa: Tarefa; tarefas: Tarefa[]; mensagem: string };
+  'tarefas.reagendarAtrasadas': { reagendadas: number; tarefas: Tarefa[] };
+  'tarefas.interpretar': { texto: string; quando: string | null; semHora?: boolean; passou?: boolean; vespera?: boolean; rotulo?: string | null };
   'hoje.ideia': { ideia: string };
   'hoje.testar': { feitos: string[] };
   'corpo.painel': PainelCorpo;

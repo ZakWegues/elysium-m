@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, PanResponder, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
@@ -7,7 +7,6 @@ import { GlassFill } from './GlassSurface';
 import { Text } from './Text';
 import { useAbaAtiva } from '../AbaViva';
 
-const SHEET_OFFSCREEN_Y = 700;
 
 /**
  * Quantas gavetas estão abertas agora. O `App` lê isto para esconder a TabBar: a gaveta
@@ -39,15 +38,39 @@ export function GlassModal({
   onClose,
   title,
   children,
+  altura = 'auto',
 }: {
   visible: boolean;
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  /**
+   * 'auto' (padrão): cresce com o conteúdo até 85% da tela. 'cheia': ocupa a tela toda desde
+   * o começo (editor de tarefa). Nas duas, arrastar a alça para cima expande para a tela cheia
+   * e para baixo fecha (08/10 — antes a alça era só enfeite e a lista ficava cortada em 85%).
+   */
+  altura?: 'auto' | 'cheia';
 }) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  // Fora da tela de verdade: com 700 fixo, num aparelho alto a gaveta "nascia" já visível.
+  const { height: alturaJanela } = useWindowDimensions();
+  const SHEET_OFFSCREEN_Y = alturaJanela + 40;
   const translateY = useRef(new Animated.Value(SHEET_OFFSCREEN_Y)).current;
+  const [expandida, setExpandida] = useState(altura === 'cheia');
+  useEffect(() => { if (visible) setExpandida(altura === 'cheia'); }, [visible, altura]);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const arrasto = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 4,
+    onPanResponderMove: (_e, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
+    onPanResponderRelease: (_e, g) => {
+      if (g.dy > 90 || g.vy > 1.2) { onCloseRef.current(); return; }
+      if (g.dy < -40) setExpandida(true);
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 220 }).start();
+    },
+  })).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   /** Continua montada durante a saída; sem isto a gaveta sumiria de um quadro pro outro. */
   const [montada, setMontada] = useState(visible);
@@ -95,7 +118,7 @@ export function GlassModal({
         if (finished) setMontada(false);
       });
     }
-  }, [visible, translateY, backdropOpacity]);
+  }, [visible, translateY, backdropOpacity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!montada) return null;
 
@@ -110,6 +133,7 @@ export function GlassModal({
       <Animated.View
         style={[
           styles.sheet,
+          expandida && { top: insets.top + 8, maxHeight: undefined },
           {
             borderTopLeftRadius: tokens.radii['2xl'],
             borderTopRightRadius: tokens.radii['2xl'],
@@ -130,9 +154,13 @@ export function GlassModal({
           style={styles.topSheen}
         />
 
-        <View style={styles.handle} />
+        {/* A alça agora arrasta: para cima expande, para baixo fecha. */}
+        <View {...arrasto.panHandlers} style={styles.alcaArea} accessibilityRole="adjustable" accessibilityLabel="Arraste para expandir ou fechar">
+          <View style={styles.handle} />
+        </View>
 
         <ScrollView
+          style={expandida ? { flex: 1 } : undefined}
           contentContainerStyle={{
             paddingBottom: insets.bottom + tokens.spacing.lg,
             paddingHorizontal: tokens.spacing.lg,
@@ -170,13 +198,12 @@ const styles = StyleSheet.create({
     right: 0,
     height: 90,
   },
+  alcaArea: { alignSelf: 'stretch', alignItems: 'center', paddingTop: 10, paddingBottom: 8 },
   handle: {
     alignSelf: 'center',
     width: 36,
     height: 5,
     borderRadius: 3,
     backgroundColor: 'rgba(120,120,128,0.36)',
-    marginTop: 10,
-    marginBottom: 6,
   },
 });

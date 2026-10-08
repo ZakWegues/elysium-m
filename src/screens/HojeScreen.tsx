@@ -13,6 +13,8 @@ import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { CardCorrida, CardElysium, CardIdeia, CardNutricao, CardRotinasHoje, CardTreino, OuvirResumo } from './hoje/CardsFase18';
 import TreinoScreen from './TreinoScreen';
+import TarefasScreen from './TarefasScreen';
+import { atrasada, mascaraHora, quandoTarefa } from '../lib/tarefasUi';
 
 /**
  * Hoje (fase 16, 07/10) — o briefing do dia, a mesma aba do desktop. Uma chamada só
@@ -22,17 +24,8 @@ import TreinoScreen from './TreinoScreen';
 
 const DIAS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-/** "hoje 16:00", "amanhã 08:00", "sáb 10:00", "25/12 16:00". */
-function quandoTarefa(ms: number) {
-  const d = new Date(ms), hoje = new Date();
-  const amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
-  const hora = horaCurta(ms);
-  if (d.toDateString() === hoje.toDateString()) return `hoje ${hora}`;
-  if (d.toDateString() === amanha.toDateString()) return `amanhã ${hora}`;
-  const dias = (d.getTime() - hoje.getTime()) / 86_400_000;
-  if (dias > 0 && dias < 7) return `${d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')} ${hora}`;
-  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`;
-}
+/** Quantas tarefas o card do Hoje mostra; o resto fica no "Ver todas" (tela cheia). */
+const TAREFAS_NO_CARD = 5;
 
 function horaCurta(ms: number) {
   return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -43,7 +36,7 @@ function restante(ms: number) {
   return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function HojeScreen({ pairing }: { pairing: Pairing }) {
+export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pairing; pedidoTarefas?: number }) {
   const { palette, tokens } = useTheme();
   const [painel, setPainel] = useState<PainelHoje | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -63,6 +56,10 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
   const [novaTarefa, setNovaTarefa] = useState('');
   const [diaNova, setDiaNova] = useState<'nenhum' | 'hoje' | 'amanha'>('nenhum');
   const [horaNova, setHoraNova] = useState('');
+  /** Fase 18: as tarefas em tela cheia ("Ver todas", widget, elysium://tarefas). */
+  const [tarefasAbertas, setTarefasAbertas] = useState(false);
+  const fecharTarefas = useCallback(() => setTarefasAbertas(false), []);
+  useEffect(() => { if (pedidoTarefas) setTarefasAbertas(true); }, [pedidoTarefas]);
   /** Fase 18: o treino em tela cheia, aberto pelos cards do corpo. */
   const [treinoAberto, setTreinoAberto] = useState(false);
   const aplicarCorpo = useCallback((corpo: PainelCorpo) => setPainel(p => p && { ...p, corpo }), []);
@@ -87,7 +84,7 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
       const r = await callRpc(pairing, 'tarefas.criar', comData ? { texto, quando: hora ? `${dia}T${hora}` : dia } : { texto });
       aplicarTarefas(r.tarefas);
       setNovaTarefa(''); setHoraNova(''); setDiaNova('nenhum');
-      if (comData) Alert.alert('Anotado', r.mensagem);
+      if (comData || r.tarefa?.prazo) Alert.alert('Anotado', r.mensagem);
     } catch (e) { Alert.alert('Não deu para anotar', errMessage(e)); }
   }
 
@@ -96,11 +93,18 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
     if (!t) return;
     setConcluindo(null);
     haptica.sucesso();
+    // Otimista: risca na hora; o PC confirma logo depois.
+    setPainel(p => p && { ...p, tarefas: p.tarefas?.map(x => (x.id === t.id ? { ...x, feita: true, feitaEm: Date.now(), ressalva: ressalva.trim() || undefined } : x)) });
     try {
       const r = await callRpc(pairing, 'tarefas.concluir', { id: t.id, ressalva: ressalva.trim() || undefined });
       aplicarTarefas(r.tarefas);
-    } catch (e) { Alert.alert('Não deu para concluir', errMessage(e)); }
-    setRessalva('');
+      setRessalva('');
+    } catch (e) {
+      // A ressalva digitada não se perde: o modal volta com ela (08/10).
+      Alert.alert('Não deu para concluir', errMessage(e));
+      setConcluindo(t);
+      void carregar();
+    }
   }
 
   async function tocarTarefa(t: Tarefa) {
@@ -198,12 +202,12 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
     ...(painel?.proximaRotina ? [{ em: painel.proximaRotina.em, icone: 'zap' as const, texto: `Rotina ${painel.proximaRotina.nome}` }] : []),
   ].sort((a, b) => a.em - b.em);
 
-  const secao = (t: string, acao?: { rotulo: string; onPress: () => void }) => (
+  const secao = (t: string, acao?: { rotulo: string; onPress: () => void; icone?: keyof typeof Feather.glyphMap }) => (
     <View style={styles.secaoTopo}>
       <Text variant="label" color={palette.textMuted} style={styles.secao}>{t}</Text>
       {acao && (
         <Pressable onPress={acao.onPress} hitSlop={12} accessibilityRole="button" accessibilityLabel={acao.rotulo} style={styles.secaoAcao}>
-          <Feather name="plus" size={15} color={palette.primary} />
+          <Feather name={acao.icone ?? 'plus'} size={15} color={palette.primary} />
           <Text variant="label" color={palette.primary}>{acao.rotulo}</Text>
         </Pressable>
       )}
@@ -214,6 +218,7 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
     <View style={{ flex: 1 }}>
       <ScreenHeader title="Hoje" />
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={puxar} tintColor={palette.primary} colors={[palette.primary]} />}
       >
@@ -313,7 +318,7 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
 
             {painel.tarefas && (
               <>
-                {secao('LEMBRETES E TAREFAS')}
+                {secao('LEMBRETES E TAREFAS', { rotulo: 'Tela cheia', icone: 'maximize-2', onPress: () => { haptica.leve(); setTarefasAbertas(true); } })}
                 <Card glass style={{ gap: 4 }}>
                   {/* Nova tarefa: com dia ou hora vira lembrete (16h sem hora; prova e consulta avisam na véspera). */}
                   <TextInput
@@ -326,25 +331,29 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
                     returnKeyType="done"
                     style={[styles.campo, { borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]}
                   />
-                  <View style={[styles.linha, { marginTop: 6, marginBottom: 6 }]}>
+                  {/* 08/10: em duas fileiras. Numa linha só (3 chips + HH:MM + botão) não cabia em
+                      360 dp — o Card corta o que passa, e o "+" sumia. */}
+                  <View style={[styles.linha, { marginTop: 6, flexWrap: 'wrap', gap: 6 }]}>
                     {(['nenhum', 'hoje', 'amanha'] as const).map(d => {
                       const on = diaNova === d;
                       return (
                         <Pressable key={d} onPress={() => setDiaNova(d)} hitSlop={4}
                           style={[styles.chipDia, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
-                          <Text variant="caption" color={on ? palette.primary : palette.textMuted}>{d === 'nenhum' ? 'Sem data' : d === 'hoje' ? 'Hoje' : 'Amanhã'}</Text>
+                          <Text variant="caption" color={on ? palette.primary : palette.textMuted} maxFontSizeMultiplier={1.3}>{d === 'nenhum' ? 'Sem data' : d === 'hoje' ? 'Hoje' : 'Amanhã'}</Text>
                         </Pressable>
                       );
                     })}
-                    <TextInput value={horaNova} onChangeText={setHoraNova} placeholder="HH:MM" placeholderTextColor={palette.textMuted} maxLength={5} keyboardType="numbers-and-punctuation"
-                      style={[styles.campo, { flex: 1, paddingVertical: 6, borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]} />
+                  </View>
+                  <View style={[styles.linha, { marginTop: 6, marginBottom: 6 }]}>
+                    <TextInput value={horaNova} onChangeText={v => setHoraNova(mascaraHora(v))} placeholder="Hora (opcional)" placeholderTextColor={palette.textMuted} maxLength={5} keyboardType="number-pad"
+                      style={[styles.campo, { flex: 1, paddingVertical: 8, borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]} />
                     <Pressable onPress={adicionarTarefa} hitSlop={8} accessibilityLabel="Adicionar tarefa" style={[styles.botaoAdd, { backgroundColor: palette.primary }]}>
                       <Feather name="plus" size={18} color={palette.background} />
                     </Pressable>
                   </View>
                   {painel.tarefas.length === 0 && <Text variant="caption" color={palette.textMuted}>Nada na lista. Diga à Ely "tenho prova sexta" — ela anota e avisa na véspera.</Text>}
-                  {painel.tarefas.map((t, i) => {
-                    const atrasada = !t.feita && !!t.prazo && t.prazo < Date.now();
+                  {painel.tarefas.slice(0, TAREFAS_NO_CARD).map((t, i) => {
+                    const late = atrasada(t);
                     return (
                       <Pressable
                         key={t.id}
@@ -352,22 +361,31 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
                         onLongPress={() => apagarTarefa(t)}
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: t.feita }}
-                        accessibilityLabel={`${t.texto}${t.prazo ? `, ${quandoTarefa(t.prazo)}` : ''}`}
+                        accessibilityLabel={`${t.texto}${t.prazo ? `, ${quandoTarefa(t.prazo, t.semHora)}` : ''}`}
                         style={[styles.habito, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border }]}
                       >
                         <View style={[styles.check, { borderColor: palette.primary, backgroundColor: t.feita ? palette.primary : 'transparent' }]}>
                           {t.feita && <Feather name="check" size={16} color={palette.background} />}
                         </View>
+                        {/* A data vai embaixo do texto (08/10): à direita ela espremia a tarefa. */}
                         <View style={{ flex: 1, gap: 2 }}>
-                          <Text variant="body" color={t.feita ? palette.textMuted : palette.text} style={t.feita ? { textDecorationLine: 'line-through' } : undefined}>{t.texto}</Text>
+                          <Text variant="body" color={t.feita ? palette.textMuted : palette.text} style={t.feita ? { textDecorationLine: 'line-through' } : undefined}>{t.prioridade === 'alta' ? '★ ' : ''}{t.texto}</Text>
+                          {(t.feita || t.prazo !== undefined) && (
+                            <Text variant="caption" color={late ? palette.error : palette.textMuted} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                              {t.feita ? 'feita' : t.prazo !== undefined ? `${late ? 'atrasada · ' : ''}${quandoTarefa(t.prazo, t.semHora)}` : ''}
+                            </Text>
+                          )}
                           {t.ressalva ? <Text variant="caption" color={palette.accent}>✎ {t.ressalva}</Text> : null}
                         </View>
-                        <Text variant="caption" color={atrasada ? palette.error : palette.textMuted}>
-                          {t.feita ? 'feita' : t.prazo ? `${atrasada ? 'atrasada · ' : ''}${quandoTarefa(t.prazo)}` : ''}
-                        </Text>
                       </Pressable>
                     );
                   })}
+                  {painel.tarefas.length > TAREFAS_NO_CARD && (
+                    <Pressable onPress={() => { haptica.leve(); setTarefasAbertas(true); }} accessibilityRole="button" style={[styles.linha, { minHeight: 44, justifyContent: 'center' }]}>
+                      <Text variant="label" color={palette.primary}>Ver todas ({painel.tarefas.length})</Text>
+                      <Feather name="chevron-right" size={16} color={palette.primary} />
+                    </Pressable>
+                  )}
                 </Card>
               </>
             )}
@@ -496,6 +514,9 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
       <GlassModal title={metaEdit?.id ? 'Editar meta' : 'Nova meta'} visible={metaEdit !== null} onClose={() => setMetaEdit(null)}>
         {metaEdit && <FormMeta pairing={pairing} base={metaEdit} aoTerminar={() => { setMetaEdit(null); void carregar(); }} />}
       </GlassModal>
+      {tarefasAbertas && (
+        <TarefasScreen pairing={pairing} onClose={fecharTarefas} onMudou={aplicarTarefas} />
+      )}
       {treinoAberto && painel?.corpo && (
         <TreinoScreen pairing={pairing} corpo={painel.corpo} onClose={fecharTreino} onMudar={aplicarCorpo} />
       )}

@@ -116,6 +116,8 @@ function AppInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairing]);
 
+  /** Fase 18: cada incremento abre as Tarefas em tela cheia (widget e elysium://tarefas). */
+  const [pedidoTarefas, setPedidoTarefas] = useState(0);
   /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
   const [pedidoBusca, setPedidoBusca] = useState(0);
 
@@ -331,6 +333,7 @@ function AppInner() {
     else if (destino === 'pc') setScreen('control');
     else if (destino === 'rotinas') setScreen('rotinas');
     else if (destino === 'hoje') setScreen('hoje');
+    else if (destino === 'tarefas') { setScreen('hoje'); setPedidoTarefas(n => n + 1); }
     // Widget "Falar com a Ely" (fase 16): o mesmo pedido de voz do "Ely" e do atalho.
     else if (destino === 'falar') { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); }
     else if (destino === 'inicio') setScreen('home');
@@ -429,7 +432,7 @@ function AppInner() {
         )}
         {montadas.has('control') && <AbaViva ativa={screen === 'control'}><ControlScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
         {montadas.has('rotinas') && <AbaViva ativa={screen === 'rotinas'}><RotinasScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
-        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} /></AbaViva>}
+        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} pedidoTarefas={pedidoTarefas} /></AbaViva>}
         {screen === 'conversations' && (
           <AbaViva ativa>
             <ConversationsScreen
