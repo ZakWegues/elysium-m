@@ -8,7 +8,8 @@ const MAX_NON_FAVORITE_SESSIONS = 5;
 
 export type Fonte = { titulo: string; url: string };
 /** `fontes`: as páginas que a busca na web leu para essa resposta (bloco 131). */
-export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[] };
+/** `local` (fase 18): a nuvem falhou e quem respondeu foi o cérebro do PC — selo "modo local". */
+export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[]; local?: boolean };
 
 export type ChatSession = {
   id: string;

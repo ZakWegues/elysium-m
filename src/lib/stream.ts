@@ -7,7 +7,7 @@ import type { Entrega } from './rpc';
 
 import type { Fonte } from './chatHistoryStore';
 
-type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[] };
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -84,7 +84,7 @@ export function openVoiceConnection(
   });
 
   ws.onmessage = (event) => {
-    let data: { type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[] } & Partial<Entrega>;
+    let data: { type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -107,7 +107,7 @@ export function openVoiceConnection(
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined }));
+      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true }));
     } else if (data.type === 'sugestoes') {
       if (Array.isArray(data.sugestoes)) onSugestoes?.(data.sugestoes.filter((s): s is string => typeof s === 'string').slice(0, 3));
     } else if (data.type === 'notify') {

@@ -285,7 +285,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[]) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -299,9 +299,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[]) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean) => {
       setEscrevendoId(null);
-      const extra = fontes?.length ? { fontes } : {};
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -361,6 +361,7 @@ export default function ChatScreen({
       // — resposta inteira de uma vez, como antes do bloco 59.
       let reply: string;
       let fontes: Fonte[] | undefined;
+      let local = false;
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
@@ -372,6 +373,7 @@ export default function ChatScreen({
         const r = await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer });
         reply = r.reply;
         fontes = r.fontes;
+        local = r.local === true;
       } catch (wsErr) {
         // Só cai no HTTP se o PC não chegou a responder NADA: com pedaços já na tela o
         // comando já rodou lá, e mandar de novo abriria o programa duas vezes.
@@ -380,7 +382,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes);
+      bolha.fechar(reply, fontes, local);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -793,6 +795,10 @@ export default function ChatScreen({
                   </Text>
                 )}
               </Pressable>
+              {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
+              {item.local ? (
+                <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta do modo local: a nuvem não respondeu">MODO LOCAL</Text>
+              ) : null}
               {/* Fontes da busca (bloco 131): um toque abre o site. */}
               {item.fontes?.length ? (
                 <View style={styles.fontes}>
@@ -1033,6 +1039,7 @@ function hostDe(url: string): string {
 
 const styles = StyleSheet.create({
   fontes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  selo: { marginTop: 4, fontSize: 10, letterSpacing: 1 },
   fonte: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, maxWidth: 180 },
   sugestao: { paddingHorizontal: 11, paddingVertical: 7, borderWidth: StyleSheet.hairlineWidth },
   faixaVoz: {
