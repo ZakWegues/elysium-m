@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { callRpc, Habito, Meta, PainelHoje } from '../lib/rpc';
+import { callRpc, Habito, Meta, PainelHoje, Tarefa } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { confirmDestructive } from '../lib/confirm';
@@ -18,6 +18,18 @@ import { Markdown } from '../components/Markdown';
  */
 
 const DIAS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+/** "hoje 16:00", "amanhã 08:00", "sáb 10:00", "25/12 16:00". */
+function quandoTarefa(ms: number) {
+  const d = new Date(ms), hoje = new Date();
+  const amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+  const hora = horaCurta(ms);
+  if (d.toDateString() === hoje.toDateString()) return `hoje ${hora}`;
+  if (d.toDateString() === amanha.toDateString()) return `amanhã ${hora}`;
+  const dias = (d.getTime() - hoje.getTime()) / 86_400_000;
+  if (dias > 0 && dias < 7) return `${d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')} ${hora}`;
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`;
+}
 
 function horaCurta(ms: number) {
   return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -42,6 +54,65 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
    * concluída não dava para apagar.
    */
   const [todos, setTodos] = useState<{ habitos: Habito[]; metas: Meta[] } | null>(null);
+  /** Fase 17: a tarefa sendo concluída (o modal pede a ressalva opcional). */
+  const [concluindo, setConcluindo] = useState<Tarefa | null>(null);
+  const [ressalva, setRessalva] = useState('');
+  const [novaTarefa, setNovaTarefa] = useState('');
+  const [diaNova, setDiaNova] = useState<'nenhum' | 'hoje' | 'amanha'>('nenhum');
+  const [horaNova, setHoraNova] = useState('');
+
+  function aplicarTarefas(tarefas: Tarefa[]) {
+    setPainel(p => p && { ...p, tarefas });
+  }
+
+  async function adicionarTarefa() {
+    const texto = novaTarefa.trim();
+    if (!texto) return;
+    if (horaNova && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(horaNova)) { Alert.alert('Hora inválida', 'Use HH:MM, por exemplo 14:30.'); return; }
+    const base = new Date();
+    if (diaNova === 'amanha') base.setDate(base.getDate() + 1);
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    const dia = `${base.getFullYear()}-${p2(base.getMonth() + 1)}-${p2(base.getDate())}`;
+    const comData = diaNova !== 'nenhum' || !!horaNova;
+    const hora = horaNova ? horaNova.padStart(5, '0') : '';
+    haptica.leve();
+    try {
+      const r = await callRpc(pairing, 'tarefas.criar', comData ? { texto, quando: hora ? `${dia}T${hora}` : dia } : { texto });
+      aplicarTarefas(r.tarefas);
+      setNovaTarefa(''); setHoraNova(''); setDiaNova('nenhum');
+      if (comData) Alert.alert('Anotado', r.mensagem);
+    } catch (e) { Alert.alert('Não deu para anotar', errMessage(e)); }
+  }
+
+  async function concluir() {
+    const t = concluindo;
+    if (!t) return;
+    setConcluindo(null);
+    haptica.sucesso();
+    try {
+      const r = await callRpc(pairing, 'tarefas.concluir', { id: t.id, ressalva: ressalva.trim() || undefined });
+      aplicarTarefas(r.tarefas);
+    } catch (e) { Alert.alert('Não deu para concluir', errMessage(e)); }
+    setRessalva('');
+  }
+
+  async function tocarTarefa(t: Tarefa) {
+    if (!t.feita) { setRessalva(''); setConcluindo(t); return; }
+    haptica.leve();
+    try { aplicarTarefas((await callRpc(pairing, 'tarefas.reabrir', { id: t.id })).tarefas); }
+    catch (e) { Alert.alert('Não deu para reabrir', errMessage(e)); }
+  }
+
+  function apagarTarefa(t: Tarefa) {
+    haptica.leve();
+    Alert.alert('Apagar a tarefa?', `"${t.texto}"${t.lembreteIds?.length ? ' — os avisos que faltam são cancelados.' : ''}`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Apagar', style: 'destructive', onPress: async () => {
+        try { aplicarTarefas((await callRpc(pairing, 'tarefas.delete', { id: t.id })).tarefas); }
+        catch (e) { Alert.alert('Não deu para apagar', errMessage(e)); }
+      } },
+    ]);
+  }
   async function abrirTodos() {
     try { setTodos(await callRpc(pairing, 'habitos.list')); }
     catch (e) { Alert.alert('Não consegui ler', errMessage(e)); }
@@ -215,6 +286,67 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
               })}
             </Card>
 
+            {painel.tarefas && (
+              <>
+                {secao('LEMBRETES E TAREFAS')}
+                <Card glass style={{ gap: 4 }}>
+                  {/* Nova tarefa: com dia ou hora vira lembrete (16h sem hora; prova e consulta avisam na véspera). */}
+                  <TextInput
+                    value={novaTarefa}
+                    onChangeText={setNovaTarefa}
+                    placeholder="Nova tarefa ou lembrete"
+                    placeholderTextColor={palette.textMuted}
+                    maxLength={200}
+                    onSubmitEditing={adicionarTarefa}
+                    returnKeyType="done"
+                    style={[styles.campo, { borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]}
+                  />
+                  <View style={[styles.linha, { marginTop: 6, marginBottom: 6 }]}>
+                    {(['nenhum', 'hoje', 'amanha'] as const).map(d => {
+                      const on = diaNova === d;
+                      return (
+                        <Pressable key={d} onPress={() => setDiaNova(d)} hitSlop={4}
+                          style={[styles.chipDia, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
+                          <Text variant="caption" color={on ? palette.primary : palette.textMuted}>{d === 'nenhum' ? 'Sem data' : d === 'hoje' ? 'Hoje' : 'Amanhã'}</Text>
+                        </Pressable>
+                      );
+                    })}
+                    <TextInput value={horaNova} onChangeText={setHoraNova} placeholder="HH:MM" placeholderTextColor={palette.textMuted} maxLength={5} keyboardType="numbers-and-punctuation"
+                      style={[styles.campo, { flex: 1, paddingVertical: 6, borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]} />
+                    <Pressable onPress={adicionarTarefa} hitSlop={8} accessibilityLabel="Adicionar tarefa" style={[styles.botaoAdd, { backgroundColor: palette.primary }]}>
+                      <Feather name="plus" size={18} color={palette.background} />
+                    </Pressable>
+                  </View>
+                  {painel.tarefas.length === 0 && <Text variant="caption" color={palette.textMuted}>Nada na lista. Diga à Ely "tenho prova sexta" — ela anota e avisa na véspera.</Text>}
+                  {painel.tarefas.map((t, i) => {
+                    const atrasada = !t.feita && !!t.prazo && t.prazo < Date.now();
+                    return (
+                      <Pressable
+                        key={t.id}
+                        onPress={() => tocarTarefa(t)}
+                        onLongPress={() => apagarTarefa(t)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: t.feita }}
+                        accessibilityLabel={`${t.texto}${t.prazo ? `, ${quandoTarefa(t.prazo)}` : ''}`}
+                        style={[styles.habito, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border }]}
+                      >
+                        <View style={[styles.check, { borderColor: palette.primary, backgroundColor: t.feita ? palette.primary : 'transparent' }]}>
+                          {t.feita && <Feather name="check" size={16} color={palette.background} />}
+                        </View>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text variant="body" color={t.feita ? palette.textMuted : palette.text} style={t.feita ? { textDecorationLine: 'line-through' } : undefined}>{t.texto}</Text>
+                          {t.ressalva ? <Text variant="caption" color={palette.accent}>✎ {t.ressalva}</Text> : null}
+                        </View>
+                        <Text variant="caption" color={atrasada ? palette.error : palette.textMuted}>
+                          {t.feita ? 'feita' : t.prazo ? `${atrasada ? 'atrasada · ' : ''}${quandoTarefa(t.prazo)}` : ''}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </Card>
+              </>
+            )}
+
             {secao('AGENDA')}
             <Card glass style={{ gap: 8 }}>
               {painel.timers.map(t => (
@@ -270,6 +402,24 @@ export default function HojeScreen({ pairing }: { pairing: Pairing }) {
         )}
       </ScrollView>
 
+      <GlassModal title="Concluir" visible={concluindo !== null} onClose={() => setConcluindo(null)}>
+        {concluindo && (
+          <View style={{ gap: tokens.spacing.md }}>
+            <Text variant="subheading">{concluindo.texto}</Text>
+            <Text variant="caption" color={palette.textMuted}>Ressalva (opcional) — o que ficou de fora, uma observação. Fica anotada na tarefa.</Text>
+            <TextInput
+              value={ressalva}
+              onChangeText={setRessalva}
+              multiline
+              maxLength={300}
+              placeholder="Ex.: fiz, mas faltou revisar o capítulo 3"
+              placeholderTextColor={palette.textMuted}
+              style={[styles.campo, { minHeight: 80, textAlignVertical: 'top', borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]}
+            />
+            <Button title="Concluir" onPress={concluir} />
+          </View>
+        )}
+      </GlassModal>
       <GlassModal title="Hábitos e metas" visible={todos !== null} onClose={() => setTodos(null)}>
         {todos && (
           <View style={{ gap: tokens.spacing.sm }}>
@@ -396,5 +546,7 @@ const styles = StyleSheet.create({
   barra: { height: 6, borderRadius: 3, overflow: 'hidden' },
   passo: { minWidth: 44, minHeight: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   campo: { borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
+  chipDia: { paddingHorizontal: 10, minHeight: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  botaoAdd: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   diaBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

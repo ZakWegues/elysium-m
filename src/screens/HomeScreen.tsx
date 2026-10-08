@@ -21,7 +21,6 @@ import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizac
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
-import { useEstadoPalavra } from '../lib/palavraNoCelular';
 
 /** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
 const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
@@ -421,7 +420,6 @@ export default function HomeScreen({
   }
 
   const online = status === 'open';
-  const palavra = useEstadoPalavra();
 
   return (
     <View style={{ flex: 1 }}>
@@ -429,23 +427,8 @@ export default function HomeScreen({
         title={nome ? `${saudacao()}, ${nome}` : saudacao()}
         right={
           <View style={styles.linhaStatus}>
-            {/* "Elysium" (bloco 129): microfone aceso = escutando; cortado = não deu, toque diz o porquê. */}
-            {palavra.fase !== 'desligada' ? (
-              <Pressable
-                hitSlop={8}
-                style={{ marginRight: 8 }}
-                onPress={() => Alert.alert(
-                  'Palavra “Ely”',
-                  palavra.fase === 'ouvindo'
-                    ? `Escutando ${palavra.offline ? 'no próprio celular' : 'pelo reconhecimento do Google'}. Diga “Ely” (ou “Ely, pausa a música”).`
-                    : palavra.fase === 'iniciando'
-                      ? 'Ligando o reconhecimento de voz… Se ficar assim (amarelo), ele não está conseguindo começar — o motivo vai para o log do PC.'
-                      : `Não está escutando: ${palavra.motivo}.\n\nDá para desligar em Ajustes → Voz.`,
-                )}
-              >
-                <Feather name={palavra.fase === 'falhou' ? 'mic-off' : 'mic'} size={16} color={palavra.fase === 'ouvindo' ? palette.primary : palavra.fase === 'iniciando' ? '#d99a2b' : palette.error} />
-              </Pressable>
-            ) : null}
+            {/* 08/10: o microfone que mostrava a escuta do "Ely" saiu do topo — o Zak o lia como a
+                mão livre que ele pediu para tirar. O estado da escuta continua em Ajustes → Voz. */}
             <GlassCircle size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
               <Feather name="search" size={16} color={palette.textMuted} />
             </GlassCircle>

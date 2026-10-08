@@ -43,6 +43,11 @@ export type RpcMethod =
   | 'metas.save'
   | 'metas.progresso'
   | 'metas.delete'
+  | 'tarefas.list'
+  | 'tarefas.criar'
+  | 'tarefas.concluir'
+  | 'tarefas.reabrir'
+  | 'tarefas.delete'
   | 'memory.aceitar'
   | 'memory.recusar'
   | 'foco.start'
@@ -354,11 +359,16 @@ export type Habito = {
 };
 export type Meta = { id: string; titulo: string; alvo: number; unidade: string; progresso: number; prazo?: string; criadaEm: number; concluidaEm?: number };
 
+/** Tarefa da lista (fase 17): os lembretes viram afazeres, com ressalva ao concluir. */
+export type Tarefa = { id: string; texto: string; prazo?: number; lembreteIds?: string[]; feita: boolean; feitaEm?: number; ressalva?: string; criadaEm: number; origem: 'manual' | 'lembrete' };
+
 /** O briefing do dia (`hoje.painel`, fase 16). */
 export type PainelHoje = {
   saudacao: string; frase: string; data: string;
   clima: { cidade: string; temperatura: number; max: number; min: number; descricao: string; icone: string; chuvaHoje: boolean } | null;
   lembretes: { id: string; texto: string; em: number }[];
+  /** Fase 17. PC antigo não manda. */
+  tarefas?: Tarefa[];
   timers: { id: string; nome: string; fimEm: number }[];
   listas: { id: string; nome: string; pendentes: number; itens: string[] }[];
   habitos: Habito[]; metas: Meta[];
@@ -407,6 +417,11 @@ export type RpcResults = {
   'metas.save': { meta: Meta };
   'metas.progresso': { meta: Meta };
   'metas.delete': { ok: boolean };
+  'tarefas.list': { tarefas: Tarefa[] };
+  'tarefas.criar': { tarefas: Tarefa[]; mensagem: string };
+  'tarefas.concluir': { tarefa: Tarefa; tarefas: Tarefa[] };
+  'tarefas.reabrir': { tarefa: Tarefa; tarefas: Tarefa[] };
+  'tarefas.delete': { ok: boolean; tarefas: Tarefa[] };
   'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
   'memory.aceitar': { fact: MemoryFact };
   'memory.recusar': { recusada: boolean };

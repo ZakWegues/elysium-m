@@ -421,34 +421,43 @@ export default function ChatScreen({
    */
   async function handleAnexar() {
     if (enviandoRef.current) return;
+    // Vários de uma vez (08/10): o seletor do Android deixa marcar mais de um; cada arquivo
+    // vai como um recado, em sequência, e um grande demais não impede os outros.
     const escolha = await emFluxoExterno(() => DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
       copyToCacheDirectory: false,
+      multiple: true,
     }));
-    if (escolha.canceled || !escolha.assets[0]) return;
-    const asset = escolha.assets[0];
+    if (escolha.canceled || !escolha.assets.length) return;
+    const arquivos = escolha.assets.slice(0, 10);
 
     setSending(true);
     try {
-      const bytes = new Uint8Array(await new File(asset.uri).arrayBuffer());
-      if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) {
-        Alert.alert('Arquivo grande demais', 'Limite de 5MB por anexo.');
-        return;
+      const enviados: string[] = [];
+      const grandes: string[] = [];
+      for (const asset of arquivos) {
+        const bytes = new Uint8Array(await new File(asset.uri).arrayBuffer());
+        if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) { grandes.push(asset.name); continue; }
+        await sendMessage(pairing, {
+          kind: 'file',
+          attachment: {
+            name: asset.name,
+            mimeType: asset.mimeType ?? 'application/octet-stream',
+            base64: fromByteArray(bytes),
+          },
+        });
+        enviados.push(asset.name);
       }
-      await sendMessage(pairing, {
-        kind: 'file',
-        attachment: {
-          name: asset.name,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          base64: fromByteArray(bytes),
-        },
-      });
       const ts = Date.now();
-      setMessages((prev) => [
-        ...prev,
-        { id: `file-${ts}`, from: 'me', text: `📎 ${asset.name}`, ts },
-        { id: `file-ok-${ts + 1}`, from: 'reply', text: 'Arquivo entregue na caixa do PC.', ts: ts + 1 },
-      ]);
+      if (enviados.length) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `file-${ts}`, from: 'me', text: enviados.map(n => `📎 ${n}`).join('\n'), ts },
+          { id: `file-ok-${ts + 1}`, from: 'reply', text: enviados.length === 1 ? 'Arquivo entregue na caixa do PC.' : `${enviados.length} arquivos entregues na caixa do PC.`, ts: ts + 1 },
+        ]);
+      }
+      if (grandes.length) Alert.alert(grandes.length === 1 ? 'Arquivo grande demais' : 'Arquivos grandes demais', `Limite de 5MB por anexo — ficou de fora: ${grandes.join(', ')}.`);
+      if (escolha.assets.length > arquivos.length) Alert.alert('Até 10 de cada vez', `Mandei os 10 primeiros; ${escolha.assets.length - arquivos.length} ficaram para a próxima.`);
     } catch (err) {
       if (err instanceof AuthError) {
         Alert.alert('Sessão expirada', 'O token foi regenerado no PC. Pareie o celular de novo.');

@@ -8,7 +8,7 @@ function ehDoApp(m: StoredMessage): boolean {
   const t = m.text.trim();
   if (m.id === 'welcome') return true;
   if (m.from === 'me' && t === '🎤 (áudio)') return true;
-  if (m.from === 'reply' && (t.startsWith('⏳ PC fora do ar') || t === 'Arquivo entregue na caixa do PC.')) return true;
+  if (m.from === 'reply' && (t.startsWith('⏳ PC fora do ar') || /^(Arquivo entregue|\d+ arquivos entregues) na caixa do PC\.$/.test(t))) return true;
   return false;
 }
 
