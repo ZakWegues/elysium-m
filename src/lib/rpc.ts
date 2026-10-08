@@ -104,6 +104,7 @@ export type RpcMethod =
   | 'memory.list'
   | 'memory.add'
   | 'memory.remove'
+  | 'memory.edit'
   | 'reminders.list'
   | 'reminders.create'
   | 'reminders.cancel'
@@ -553,6 +554,7 @@ export type RpcResults = {
   'memory.list': { facts: MemoryFact[] };
   'memory.add': { fact: MemoryFact; created: boolean };
   'memory.remove': { removed: boolean };
+  'memory.edit': { fact: MemoryFact };
   'reminders.list': { reminders: Reminder[] };
   'reminders.create': { reminder: Reminder };
   'reminders.cancel': { cancelled: boolean };

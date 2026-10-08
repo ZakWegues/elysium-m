@@ -531,6 +531,23 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
   const [facts, setFacts] = useState<MemoryFact[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  // Fase 18: busca e correção do que a Ely sabe (o painel de memória que a pesquisa pediu).
+  const [busca, setBusca] = useState('');
+  const [editando, setEditando] = useState<MemoryFact | null>(null);
+  const [textoEdicao, setTextoEdicao] = useState('');
+  const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const visiveis = busca.trim() ? facts.filter(f => semAcento(f.text).includes(semAcento(busca.trim()))) : facts;
+  async function salvarEdicao() {
+    const f = editando;
+    const texto = textoEdicao.trim();
+    setEditando(null);
+    if (!f || !texto || texto === f.text) return;
+    try {
+      const res = await callRpc(pairing, 'memory.edit', { id: f.id, text: texto });
+      haptica.sucesso();
+      setFacts(prev => prev.map(x => (x.id === f.id ? res.fact : x)));
+    } catch (err) { onError(err, 'Falha ao corrigir'); }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -575,16 +592,30 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
 
   return (
     <View style={{ gap: tokens.spacing.md }}>
-      <Dica texto="Fatos curtos que entram em toda conversa. Até 20, de 200 letras cada." />
+      <Dica texto="Fatos curtos que a Ely usa nas conversas. Até 60, de 200 letras cada — toque num para corrigir." />
       {loading && <ActivityIndicator color={palette.primary} />}
       {!loading && facts.length === 0 && <Vazio icone="bookmark" texto="Nada guardado ainda." />}
-      {facts.map(f => (
-        <View key={f.id} style={styles.procRow}>
-          <Text variant="body" style={{ flex: 1 }}>{f.text}</Text>
-          <Pressable onPress={() => remove(f)} hitSlop={10}>
-            <Feather name="x-circle" size={20} color={palette.error} />
-          </Pressable>
-        </View>
+      {facts.length > 5 && (
+        <TextInput value={busca} onChangeText={setBusca} placeholder="Buscar na memória" placeholderTextColor={palette.textMuted}
+          style={[styles.input, { flex: 0, borderRadius: tokens.radii.md, borderColor: palette.border, color: palette.text, backgroundColor: palette.surface }]} />
+      )}
+      {visiveis.map(f => (
+        editando?.id === f.id ? (
+          <View key={f.id} style={[styles.procRow, { gap: 8 }]}>
+            <TextInput value={textoEdicao} onChangeText={setTextoEdicao} autoFocus maxLength={200} onSubmitEditing={salvarEdicao} onBlur={salvarEdicao} multiline
+              style={[styles.input, { borderRadius: tokens.radii.md, borderColor: palette.primary, color: palette.text, backgroundColor: palette.surface }]} />
+          </View>
+        ) : (
+          <View key={f.id} style={styles.procRow}>
+            <Pressable onPress={() => { setEditando(f); setTextoEdicao(f.text); }} accessibilityRole="button" accessibilityLabel={`Corrigir: ${f.text}`} style={{ flex: 1, gap: 2 }}>
+              <Text variant="body">{f.text}</Text>
+              <Text variant="caption" color={palette.textMuted}>aprendi em {new Date(f.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · toque para corrigir</Text>
+            </Pressable>
+            <Pressable onPress={() => remove(f)} hitSlop={12} accessibilityLabel={`Esquecer: ${f.text}`} style={{ minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="x-circle" size={20} color={palette.error} />
+            </Pressable>
+          </View>
+        )
       ))}
 
       <View style={{ flexDirection: 'row', gap: tokens.spacing.sm }}>
