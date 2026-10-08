@@ -309,6 +309,8 @@ function AppInner() {
     else if (destino === 'pc') setScreen('control');
     else if (destino === 'rotinas') setScreen('rotinas');
     else if (destino === 'hoje') setScreen('hoje');
+    // Widget "Falar com a Ely" (fase 16): o mesmo pedido de voz do "Ely" e do atalho.
+    else if (destino === 'falar') { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); }
     else if (destino === 'inicio') setScreen('home');
   }, []));
 

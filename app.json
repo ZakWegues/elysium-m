@@ -186,6 +186,84 @@
               "maxResizeHeight": "160dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Falar",
+              "label": "ELYSIUM — Falar com a Ely",
+              "description": "Um toque e a Ely já está ouvindo o seu pedido.",
+              "minWidth": "50dp",
+              "minHeight": "50dp",
+              "targetCellWidth": 1,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "120dp",
+              "maxResizeHeight": "120dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            },
+            {
+              "name": "Hoje",
+              "label": "ELYSIUM — Hoje",
+              "description": "O briefing do dia: saudação, status, hábitos, próximo lembrete e timer.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "500dp",
+              "maxResizeHeight": "250dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Habitos",
+              "label": "ELYSIUM — Hábitos",
+              "description": "Os hábitos de hoje com a sequência; toque marca como feito.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "500dp",
+              "maxResizeHeight": "300dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Timers",
+              "label": "ELYSIUM — Timers",
+              "description": "Os timers correndo no PC e atalhos de 5, 10 e 25 minutos.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "300dp",
+              "maxResizeHeight": "250dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Musica",
+              "label": "ELYSIUM — Música",
+              "description": "O que toca no PC, com anterior, play/pausa e próxima.",
+              "minWidth": "250dp",
+              "minHeight": "60dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "500dp",
+              "maxResizeHeight": "110dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Listas",
+              "label": "ELYSIUM — Listas",
+              "description": "Os pendentes da lista; toque marca como feito.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "500dp",
+              "maxResizeHeight": "300dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
             }
           ]
         }
@@ -194,9 +272,12 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "O ELYSIUM usa o microfone para ouvir quando você diz “Elysium” e na conversa por voz.",
-          "speechRecognitionPermission": "O ELYSIUM reconhece a palavra “Elysium” com o app aberto.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as"]
+          "microphonePermission": "O ELYSIUM usa o microfone para ouvir o seu pedido quando você diz “Ely” ou segura o botão de falar.",
+          "speechRecognitionPermission": "O ELYSIUM reconhece a palavra “Ely” com o app aberto.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.as"
+          ]
         }
       ]
     ],
