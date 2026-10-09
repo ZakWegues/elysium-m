@@ -108,6 +108,8 @@ export type RpcMethod =
   | 'memory.edit'
   | 'episodios.list'
   | 'acompanhamento.abrir'
+  | 'despejo.interpretar'
+  | 'despejo.aplicar'
   | 'acompanhamento.dispensar'
   | 'episodios.delete'
   | 'episodios.clear'
@@ -195,6 +197,8 @@ export type NowPlaying = {
 
 export type MemoryFact = { id: string; text: string; createdAt: number };
 /** Uma conversa que a Ely lembra (bloco 190): resumo curto, assuntos e o que ficou pendente. */
+/** Bloco 194: um item do despejo (a prévia que a Ely separou). */
+export type ItemDespejo = { id: string; tipo: 'tarefa' | 'lista' | 'nota'; texto: string; lista?: string; quando?: string | null; semHora?: boolean; rotulo?: string | null };
 export type Episodio = { id: string; em: number; resumo: string; assuntos: string[]; pendencias: string[]; perguntado?: boolean };
 
 /** Uma rotina do PC (elysium/src/services/rotinas.ts, bloco 68). */
@@ -522,6 +526,8 @@ export type RpcResults = {
   // Fase 19 (bloco 190): as conversas que a Ely lembra e o modo anônimo.
   'episodios.list': { episodios: Episodio[] };
   'acompanhamento.abrir': { pergunta: string };
+  'despejo.interpretar': { itens: ItemDespejo[] };
+  'despejo.aplicar': { criados: number; falhas: string[]; mensagem: string };
   'acompanhamento.dispensar': { ok: boolean };
   'episodios.delete': { removed: boolean };
   'episodios.clear': { removidos: number };

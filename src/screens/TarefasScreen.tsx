@@ -5,7 +5,7 @@ import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { callRpc, Tarefa } from '../lib/rpc';
+import { callRpc, ItemDespejo, Tarefa } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { agruparTarefas, atrasada, filtrarTarefas, mascaraHora, montarQuando, proximosDias, quandoTarefa, validarHora } from '../lib/tarefasUi';
@@ -43,6 +43,8 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
   const [busca, setBusca] = useState('');
   const [escondidas, setEscondidas] = useState<Set<string>>(new Set());
   const [editando, setEditando] = useState<Tarefa | 'nova' | null>(abrirNova ? 'nova' : null);
+  // Bloco 194: o despejo (várias coisas de uma vez, com prévia).
+  const [despejando, setDespejando] = useState(false);
   const [adiando, setAdiando] = useState<Tarefa | null>(null);
   const [concluindo, setConcluindo] = useState<Tarefa | null>(null);
   const [ressalva, setRessalva] = useState('');
@@ -158,6 +160,9 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
           <Feather name="arrow-left" size={22} color={palette.text} />
         </Pressable>
         <Text variant="heading" style={{ flex: 1 }}>Tarefas</Text>
+        <Pressable onPress={() => setDespejando(true)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Despejar várias coisas de uma vez" style={styles.icone}>
+          <Feather name="layers" size={21} color={palette.primary} />
+        </Pressable>
         <Pressable onPress={() => setEditando('nova')} hitSlop={12} accessibilityRole="button" accessibilityLabel="Nova tarefa" style={styles.icone}>
           <Feather name="plus" size={22} color={palette.primary} />
         </Pressable>
@@ -254,6 +259,10 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
             ))}
           </View>
         )}
+      </GlassModal>
+
+      <GlassModal title="Despejar" visible={despejando} onClose={() => setDespejando(false)} altura="cheia">
+        {despejando && <Despejo pairing={pairing} aoTerminar={async () => { setDespejando(false); await aposMudar(); }} />}
       </GlassModal>
 
       <GlassModal title={editando === 'nova' ? 'Nova tarefa' : 'Editar tarefa'} visible={editando !== null} onClose={() => setEditando(null)} altura="cheia">
@@ -476,6 +485,71 @@ function EditorTarefa({ pairing, base, aoTerminar, aoApagar }: {
       <Button title={salvando ? 'Salvando…' : base ? 'Salvar' : 'Criar tarefa'} onPress={() => void salvar()} disabled={salvando} />
       {aoApagar && <Button title="Apagar tarefa" variant="secondary" onPress={aoApagar} />}
     </View>
+  );
+}
+
+/**
+ * Despejo (bloco 194): escreve ou dita (o microfone do teclado) várias coisas de uma vez; a Ely
+ * separa em tarefas, listas e notas; nada é gravado antes de ele marcar e tocar em Salvar.
+ */
+function Despejo({ pairing, aoTerminar }: { pairing: Pairing; aoTerminar: () => Promise<void> }) {
+  const { palette, tokens } = useTheme();
+  const [texto, setTexto] = useState('');
+  const [itens, setItens] = useState<ItemDespejo[] | null>(null);
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [ocupado, setOcupado] = useState(false);
+  const rotulos = { tarefa: 'Tarefa', lista: 'Lista', nota: 'Nota' } as const;
+
+  async function organizar() {
+    if (texto.trim().length < 10) { Alert.alert('Escreva um pouco mais', 'Ex.: comprar pão e leite, estudar física sexta às 14h, ligar pra vó.'); return; }
+    setOcupado(true);
+    try {
+      const r = await callRpc(pairing, 'despejo.interpretar', { texto: texto.trim() }, { timeoutMs: 70_000 });
+      setItens(r.itens);
+      setMarcados(new Set(r.itens.map(i => i.id)));
+      if (!r.itens.length) Alert.alert('Não consegui separar', 'Tente uma coisa por frase.');
+    } catch (e) { Alert.alert('Não consegui organizar', errMessage(e)); }
+    finally { setOcupado(false); }
+  }
+
+  async function salvar() {
+    const escolhidos = (itens ?? []).filter(i => marcados.has(i.id));
+    if (!escolhidos.length) return;
+    setOcupado(true);
+    try {
+      const r = await callRpc(pairing, 'despejo.aplicar', { itens: escolhidos });
+      haptica.sucesso();
+      Alert.alert('Anotado', r.mensagem);
+      await aoTerminar();
+    } catch (e) { Alert.alert('Não consegui salvar', errMessage(e)); }
+    finally { setOcupado(false); }
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ gap: tokens.spacing.md, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <Text variant="caption" color={palette.textMuted}>
+        Escreva ou dite (microfone do teclado) tudo de uma vez — a Ely separa em tarefas, listas e notas, e você confere antes de salvar.
+      </Text>
+      <TextInput value={texto} onChangeText={setTexto} multiline maxLength={4000} placeholder="O que está na sua cabeça…" placeholderTextColor={palette.textMuted}
+        accessibilityLabel="O que despejar"
+        style={[styles.campo, { minHeight: 120, textAlignVertical: 'top', borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]} />
+      <Button title={ocupado && !itens ? 'Organizando…' : 'Organizar'} onPress={() => void organizar()} disabled={ocupado} />
+      {itens && itens.map(i => {
+        const on = marcados.has(i.id);
+        return (
+          <Pressable key={i.id} onPress={() => setMarcados(m => { const n = new Set(m); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n; })}
+            accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={`${rotulos[i.tipo]}: ${i.texto}`}
+            style={[styles.linha, { minHeight: 52, opacity: on ? 1 : 0.5 }]}>
+            <Feather name={on ? 'check-square' : 'square'} size={20} color={on ? palette.primary : palette.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text variant="body">{i.texto}</Text>
+              <Text variant="caption" color={palette.textMuted}>{rotulos[i.tipo]}{i.tipo === 'lista' && i.lista ? ` · ${i.lista}` : ''}{i.rotulo ? ` · ${i.rotulo}` : ''}</Text>
+            </View>
+          </Pressable>
+        );
+      })}
+      {itens && itens.length > 0 && <Button title={`Salvar ${marcados.size} ${marcados.size === 1 ? 'item' : 'itens'}`} onPress={() => void salvar()} disabled={ocupado || !marcados.size} />}
+    </ScrollView>
   );
 }
 
