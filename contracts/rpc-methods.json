@@ -1,0 +1,652 @@
+{
+  "metodos": [
+    {
+      "method": "acompanhamento.abrir",
+      "destructive": false
+    },
+    {
+      "method": "acompanhamento.dispensar",
+      "destructive": false
+    },
+    {
+      "method": "agenda.dia",
+      "destructive": false
+    },
+    {
+      "method": "agenda.status",
+      "destructive": false
+    },
+    {
+      "method": "apps.close",
+      "destructive": true
+    },
+    {
+      "method": "apps.list",
+      "destructive": false
+    },
+    {
+      "method": "apps.open",
+      "destructive": false
+    },
+    {
+      "method": "apps.running",
+      "destructive": false
+    },
+    {
+      "method": "chat.ackDeleted",
+      "destructive": false
+    },
+    {
+      "method": "chat.delete",
+      "destructive": true
+    },
+    {
+      "method": "chat.favorite",
+      "destructive": false
+    },
+    {
+      "method": "chat.get",
+      "destructive": false
+    },
+    {
+      "method": "chat.list",
+      "destructive": false
+    },
+    {
+      "method": "chat.rename",
+      "destructive": false
+    },
+    {
+      "method": "chat.save",
+      "destructive": false
+    },
+    {
+      "method": "chat.search",
+      "destructive": false
+    },
+    {
+      "method": "chat.starters",
+      "destructive": false
+    },
+    {
+      "method": "clipboard.get",
+      "destructive": false
+    },
+    {
+      "method": "clipboard.set",
+      "destructive": false
+    },
+    {
+      "method": "comandos.delete",
+      "destructive": true
+    },
+    {
+      "method": "comandos.list",
+      "destructive": false
+    },
+    {
+      "method": "comandos.run",
+      "destructive": false
+    },
+    {
+      "method": "comandos.save",
+      "destructive": false
+    },
+    {
+      "method": "corpo.dica",
+      "destructive": false
+    },
+    {
+      "method": "corpo.painel",
+      "destructive": false
+    },
+    {
+      "method": "corpo.perfil",
+      "destructive": false
+    },
+    {
+      "method": "corpo.peso",
+      "destructive": false
+    },
+    {
+      "method": "corrida.delete",
+      "destructive": true
+    },
+    {
+      "method": "corrida.marcar",
+      "destructive": false
+    },
+    {
+      "method": "despejo.aplicar",
+      "destructive": false
+    },
+    {
+      "method": "despejo.interpretar",
+      "destructive": false
+    },
+    {
+      "method": "diag.registrar",
+      "destructive": false
+    },
+    {
+      "method": "episodios.clear",
+      "destructive": true
+    },
+    {
+      "method": "episodios.delete",
+      "destructive": true
+    },
+    {
+      "method": "episodios.list",
+      "destructive": false
+    },
+    {
+      "method": "foco.lista",
+      "destructive": false
+    },
+    {
+      "method": "foco.start",
+      "destructive": false
+    },
+    {
+      "method": "foco.status",
+      "destructive": false
+    },
+    {
+      "method": "foco.stop",
+      "destructive": false
+    },
+    {
+      "method": "habitos.delete",
+      "destructive": true
+    },
+    {
+      "method": "habitos.list",
+      "destructive": false
+    },
+    {
+      "method": "habitos.marcar",
+      "destructive": false
+    },
+    {
+      "method": "habitos.pausar",
+      "destructive": false
+    },
+    {
+      "method": "habitos.save",
+      "destructive": false
+    },
+    {
+      "method": "hoje.ideia",
+      "destructive": false
+    },
+    {
+      "method": "hoje.ocultar",
+      "destructive": false
+    },
+    {
+      "method": "hoje.painel",
+      "destructive": false
+    },
+    {
+      "method": "hoje.revisao",
+      "destructive": false
+    },
+    {
+      "method": "hoje.testar",
+      "destructive": false
+    },
+    {
+      "method": "input.buttonDown",
+      "destructive": false
+    },
+    {
+      "method": "input.buttonUp",
+      "destructive": false
+    },
+    {
+      "method": "input.click",
+      "destructive": false
+    },
+    {
+      "method": "input.doubleClick",
+      "destructive": false
+    },
+    {
+      "method": "input.key",
+      "destructive": false
+    },
+    {
+      "method": "input.move",
+      "destructive": false
+    },
+    {
+      "method": "input.ping",
+      "destructive": false
+    },
+    {
+      "method": "input.scroll",
+      "destructive": false
+    },
+    {
+      "method": "input.type",
+      "destructive": false
+    },
+    {
+      "method": "link.resumir",
+      "destructive": false
+    },
+    {
+      "method": "listas.add",
+      "destructive": false
+    },
+    {
+      "method": "listas.clearDone",
+      "destructive": false
+    },
+    {
+      "method": "listas.delete",
+      "destructive": true
+    },
+    {
+      "method": "listas.list",
+      "destructive": false
+    },
+    {
+      "method": "listas.remove",
+      "destructive": false
+    },
+    {
+      "method": "listas.toggle",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.messages.delete",
+      "destructive": true
+    },
+    {
+      "method": "mailbox.sessions.ackDeleted",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.sessions.create",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.sessions.delete",
+      "destructive": true
+    },
+    {
+      "method": "mailbox.sessions.favorite",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.sessions.list",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.sessions.open",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.sessions.rename",
+      "destructive": false
+    },
+    {
+      "method": "mailbox.sessions.save",
+      "destructive": false
+    },
+    {
+      "method": "media.control",
+      "destructive": false
+    },
+    {
+      "method": "memoria.anonimo.get",
+      "destructive": false
+    },
+    {
+      "method": "memoria.anonimo.set",
+      "destructive": false
+    },
+    {
+      "method": "memory.aceitar",
+      "destructive": false
+    },
+    {
+      "method": "memory.add",
+      "destructive": false
+    },
+    {
+      "method": "memory.edit",
+      "destructive": false
+    },
+    {
+      "method": "memory.list",
+      "destructive": false
+    },
+    {
+      "method": "memory.recusar",
+      "destructive": false
+    },
+    {
+      "method": "memory.remove",
+      "destructive": true
+    },
+    {
+      "method": "memory.sugestoes",
+      "destructive": false
+    },
+    {
+      "method": "metas.delete",
+      "destructive": true
+    },
+    {
+      "method": "metas.progresso",
+      "destructive": false
+    },
+    {
+      "method": "metas.save",
+      "destructive": false
+    },
+    {
+      "method": "notify.ack",
+      "destructive": false
+    },
+    {
+      "method": "notify.history",
+      "destructive": false
+    },
+    {
+      "method": "notify.pending",
+      "destructive": false
+    },
+    {
+      "method": "pairing.endpoints",
+      "destructive": false
+    },
+    {
+      "method": "pc.estado",
+      "destructive": false
+    },
+    {
+      "method": "perfil.get",
+      "destructive": false
+    },
+    {
+      "method": "perfil.set",
+      "destructive": false
+    },
+    {
+      "method": "power.control",
+      "destructive": true
+    },
+    {
+      "method": "presets.delete",
+      "destructive": true
+    },
+    {
+      "method": "presets.list",
+      "destructive": false
+    },
+    {
+      "method": "presets.run",
+      "destructive": false
+    },
+    {
+      "method": "presets.save",
+      "destructive": false
+    },
+    {
+      "method": "push.getPrefs",
+      "destructive": false
+    },
+    {
+      "method": "push.register",
+      "destructive": false
+    },
+    {
+      "method": "push.setPrefs",
+      "destructive": false
+    },
+    {
+      "method": "push.unregister",
+      "destructive": false
+    },
+    {
+      "method": "reminders.cancel",
+      "destructive": false
+    },
+    {
+      "method": "reminders.create",
+      "destructive": false
+    },
+    {
+      "method": "reminders.list",
+      "destructive": false
+    },
+    {
+      "method": "resumo.dia",
+      "destructive": false
+    },
+    {
+      "method": "rotinas.delete",
+      "destructive": true
+    },
+    {
+      "method": "rotinas.list",
+      "destructive": false
+    },
+    {
+      "method": "rotinas.run",
+      "destructive": false
+    },
+    {
+      "method": "rotinas.save",
+      "destructive": false
+    },
+    {
+      "method": "rotinas.toggle",
+      "destructive": false
+    },
+    {
+      "method": "screen.capture",
+      "destructive": false
+    },
+    {
+      "method": "screen.list",
+      "destructive": false
+    },
+    {
+      "method": "screen.screenshot",
+      "destructive": false
+    },
+    {
+      "method": "spotify.command",
+      "destructive": false
+    },
+    {
+      "method": "spotify.login",
+      "destructive": false
+    },
+    {
+      "method": "spotify.logout",
+      "destructive": false
+    },
+    {
+      "method": "spotify.nowPlaying",
+      "destructive": false
+    },
+    {
+      "method": "spotify.playSearch",
+      "destructive": false
+    },
+    {
+      "method": "spotify.repeat",
+      "destructive": false
+    },
+    {
+      "method": "spotify.seek",
+      "destructive": false
+    },
+    {
+      "method": "spotify.shuffle",
+      "destructive": false
+    },
+    {
+      "method": "spotify.status",
+      "destructive": false
+    },
+    {
+      "method": "spotify.volume",
+      "destructive": false
+    },
+    {
+      "method": "storage.clean",
+      "destructive": true
+    },
+    {
+      "method": "storage.info",
+      "destructive": false
+    },
+    {
+      "method": "storage.open",
+      "destructive": false
+    },
+    {
+      "method": "suggestions.list",
+      "destructive": false
+    },
+    {
+      "method": "system.diagnostico",
+      "destructive": false
+    },
+    {
+      "method": "system.disks",
+      "destructive": false
+    },
+    {
+      "method": "system.killProcess",
+      "destructive": true
+    },
+    {
+      "method": "system.processes",
+      "destructive": false
+    },
+    {
+      "method": "system.saude",
+      "destructive": false
+    },
+    {
+      "method": "system.saude.consertar",
+      "destructive": false
+    },
+    {
+      "method": "system.telemetry",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.adiar",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.concluir",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.criar",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.delete",
+      "destructive": true
+    },
+    {
+      "method": "tarefas.editar",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.interpretar",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.list",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.reabrir",
+      "destructive": false
+    },
+    {
+      "method": "tarefas.reagendarAtrasadas",
+      "destructive": false
+    },
+    {
+      "method": "timers.cancel",
+      "destructive": false
+    },
+    {
+      "method": "timers.list",
+      "destructive": false
+    },
+    {
+      "method": "timers.start",
+      "destructive": false
+    },
+    {
+      "method": "treinos.delete",
+      "destructive": true
+    },
+    {
+      "method": "treinos.importar",
+      "destructive": true
+    },
+    {
+      "method": "treinos.marcar",
+      "destructive": false
+    },
+    {
+      "method": "treinos.save",
+      "destructive": false
+    },
+    {
+      "method": "update.install",
+      "destructive": true
+    },
+    {
+      "method": "update.status",
+      "destructive": false
+    },
+    {
+      "method": "vision.ask",
+      "destructive": false
+    },
+    {
+      "method": "vision.screen",
+      "destructive": false
+    },
+    {
+      "method": "volume.get",
+      "destructive": false
+    },
+    {
+      "method": "volume.set",
+      "destructive": false
+    },
+    {
+      "method": "weather.now",
+      "destructive": false
+    },
+    {
+      "method": "web.search",
+      "destructive": false
+    },
+    {
+      "method": "window.control",
+      "destructive": false
+    },
+    {
+      "method": "window.list",
+      "destructive": false
+    }
+  ]
+}

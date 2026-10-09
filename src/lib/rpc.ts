@@ -9,6 +9,7 @@
 import { baseUrl, Pairing } from './pairing';
 import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
 import type { EstadoAppPc } from './estadoPc';
+import contrato from '../../contracts/rpc-methods.json';
 
 /** O desktop recusa (403) métodos destrutivos sem este header. */
 export class ConfirmationRequiredError extends Error {}
@@ -176,7 +177,16 @@ export type RpcMethod =
   | 'notify.pending'
   | 'notify.history'
   | 'notify.ack'
-  | 'chat.starters';
+  | 'chat.starters'
+  // Fase 20 (contrato): existiam no PC sem tipo aqui. O teste `contrato.test.ts` cobra.
+  | 'agenda.status'
+  | 'agenda.dia'
+  | 'chat.search'
+  | 'comandos.save'
+  | 'comandos.delete'
+  | 'foco.lista'
+  | 'listas.clearDone'
+  | 'listas.delete';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -624,6 +634,14 @@ export type RpcResults = {
   'suggestions.list': { suggestions: Sugestao[] };
   /** Perguntas de partida do chat, sorteadas no desktop — ver `perguntas.ts`. */
   'chat.starters': { starters: string[] };
+  'agenda.status': { configurado: boolean; conectado: boolean; conta: string };
+  'agenda.dia': { eventos: EventoAgenda[]; frase: string };
+  'chat.search': { achados: AchadoConversa[] };
+  'comandos.save': { comando: ComandoIa };
+  'comandos.delete': { ok: boolean };
+  'foco.lista': { apps: string[] };
+  'listas.clearDone': { removidos: number };
+  'listas.delete': { ok: boolean };
   /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
   'weather.now': Clima | null;
   'rotinas.list': { rotinas: Rotina[]; eventos?: { id: string; rotulo: string }[] };
@@ -662,6 +680,13 @@ export type SyncedChatSession = {
   messages: { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number }[];
 };
 
+/** Compromisso do Google Agenda (só leitura) — `agenda.ts` do desktop. */
+export type EventoAgenda = { id: string; titulo: string; inicio: number; fim: number; diaInteiro: boolean; local?: string };
+/** Um trecho achado na busca das conversas do PC. */
+export type AchadoConversa = { sessaoId: string; titulo: string; trecho: string; em: number; deQuem: 'eu' | 'elysium' };
+/** Comando de IA do menu "Ely, …" sobre texto selecionado. */
+export type ComandoIa = { id: string; nome: string; instrucao: string; fabrica?: boolean };
+
 /**
  * Uma conversa da Caixa. Mesmo formato do `SyncedChatSession`, sem as mensagens: elas
  * ja moram no PC e chegam pelo /api/mailbox/messages, nao pelo RPC.
@@ -676,32 +701,14 @@ export type SyncedMailboxSession = {
   count?: number;
 };
 
-/** Espelha a marcação `destructive` do desktop — ver elysium/src/services/rpc.ts. */
-export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
-  'system.killProcess',
-  'apps.close',
-  'power.control',
-  // Apagar conversa da Caixa leva os recados e os anexos do disco do PC junto, e nao
-  // tem desfazer. Mesma trava dos outros destrutivos.
-  'mailbox.sessions.delete',
-  'mailbox.messages.delete',
-  // Esvaziar a Lixeira e limpar temporários não têm desfazer; instalar fecha o app do PC.
-  'storage.clean',
-  'update.install',
-  // Fase 16: apagar hábito leva o histórico de dias junto; meta, o progresso.
-  'habitos.delete',
-  'metas.delete',
-  // Fase 18: apagar um treino leva os exercícios e as cargas; importar troca a lista toda.
-  'treinos.delete',
-  'treinos.importar',
-  // 08/10 (PC 2.2.1+): apagar conversa, memória, tarefa, preset e rotina também
-  // passam pela trava. Quem chama já perguntou na tela e manda `confirmed: true`.
-  'chat.delete',
-  'memory.remove',
-  'tarefas.delete',
-  'presets.delete',
-  'rotinas.delete',
-]);
+/**
+ * Os métodos que o PC só executa com `X-Elysium-Confirm` — lidos do contrato copiado do
+ * desktop (`contracts/rpc-methods.json`, fase 20). A lista à mão que havia aqui envelheceu:
+ * faltavam `episodios.delete`, `listas.delete` e `comandos.delete`.
+ */
+export const DESTRUCTIVE_METHODS: ReadonlySet<RpcMethod> = new Set<RpcMethod>(
+  contrato.metodos.filter(m => m.destructive).map(m => m.method as RpcMethod)
+);
 
 export type RpcOptions = {
   /**
