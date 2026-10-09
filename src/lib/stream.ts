@@ -6,6 +6,7 @@ import { receberEntrega } from './notificacoes';
 import type { Entrega } from './rpc';
 import { receberFrameEstado } from './estadoPc';
 import { receberFrameModo } from './modo';
+import { receberFramePomodoro } from './pomodoro';
 
 import type { Fonte } from './chatHistoryStore';
 
@@ -122,6 +123,8 @@ export function openVoiceConnection(
       receberFrameEstado(data as Record<string, unknown>);
     } else if (data.type === 'modo') {
       receberFrameModo(data as Record<string, unknown>);
+    } else if (data.type === 'pomodoro') {
+      receberFramePomodoro(data as Record<string, unknown>);
     } else if (data.type === 'error') {
       console.error('[voice-ws] servidor retornou erro', data.error);
       settlePending((p) => p.reject(new Error(`Falha do servidor: ${data.error ?? 'erro sem mensagem'}`)));

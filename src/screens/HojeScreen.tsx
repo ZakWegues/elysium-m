@@ -13,6 +13,7 @@ import { Reator } from '../components/Reator';
 import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { CardElysium, CardIdeia, CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
+import { CardEstudo } from './hoje/CardEstudo';
 import TarefasScreen from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
 
@@ -322,6 +323,12 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
                 <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>{a.titulo}</Text> — {a.detalhe}</Text>
               </Card>
             ))}
+
+            {/* Fase 20: pomodoro, cartões de revisão e plano de estudo. */}
+            {vis('estudo') && (<>
+            {secao('ESTUDO')}
+            <CardEstudo pairing={pairing} />
+            </>)}
 
             {vis('habitos-de-hoje') && (<>
             {secao('HÁBITOS DE HOJE', { rotulo: 'Hábito', onPress: () => setHabitoEdit({}) })}

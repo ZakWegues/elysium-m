@@ -196,7 +196,12 @@ export type RpcMethod =
   | 'cartoes.list'
   | 'cartoes.responder'
   | 'cartoes.criar'
-  | 'cartoes.delete';
+  | 'cartoes.delete'
+  | 'pomodoro.get'
+  | 'pomodoro.start'
+  | 'pomodoro.stop'
+  | 'pomodoro.skip'
+  | 'estudo.planejar';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -661,6 +666,11 @@ export type RpcResults = {
   'cartoes.responder': { cartao: Cartao; restantes: number };
   'cartoes.criar': { cartao: Cartao };
   'cartoes.delete': { ok: boolean };
+  'pomodoro.get': EstadoPomodoro;
+  'pomodoro.start': EstadoPomodoro;
+  'pomodoro.stop': EstadoPomodoro;
+  'pomodoro.skip': EstadoPomodoro;
+  'estudo.planejar': { itens: ItemDespejo[]; prova: { texto: string; dia: string } | null; resumo: string };
   /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
   'weather.now': Clima | null;
   'rotinas.list': { rotinas: Rotina[]; eventos?: { id: string; rotulo: string }[] };
@@ -712,6 +722,13 @@ export type Cartao = {
   id: string; frente: string; verso: string; caixa: number; proxima: string;
   origem: 'quiz' | 'manual'; criadoEm: number; acertos: number; erros: number;
 };
+/**
+ * O pomodoro do PC (fase 20). `fimEm` e `agora` vêm no relógio do PC: o celular acerta a
+ * diferença em vez de confiar que os dois relógios batem.
+ */
+export type EstadoPomodoro =
+  | { ativo: false; config?: { foco: number; pausa: number; longa: number; ciclos: number } }
+  | { ativo: true; fase: 'foco' | 'pausa' | 'longa'; faseMin: number; fimEm: number; restaMs: number; ciclo: number; de: number; agora: number };
 /** Comando de IA do menu "Ely, …" sobre texto selecionado. */
 export type ComandoIa = { id: string; nome: string; instrucao: string; fabrica?: boolean };
 

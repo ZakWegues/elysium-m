@@ -3,6 +3,7 @@ import { openAuthedWebSocket, streamUrl } from './ws';
 import { backoffDelay } from './http';
 import { receberFrameEstado } from './estadoPc';
 import { receberFrameModo } from './modo';
+import { receberFramePomodoro } from './pomodoro';
 
 export type TelemetryFrame = Record<string, unknown> & { type: 'telemetry' };
 export type TelemetryStatus = 'connecting' | 'open' | 'closed';
@@ -47,6 +48,8 @@ export function openTelemetryStream(
       } else if (data.type === 'modo') {
         // Fase 20: o chip do modo acompanha a troca feita no PC ou pela voz.
         receberFrameModo(data);
+      } else if (data.type === 'pomodoro') {
+        receberFramePomodoro(data);
       }
     };
 

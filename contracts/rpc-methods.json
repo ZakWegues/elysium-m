@@ -157,6 +157,10 @@
       "destructive": false
     },
     {
+      "method": "estudo.planejar",
+      "destructive": false
+    },
+    {
       "method": "foco.lista",
       "destructive": false
     },
@@ -410,6 +414,22 @@
     },
     {
       "method": "perfil.set",
+      "destructive": false
+    },
+    {
+      "method": "pomodoro.get",
+      "destructive": false
+    },
+    {
+      "method": "pomodoro.skip",
+      "destructive": false
+    },
+    {
+      "method": "pomodoro.start",
+      "destructive": false
+    },
+    {
+      "method": "pomodoro.stop",
       "destructive": false
     },
     {
