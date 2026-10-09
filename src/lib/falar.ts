@@ -164,6 +164,11 @@ export function pararDeFalar(): void {
   // nessa janela e o áudio saía mesmo assim.
   geracao++;
   controle = null;
+  // A fala antecipada esperando a próxima frase também acorda (e termina): o `terminarAtual`
+  // dela é trocado pelo do player a cada frase, então não dava para contar com ele.
+  const acordar = acordarFonte;
+  acordarFonte = null;
+  acordar?.();
   Speech.stop();
   soltarPlayer();
   void tirarAvisoDaVozDoAparelho();
@@ -245,7 +250,12 @@ async function falarDaFonte(fonte: FontePartes, trecho: string, pairing: Pairing
 export interface FalaAntecipada {
   adicionar(frase: string): void;
   fechar(resto: string): Promise<void>;
+  /** Parar ou erro: esvazia o que faltava e, se esta fala ainda é a que toca, cala na hora. */
+  abortar(): void;
 }
+
+/** Quem espera a próxima frase da fala antecipada — o `pararDeFalar` acorda. */
+let acordarFonte: (() => void) | null = null;
 
 export function abrirFalaAntecipada(pairing: Pairing | null): FalaAntecipada {
   const fila: string[] = [];
@@ -253,6 +263,8 @@ export function abrirFalaAntecipada(pairing: Pairing | null): FalaAntecipada {
   let conhecidas = 0;
   let acordar: ((v: string | null) => void) | null = null;
   let fim: Promise<void> | null = null;
+  /** A geração desta fala (o `falarDaFonte` avança e lê de forma síncrona, antes do 1º await). */
+  let minhaGeracao = -1;
 
   const entregar = () => {
     if (!acordar) return;
@@ -266,14 +278,14 @@ export function abrirFalaAntecipada(pairing: Pairing | null): FalaAntecipada {
       return new Promise<string | null>((r) => {
         acordar = r;
         // "Interromper" enquanto espera a próxima frase: ninguém fica pendurado.
-        terminarAtual = () => { if (acordar === r) { acordar = null; r(null); } };
+        acordarFonte = () => { if (acordar === r) { acordar = null; r(null); } };
       });
     },
     conhecidas: () => conhecidas,
   };
   const empurrar = (texto: string) => {
     for (const p of partesDaFala(texto)) { fila.push(p); conhecidas++; }
-    if (!fim && fila.length) fim = falarDaFonte(fonte, trechoParaMostrar(fila[0]), pairing);
+    if (!fim && fila.length) { fim = falarDaFonte(fonte, trechoParaMostrar(fila[0]), pairing); minhaGeracao = geracao; }
     entregar();
   };
   return {
@@ -281,6 +293,12 @@ export function abrirFalaAntecipada(pairing: Pairing | null): FalaAntecipada {
     fechar: (resto) => {
       if (!acabou) { empurrar(resto.trim()); acabou = true; entregar(); }
       return fim ?? Promise.resolve();
+    },
+    abortar: () => {
+      acabou = true;
+      fila.length = 0;
+      entregar();
+      if (fim && minhaGeracao === geracao) pararDeFalar();
     },
   };
 }

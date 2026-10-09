@@ -141,6 +141,9 @@ export default function ChatScreen({
   // gravação começar (ela espera o reconhecedor do "Ely" soltar o microfone), o "parar"
   // via `recording` ainda falso e saía, e o gravador ficava ligado sem ninguém segurando.
   const inicioGravacaoRef = useRef(0);
+  // Bloco 191 (revisão): a conversa está sendo lida do armazenamento; a fala da Ely espera.
+  const carregandoRef = useRef(false);
+  const falaPendenteRef = useRef<string | null>(null);
   const soltouRef = useRef(false);
 
   function pushError(text: string) {
@@ -154,22 +157,32 @@ export default function ChatScreen({
   useEffect(() => {
     if (sessionId === sessionIdRef.current) return;
 
+    carregandoRef.current = true;
     (async () => {
-      if (sessionId) {
-        const sessions = await listSessions();
-        const found = sessions.find((s) => s.id === sessionId);
-        if (found) {
-          sessionIdRef.current = found.id;
-          favoriteRef.current = found.favorite;
-          createdAtRef.current = found.createdAt;
-          setMessages(found.messages);
-          return;
+      try {
+        if (sessionId) {
+          const sessions = await listSessions();
+          const found = sessions.find((s) => s.id === sessionId);
+          if (found) {
+            sessionIdRef.current = found.id;
+            favoriteRef.current = found.favorite;
+            createdAtRef.current = found.createdAt;
+            setMessages(found.messages);
+            return;
+          }
         }
+        sessionIdRef.current = null;
+        favoriteRef.current = false;
+        createdAtRef.current = Date.now();
+        setMessages([{ id: 'welcome', from: 'reply', text: BOAS_VINDAS, ts: Date.now() }]);
+      } finally {
+        carregandoRef.current = false;
+        // Bloco 191: a pergunta da Ely que chegou durante o carregamento entra DEPOIS dele —
+        // antes, o carregamento terminava por cima e a bolha sumia.
+        const pendente = falaPendenteRef.current;
+        falaPendenteRef.current = null;
+        if (pendente) setMessages((prev) => [...prev, { id: `ely-${Date.now()}`, from: 'reply', text: pendente, ts: Date.now() }]);
       }
-      sessionIdRef.current = null;
-      favoriteRef.current = false;
-      createdAtRef.current = Date.now();
-      setMessages([{ id: 'welcome', from: 'reply', text: BOAS_VINDAS, ts: Date.now() }]);
     })();
   }, [sessionId, pairing.activeIp, pairing.port]);
 
@@ -304,6 +317,7 @@ export default function ChatScreen({
     if (!falaDaEly) return;
     const texto = falaDaEly;
     onFalaDaElyMostrada?.();
+    if (carregandoRef.current) { falaPendenteRef.current = texto; return; }
     setMessages((prev) => [...prev, { id: `ely-${Date.now()}`, from: 'reply', text: texto, ts: Date.now() }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [falaDaEly]);
@@ -634,12 +648,12 @@ export default function ChatScreen({
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
-      if (paradoRef.current) { void fala?.fechar(''); return null; }
+      if (paradoRef.current) { fala?.abortar(); return null; }
       bolha.fechar(reply);
       return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
-      // O que já foi dito fica; a fala termina na frase em que estava.
-      void fala?.fechar('');
+      // Erro no meio: o que já foi dito fica, e a voz para junto com a resposta.
+      fala?.abortar();
       setEscrevendoId(null);
       if (!paradoRef.current) pushError(errMessage(err));
       return null;
@@ -746,11 +760,11 @@ export default function ChatScreen({
       const bolha = bolhaEmPedacos();
       bolhaAtualRef.current = bolha;
       const { reply } = await conn.sendText(texto, (parcial) => { bolha.onChunk(parcial); ant.aoPedaco(parcial); });
-      if (paradoRef.current) { void fala?.fechar(''); return null; }
+      if (paradoRef.current) { fala?.abortar(); return null; }
       bolha.fechar(reply);
       return { reply, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
-      void fala?.fechar('');
+      fala?.abortar();
       setEscrevendoId(null);
       if (!paradoRef.current) pushError(errMessage(err));
       return null;
@@ -791,7 +805,7 @@ export default function ChatScreen({
       liberarMicrofone('gravar');
       // A fala tem o botão "Interromper" do App (02/10); aqui só espera ela acabar.
       if (resposta && turnoRef.current) await falarResposta(resposta);
-      else void resposta?.fala?.fechar('');
+      else resposta?.fala?.abortar();
     } catch (err) {
       pushError(`Voz: ${errMessage(err)}`);
     } finally {
