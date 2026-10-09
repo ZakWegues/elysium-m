@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View,
+  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Switch, TextInput, View,
 } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
@@ -9,7 +9,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
 import {
-  callRpc, AppEntry, CapturedFrame, DiskEntry, MediaOperation, MemoryFact,
+  callRpc, AppEntry, CapturedFrame, DiskEntry, Episodio, MediaOperation, MemoryFact,
   PowerOperation, ProcessEntry, Reminder, ScreenInfo,
   Janela, Armazenamento,
 } from '../lib/rpc';
@@ -565,6 +565,32 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
 
   useEffect(() => { load(); }, [load]);
 
+  // Fase 19 (bloco 190): as conversas que a Ely lembra e o modo anônimo. PC antigo não tem
+  // esses métodos: a seção simplesmente não aparece.
+  const [episodios, setEpisodios] = useState<Episodio[] | null>(null);
+  const [anonimo, setAnonimo] = useState(false);
+  useEffect(() => {
+    callRpc(pairing, 'episodios.list').then(r => setEpisodios(r.episodios)).catch(() => setEpisodios(null));
+    callRpc(pairing, 'memoria.anonimo.get').then(r => setAnonimo(r.anonimo)).catch(() => {});
+  }, [pairing]);
+  async function alternarAnonimo(ligar: boolean) {
+    setAnonimo(ligar);
+    try { setAnonimo((await callRpc(pairing, 'memoria.anonimo.set', { ligar })).anonimo); haptica.leve(); }
+    catch (err) { setAnonimo(!ligar); onError(err, 'Falha no modo anônimo'); }
+  }
+  function apagarEpisodio(ep: Episodio) {
+    Alert.alert('Apagar da memória?', `A Ely esquece esta conversa: "${ep.resumo}"`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Apagar', style: 'destructive', onPress: async () => {
+        try {
+          await callRpc(pairing, 'episodios.delete', { id: ep.id }, { confirmed: true });
+          haptica.medio();
+          setEpisodios(prev => (prev ?? []).filter(e => e.id !== ep.id));
+        } catch (err) { onError(err, 'Falha ao apagar'); }
+      } },
+    ]);
+  }
+
   async function add() {
     const text = draft.trim();
     if (!text) return;
@@ -645,6 +671,37 @@ function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorH
           <Feather name="plus" size={18} color={palette.onPrimary} />
         </Pressable>
       </View>
+
+      {episodios !== null && (
+        <View style={{ gap: tokens.spacing.sm, marginTop: tokens.spacing.md }}>
+          <Text variant="label" color={palette.textMuted}>CONVERSAS QUE A ELY LEMBRA</Text>
+          {episodios.length === 0 && <Vazio icone="message-circle" texto="Nenhuma ainda. Quando uma conversa termina, ela guarda um resumo curto." />}
+          {episodios.slice(0, 30).map(ep => (
+            <View key={ep.id} style={styles.procRow}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="body">{ep.resumo}</Text>
+                <Text variant="caption" color={palette.textMuted}>
+                  {new Date(ep.em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                  {ep.pendencias.length ? ` · ficou de: ${ep.pendencias.join('; ')}` : ''}
+                </Text>
+              </View>
+              <Pressable onPress={() => apagarEpisodio(ep)} hitSlop={12} accessibilityRole="button" accessibilityLabel={`Apagar da memória: ${ep.resumo}`} style={{ minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="x-circle" size={20} color={palette.error} />
+              </Pressable>
+            </View>
+          ))}
+          <View style={[styles.procRow, { gap: tokens.spacing.sm }]}>
+            <Feather name="eye-off" size={18} color={anonimo ? palette.primary : palette.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text variant="body">Modo anônimo</Text>
+              <Text variant="caption" color={palette.textMuted}>
+                {anonimo ? 'Ligado: nada das conversas vira lembrança até desligar (ou o PC reiniciar o ELYSIUM).' : 'Para uma conversa não ser lembrada. Também por voz: "modo anônimo".'}
+              </Text>
+            </View>
+            <Switch value={anonimo} onValueChange={alternarAnonimo} trackColor={{ true: palette.primary }} accessibilityLabel="Modo anônimo" />
+          </View>
+        </View>
+      )}
     </View>
   );
 }

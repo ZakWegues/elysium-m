@@ -106,6 +106,11 @@ export type RpcMethod =
   | 'memory.add'
   | 'memory.remove'
   | 'memory.edit'
+  | 'episodios.list'
+  | 'episodios.delete'
+  | 'episodios.clear'
+  | 'memoria.anonimo.get'
+  | 'memoria.anonimo.set'
   | 'reminders.list'
   | 'reminders.create'
   | 'reminders.cancel'
@@ -187,6 +192,8 @@ export type NowPlaying = {
 };
 
 export type MemoryFact = { id: string; text: string; createdAt: number };
+/** Uma conversa que a Ely lembra (bloco 190): resumo curto, assuntos e o que ficou pendente. */
+export type Episodio = { id: string; em: number; resumo: string; assuntos: string[]; pendencias: string[]; perguntado?: boolean };
 
 /** Uma rotina do PC (elysium/src/services/rotinas.ts, bloco 68). */
 /** Uma janela aberta no PC (`window.list`, bloco 87). */
@@ -508,6 +515,12 @@ export type RpcResults = {
   'memory.sugestoes': { sugestoes: { id: string; text: string; createdAt: number }[] };
   'memory.aceitar': { fact: MemoryFact };
   'memory.recusar': { recusada: boolean };
+  // Fase 19 (bloco 190): as conversas que a Ely lembra e o modo anônimo.
+  'episodios.list': { episodios: Episodio[] };
+  'episodios.delete': { removed: boolean };
+  'episodios.clear': { removidos: number };
+  'memoria.anonimo.get': { anonimo: boolean };
+  'memoria.anonimo.set': { anonimo: boolean };
   'foco.start': EstadoFoco;
   'foco.stop': EstadoFoco;
   'system.saude.consertar': { message: string };
