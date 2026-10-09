@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, View, ViewStyle } from 'react-native';
+import { Alert, AppState, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
+import { criarAdiador, gravacaoCurta } from '../lib/adiador';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
 import { useAbaAtiva } from '../components/AbaViva';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
@@ -135,6 +136,13 @@ export default function ChatScreen({
   const favoriteRef = useRef(false);
   const createdAtRef = useRef(Date.now());
 
+  const gravadorRef = useRef(criarAdiador<Parameters<typeof saveSession>[0]>((s) => { void saveSession(s); }, 800, (s) => s.id));
+  // Bloco 196: quando o dedo encostou e se já soltou — o toque rápido soltava ANTES de a
+  // gravação começar (ela espera o reconhecedor do "Ely" soltar o microfone), o "parar"
+  // via `recording` ainda falso e saía, e o gravador ficava ligado sem ninguém segurando.
+  const inicioGravacaoRef = useRef(0);
+  const soltouRef = useRef(false);
+
   function pushError(text: string) {
     setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text, ts: Date.now() }]);
   }
@@ -178,7 +186,9 @@ export default function ChatScreen({
       onSessionChange(sessionIdRef.current);
     }
 
-    saveSession({
+    // Bloco 196: adiado — o streaming muda `messages` a cada pedaço, e cada gravação relia e
+    // regravava o histórico inteiro. Agora grava uma vez quando a conversa para de mudar.
+    gravadorRef.current.agendar({
       id: sessionIdRef.current,
       title: deriveTitle(messages),
       createdAt: createdAtRef.current,
@@ -187,6 +197,12 @@ export default function ChatScreen({
       messages,
     });
   }, [messages]);
+
+  // Sair da tela ou mandar o app para o fundo grava o que estava esperando, na hora.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => { if (s !== 'active') gravadorRef.current.descarregar(); });
+    return () => { sub.remove(); gravadorRef.current.descarregar(); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -212,7 +228,7 @@ export default function ChatScreen({
       } catch (err) {
         if (!cancelled) {
           setMicStatus('denied');
-          pushError(`Falha no audio mode: ${errMessage(err)}`);
+          pushError(`Falha ao preparar o áudio: ${errMessage(err)}`);
         }
         return;
       }
@@ -481,7 +497,7 @@ export default function ChatScreen({
           { id: `file-ok-${ts + 1}`, from: 'reply', text: enviados.length === 1 ? 'Arquivo entregue na caixa do PC.' : `${enviados.length} arquivos entregues na caixa do PC.`, ts: ts + 1 },
         ]);
       }
-      if (grandes.length) Alert.alert(grandes.length === 1 ? 'Arquivo grande demais' : 'Arquivos grandes demais', `Limite de 5MB por anexo — ficou de fora: ${grandes.join(', ')}.`);
+      if (grandes.length) Alert.alert(grandes.length === 1 ? 'Arquivo grande demais' : 'Arquivos grandes demais', `Limite de ${Math.round(MAILBOX_MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB por anexo — ficou de fora: ${grandes.join(', ')}.`);
       if (escolha.assets.length > arquivos.length) Alert.alert('Até 10 de cada vez', `Mandei os 10 primeiros; ${escolha.assets.length - arquivos.length} ficaram para a próxima.`);
     } catch (err) {
       if (err instanceof AuthError) {
@@ -497,6 +513,8 @@ export default function ChatScreen({
 
   async function handleRecordStart() {
     if (enviandoRef.current || recording || turnoRef.current) return;
+    soltouRef.current = false;
+    inicioGravacaoRef.current = 0;
     if (micStatus !== 'ready') {
       Alert.alert('Microfone indisponível', 'Permissão de microfone não foi concedida.');
       return;
@@ -526,16 +544,26 @@ export default function ChatScreen({
       return;
     }
 
+    // Soltou antes de a gravação começar: era um toque, não fala.
+    if (soltouRef.current) {
+      try { await recorder.stop(); } catch { /* nada gravado */ }
+      liberarMicrofone('segurar');
+      ToastAndroid.show('Segure o microfone enquanto fala.', ToastAndroid.SHORT);
+      return;
+    }
     // O dedo já está no botão e o olho na tela: a vibração é o "pode falar" que não
     // exige olhar para o mic.
     haptica.medio();
+    inicioGravacaoRef.current = Date.now();
     setRecording(true);
   }
 
   async function handleRecordStop() {
+    soltouRef.current = true;
     if (!recording) return;
     haptica.leve();
     setRecording(false);
+    const curta = gravacaoCurta(inicioGravacaoRef.current, Date.now());
 
     try {
       await recorder.stop();
@@ -546,6 +574,9 @@ export default function ChatScreen({
       liberarMicrofone('segurar');
     }
 
+    // Toque rápido (ou duplo toque do TalkBack): um áudio de meio segundo não tem pedido —
+    // mandar gastava uma transcrição e voltava "não entendi".
+    if (curta) { ToastAndroid.show('Segure o microfone enquanto fala.', ToastAndroid.SHORT); return; }
     const uri = recorder.uri;
     if (!uri) {
       pushError('Falha ao ler o áudio gravado: uri vazia após stop()');
