@@ -19,6 +19,9 @@ import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeNa
 import { Button, Card, Text, Toque } from '../components/ui';
 import { falaAntecipadaLigada, falar, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
+import { trocarModo, useModo } from '../lib/modo';
+import { confirmDestructive } from '../lib/confirm';
+import type { ModoDaLista } from '../lib/rpc';
 
 /**
  * As duas famílias, mais "seguir o aparelho".
@@ -40,13 +43,14 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
  * "Desparear" no fim de tudo. Agora a gaveta abre num hub; cada azulejo mostra o valor que
  * está valendo e abre a seção, com uma seta para voltar.
  */
-type Secao = 'aparencia' | 'voz' | 'conversa' | 'avisos' | 'pareamento' | 'sobre';
+type Secao = 'aparencia' | 'voz' | 'conversa' | 'modos' | 'avisos' | 'pareamento' | 'sobre';
 
 export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens, familiaResolvida, name } = useTheme();
   const [secao, setSecao] = useState<Secao | null>(null);
   const [vozPc, setVozPc] = useState(true);
   const [avisos, setAvisos] = useState(false);
+  const modo = useModo();
   useEffect(() => { vozDoPcLigada().then(setVozPc); notificacoesAtivas().then(setAvisos); }, [secao]);
 
   const cor = getPalette(name, familiaResolvida);
@@ -54,6 +58,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
     { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
+    { id: 'modos', titulo: 'Modos', icone: 'layers', resumo: modo ? `Ligado: ${modo.nome}` : 'Matemática, inglês… e os seus' },
     { id: 'avisos', titulo: 'Notificações', icone: 'bell', resumo: avisos ? 'Avisando neste celular' : 'Desligadas' },
     { id: 'pareamento', titulo: 'Pareamento', icone: 'wifi', resumo: `${pairing.activeIp}:${pairing.port}` },
     { id: 'sobre', titulo: 'Sobre', icone: 'info', resumo: `Versão ${versaoInstalada()} · atualizações` },
@@ -88,6 +93,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       {secao === 'aparencia' && <SecaoAparencia />}
       {secao === 'voz' && <VozSection pairing={pairing} />}
       {secao === 'conversa' && <SecaoConversa pairing={pairing} />}
+      {secao === 'modos' && <SecaoModos pairing={pairing} />}
       {secao === 'avisos' && (
         <View style={{ gap: tokens.spacing.lg }}>
           <AvisosLocais />
@@ -176,6 +182,93 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
         style={{ minHeight: 110, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }}
       />
       <Button title={salvando ? 'Salvando…' : 'Salvar instruções'} disabled={salvando || rascunho === perfil.instrucoesPessoais} onPress={() => gravar({ instrucoesPessoais: rascunho })} />
+    </View>
+  );
+}
+
+/**
+ * Modos da Ely (fase 20): um toque liga ou desliga; os criados por ele dá para apagar. Criar
+ * aqui ou pela voz ("cria um modo entrevistador que…"). Tudo mora no PC.
+ */
+function SecaoModos({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const modo = useModo();
+  const [lista, setLista] = useState<ModoDaLista[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [nome, setNome] = useState('');
+  const [icone, setIcone] = useState('');
+  const [instrucao, setInstrucao] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const carregar = useCallback(() => {
+    callRpc(pairing, 'modos.list')
+      .then(r => { setLista(r.modos); setErro(null); })
+      .catch(e => setErro(`O PC não respondeu (ou ainda não tem modos): ${errMessage(e)}`));
+  }, [pairing]);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function alternar(m: ModoDaLista) {
+    haptica.leve();
+    try { await trocarModo(pairing, modo?.id === m.id ? null : m.id); }
+    catch (e) { Alert.alert('Modos', errMessage(e)); }
+  }
+  async function apagar(m: ModoDaLista) {
+    if ((await confirmDestructive(`Apagar o modo ${m.nome}?`, 'A instrução dele some do PC.')) !== 'confirmed') return;
+    try { await callRpc(pairing, 'modos.delete', { id: m.id }, { confirmed: true }); carregar(); }
+    catch (e) { Alert.alert('Modos', errMessage(e)); }
+  }
+  async function criar() {
+    if (!nome.trim() || !instrucao.trim()) return;
+    setSalvando(true);
+    try {
+      await callRpc(pairing, 'modos.save', { nome: nome.trim(), instrucao: instrucao.trim(), ...(icone.trim() ? { icone: icone.trim() } : {}) });
+      setNome(''); setIcone(''); setInstrucao('');
+      haptica.sucesso();
+      carregar();
+    } catch (e) { Alert.alert('Modos', errMessage(e)); }
+    finally { setSalvando(false); }
+  }
+
+  if (erro) return <Text variant="caption" color={palette.textMuted}>{erro}</Text>;
+  if (!lista) return <ActivityIndicator color={palette.primary} />;
+  const linha = (m: ModoDaLista) => {
+    const sel = modo?.id === m.id;
+    return (
+      <Pressable key={m.id} onPress={() => alternar(m)} accessibilityLabel={`${sel ? 'Desligar' : 'Ligar'} o modo ${m.nome}`}
+        style={[styles.familiaBtn, { borderRadius: tokens.radii.md, backgroundColor: sel ? palette.primarySoft : 'transparent', borderColor: sel ? palette.primary : palette.border }]}>
+        <Text variant="label" color={palette.primary} style={{ minWidth: 28, textAlign: 'center' }}>{m.icone}</Text>
+        <View style={{ flex: 1 }}>
+          <Text variant="body" color={sel ? palette.primary : palette.text}>{m.nome}</Text>
+          <Text variant="caption" color={palette.textMuted} numberOfLines={2}>{m.meu ? m.instrucao ?? m.resumo : m.resumo}</Text>
+        </View>
+        {sel && <Feather name="check" size={16} color={palette.primary} />}
+        {m.meu && (
+          <Pressable onPress={() => apagar(m)} hitSlop={10} accessibilityLabel={`Apagar o modo ${m.nome}`}>
+            <Feather name="trash-2" size={16} color={palette.textMuted} />
+          </Pressable>
+        )}
+      </Pressable>
+    );
+  };
+  const meus = lista.filter(m => m.meu);
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="caption" color={palette.textMuted}>
+        Diga “modo matemática”, “modo inglês”… e a Ely muda o jeito de responder até você dizer “sai do modo” (ou ficar 6 horas sem usar). Vale no PC e aqui.
+      </Text>
+      {lista.filter(m => !m.meu).map(linha)}
+      <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Os seus{meus.length ? ` (${meus.length} de 12)` : ''}</Text>
+      {meus.length ? meus.map(linha) : <Text variant="caption" color={palette.textMuted}>Nenhum ainda. Pela voz: “cria um modo entrevistador que me faz perguntas de entrevista de emprego”.</Text>}
+      <View style={{ flexDirection: 'row', gap: tokens.spacing.sm, marginTop: tokens.spacing.sm }}>
+        <TextInput value={icone} onChangeText={setIcone} maxLength={2} placeholder="✦" placeholderTextColor={palette.textMuted}
+          style={{ width: 52, textAlign: 'center', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, paddingVertical: 10, fontSize: 15 }} />
+        <TextInput value={nome} onChangeText={setNome} maxLength={30} placeholder="Nome (ex.: Entrevistador)" placeholderTextColor={palette.textMuted}
+          style={{ flex: 1, color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 }} />
+      </View>
+      <TextInput value={instrucao} onChangeText={setInstrucao} multiline maxLength={1500}
+        placeholder="Como a Ely responde neste modo (ex.: uma pergunta de entrevista por vez, e avalie minha resposta)"
+        placeholderTextColor={palette.textMuted}
+        style={{ minHeight: 90, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }} />
+      <Button title={salvando ? 'Criando…' : 'Criar modo'} disabled={salvando || !nome.trim() || instrucao.trim().length < 10} onPress={criar} />
     </View>
   );
 }

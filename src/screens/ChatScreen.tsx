@@ -33,6 +33,8 @@ import { Markdown } from '../components/Markdown';
 import { paraFala, textoPuro } from '../lib/markdown';
 import * as Clipboard from 'expo-clipboard';
 import { avisarTokenRecusado } from '../lib/erroRpc';
+import { sincronizarModo, trocarModo, useModo } from '../lib/modo';
+import type { ModoDaLista } from '../lib/rpc';
 import { VozAoVivo } from '../components/VozAoVivo';
 
 /** Primeiro balão (fase 16, a persona da Ely): era "Pareado com IP:porta", detalhe técnico
@@ -100,6 +102,27 @@ export default function ChatScreen({
     if (barra === null || comandosIa) return;
     callRpc(pairing, 'comandos.list').then(r => setComandosIa(r.comandos)).catch(() => setComandosIa([]));
   }, [barra === null, comandosIa, pairing]);
+  /**
+   * Fase 20: o modo da Ely. O chip mostra o ligado; o "/" também lista os modos (um toque
+   * liga). A troca feita no PC ou pela voz chega pelo WebSocket (`lib/modo.ts`).
+   */
+  const modo = useModo();
+  const [modosLista, setModosLista] = useState<ModoDaLista[] | null>(null);
+  useEffect(() => { void sincronizarModo(pairing); }, [pairing]);
+  useEffect(() => {
+    if (barra === null || modosLista) return;
+    callRpc(pairing, 'modos.list').then(r => setModosLista(r.modos)).catch(() => setModosLista([]));
+  }, [barra === null, modosLista, pairing]);
+  async function escolherModo(id: string | null) {
+    haptica.leve();
+    setDraft('');
+    try {
+      const m = await trocarModo(pairing, id);
+      ToastAndroid.show(m ? `Modo ${m.nome} ligado.` : 'Saí do modo.', ToastAndroid.SHORT);
+    } catch (e) {
+      ToastAndroid.show(`Não consegui trocar o modo: ${errMessage(e)}`, ToastAndroid.LONG);
+    }
+  }
   const [sending, setSendingEstado] = useState(false);
   /**
    * O estado `sending` só muda no próximo render: dois toques rápidos passavam os dois pela
@@ -304,7 +327,8 @@ export default function ChatScreen({
       .then(r => { if (vivo) setStarters(r.starters ?? []); })
       .catch(() => { /* sem PC, sem bolhas — a tela funciona igual */ });
     return () => { vivo = false; };
-  }, [pairing]);
+    // O modo troca as bolhas (no modo matemática, "Resolve passo a passo: …").
+  }, [pairing, modo?.id]);
 
   function speakReply(reply: string) {
     // A voz neural do PC quando der; a do aparelho quando não (bloco 85).
@@ -958,6 +982,12 @@ export default function ChatScreen({
       {/* "/" = comandos de IA (bloco 137): toque escolhe, depois escreva ou cole o texto. */}
       {barra !== null && !comandoEscolhido && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          {(modosLista ?? []).filter(m => `modo ${m.nome}`.toLowerCase().includes(barra.trim())).map(m => (
+            <Pressable key={`modo-${m.id}`} onPress={() => escolherModo(m.id)} accessibilityLabel={`Ligar o modo ${m.nome}`}
+              style={[styles.sugestao, { borderColor: modo?.id === m.id ? palette.primary : palette.glassBorder, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}>
+              <Text variant="caption" color={palette.text}>{m.icone} Modo {m.nome}</Text>
+            </Pressable>
+          ))}
           {(comandosIa ?? []).filter(c => c.nome.toLowerCase().includes(barra.trim())).map(c => (
             <Pressable key={c.id} onPress={() => setDraft(`/${c.nome} `)}
               style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}>
@@ -968,8 +998,28 @@ export default function ChatScreen({
         </View>
       )}
 
+      {/* Fase 20: o modo ligado. O ✕ sai; tocar no nome abre a lista pelo "/". */}
+      {modo && barra === null && (
+        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          <View style={[styles.chipModo, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.full }]}>
+            <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel={`Modo ${modo.nome} ligado. Toque para trocar`}>
+              <Text variant="caption" color={palette.text}>{modo.icone}  Modo {modo.nome}</Text>
+            </Pressable>
+            <Pressable onPress={() => escolherModo(null)} hitSlop={10} accessibilityLabel="Sair do modo">
+              <Feather name="x" size={14} color={palette.textMuted} />
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {starters.length > 0 && messages.length <= 1 && !sending && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+          {!modo && (
+            <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel="Escolher um modo"
+              style={[styles.starter, { borderRadius: tokens.radii.full, borderColor: palette.primary, backgroundColor: palette.primarySoft }]}>
+              <Text variant="caption" color={palette.primary}>Modos…</Text>
+            </Pressable>
+          )}
           {starters.map((t) => (
             <Pressable
               key={t}
@@ -1185,6 +1235,7 @@ const styles = StyleSheet.create({
   },
   ponto: { width: 7, height: 7, borderRadius: 4 },
   starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, paddingBottom: 10 },
+  chipModo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1 },
   starter: { paddingVertical: 8, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, maxWidth: '100%' },
   inputRow: {
     flexDirection: 'row',

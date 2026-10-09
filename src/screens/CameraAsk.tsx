@@ -7,6 +7,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
+import { useModo } from '../lib/modo';
 import { errMessage } from '../lib/errors';
 import { useKeyboard } from '../lib/useKeyboard';
 import { useTheme } from '../theme';
@@ -33,6 +34,7 @@ export default function CameraAsk({
 }) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  const modo = useModo();
   const keyboard = useKeyboard();
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -141,6 +143,13 @@ export default function CameraAsk({
                 },
               ]}
             />
+
+            {/* Fase 20: no modo matemática, foto da lista de exercícios vira resolução passo a passo. */}
+            {modo && modo.id !== 'estudo' && (
+              <Text variant="caption" color={palette.primary}>
+                {modo.icone}  Modo {modo.nome}: {modo.resumo}
+              </Text>
+            )}
 
             {error && <Text variant="caption" color={palette.error}>{error}</Text>}
 

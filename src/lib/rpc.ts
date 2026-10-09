@@ -186,7 +186,17 @@ export type RpcMethod =
   | 'comandos.delete'
   | 'foco.lista'
   | 'listas.clearDone'
-  | 'listas.delete';
+  | 'listas.delete'
+  // Fase 20: modos da Ely e cartões de revisão.
+  | 'modos.list'
+  | 'modos.get'
+  | 'modos.set'
+  | 'modos.save'
+  | 'modos.delete'
+  | 'cartoes.list'
+  | 'cartoes.responder'
+  | 'cartoes.criar'
+  | 'cartoes.delete';
 
 export type RepeatState = 'off' | 'track' | 'context';
 
@@ -642,6 +652,15 @@ export type RpcResults = {
   'foco.lista': { apps: string[] };
   'listas.clearDone': { removidos: number };
   'listas.delete': { ok: boolean };
+  'modos.list': { modos: ModoDaLista[]; ativo: ModoAtivo | null };
+  'modos.get': { ativo: ModoAtivo | null };
+  'modos.set': { ativo: ModoAtivo | null };
+  'modos.save': { modo: ModoDaLista };
+  'modos.delete': { ok: boolean };
+  'cartoes.list': { cartoes: Cartao[]; vencidos: string[] };
+  'cartoes.responder': { cartao: Cartao; restantes: number };
+  'cartoes.criar': { cartao: Cartao };
+  'cartoes.delete': { ok: boolean };
   /** `null` quando não há cidade configurada ou a consulta falhou — ver `clima.ts`. */
   'weather.now': Clima | null;
   'rotinas.list': { rotinas: Rotina[]; eventos?: { id: string; rotulo: string }[] };
@@ -684,6 +703,15 @@ export type SyncedChatSession = {
 export type EventoAgenda = { id: string; titulo: string; inicio: number; fim: number; diaInteiro: boolean; local?: string };
 /** Um trecho achado na busca das conversas do PC. */
 export type AchadoConversa = { sessaoId: string; titulo: string; trecho: string; em: number; deQuem: 'eu' | 'elysium' };
+/** O modo ligado no PC (fase 20) — `modos.ts` do desktop. */
+export type ModoAtivo = { id: string; nome: string; icone: string; resumo: string; meu: boolean };
+/** Na lista: os criados por ele trazem a instrução (para editar e apagar). */
+export type ModoDaLista = ModoAtivo & { instrucao?: string };
+/** Cartão de revisão (Leitner, caixas 1–5) — `cartoes.ts` do desktop. */
+export type Cartao = {
+  id: string; frente: string; verso: string; caixa: number; proxima: string;
+  origem: 'quiz' | 'manual'; criadoEm: number; acertos: number; erros: number;
+};
 /** Comando de IA do menu "Ely, …" sobre texto selecionado. */
 export type ComandoIa = { id: string; nome: string; instrucao: string; fabrica?: boolean };
 

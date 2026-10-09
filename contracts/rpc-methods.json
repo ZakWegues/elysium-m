@@ -33,6 +33,22 @@
       "destructive": false
     },
     {
+      "method": "cartoes.criar",
+      "destructive": false
+    },
+    {
+      "method": "cartoes.delete",
+      "destructive": true
+    },
+    {
+      "method": "cartoes.list",
+      "destructive": false
+    },
+    {
+      "method": "cartoes.responder",
+      "destructive": false
+    },
+    {
       "method": "chat.ackDeleted",
       "destructive": false
     },
@@ -346,6 +362,26 @@
     },
     {
       "method": "metas.save",
+      "destructive": false
+    },
+    {
+      "method": "modos.delete",
+      "destructive": true
+    },
+    {
+      "method": "modos.get",
+      "destructive": false
+    },
+    {
+      "method": "modos.list",
+      "destructive": false
+    },
+    {
+      "method": "modos.save",
+      "destructive": false
+    },
+    {
+      "method": "modos.set",
       "destructive": false
     },
     {
