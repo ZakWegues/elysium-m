@@ -28,7 +28,30 @@ export type EstadoAppPc = {
   anterior: { motivo: MotivoEncerramento; em: number } | null;
   /** PC 2.5+: para onde vai o som do PC (a voz da Ely). */
   som?: { nome: string; volume: number; mudo: boolean; virtual: boolean } | null;
+  /** Fase 19: as sessões dos últimos 7 dias (quando o ELYSIUM abriu e como terminou). */
+  sessoes?: { inicio: number; fim: number; motivo: MotivoEncerramento }[];
 };
+
+/**
+ * Fase 19: "seg 08:10–23:40 · PC desligou". As sessões dos últimos dias, uma linha cada, as
+ * mais recentes primeiro (no máximo `max`). Pura.
+ */
+export function linhasDasSessoes(sessoes: EstadoAppPc['sessoes'], agora = Date.now(), max = 5): string[] {
+  if (!sessoes?.length) return [];
+  const h = (ms: number) => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dia = (ms: number) => {
+    const d = new Date(ms); const hoje = new Date(agora);
+    const ontem = new Date(agora - 86_400_000);
+    if (d.toDateString() === hoje.toDateString()) return 'hoje';
+    if (d.toDateString() === ontem.toDateString()) return 'ontem';
+    return d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric' }).replace('.', '');
+  };
+  const como: Record<MotivoEncerramento, string> = { fechado: 'fechado', atualizando: 'atualizou', desligando: 'PC desligou', suspenso: 'PC dormiu', interrompido: 'parou sem avisar' };
+  return sessoes.slice(0, max).map(s => {
+    const mesmoDia = new Date(s.inicio).toDateString() === new Date(s.fim).toDateString();
+    return `${dia(s.inicio)} ${h(s.inicio)}–${mesmoDia ? '' : `${dia(s.fim)} `}${h(s.fim)} · ${como[s.motivo] ?? s.motivo}`;
+  });
+}
 
 export type EstadoPc = {
   /** O último estado que o PC mandou. */
@@ -178,6 +201,8 @@ export function detalhesEstadoPc(s: EstadoPc, agora = Date.now()): { rotulo: str
     const som = s.app.som;
     l.push({ rotulo: 'Som do PC', valor: `${som.nome} · ${som.mudo ? 'no mudo' : `${som.volume}%`}${som.virtual ? ' · virtual, ninguém ouve' : ''}` });
   }
+  const sess = linhasDasSessoes(s.app?.sessoes, agora);
+  if (sess.length) l.push({ rotulo: 'Últimas sessões', valor: sess.join('\n') });
   if (s.vistoEm) l.push({ rotulo: 'Última resposta', valor: s.online === false ? `${hora(s.vistoEm)} (${haQuanto(s.vistoEm, agora)})` : 'agora' });
   return l;
 }

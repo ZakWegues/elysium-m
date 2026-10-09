@@ -43,3 +43,17 @@ describe('estado do PC no celular', () => {
     expect(haQuanto(new Date(2026, 9, 7, 18, 40).getTime(), AGORA)).toMatch(/^desde ontem 18:40/);
   });
 });
+
+describe('sessões do PC (fase 19)', async () => {
+  const { linhasDasSessoes } = await import('../src/lib/estadoPc');
+  it('uma linha por sessão, hoje/ontem, e nada sem histórico', () => {
+    const agora = new Date(2026, 9, 9, 20, 0).getTime();
+    const l = linhasDasSessoes([
+      { inicio: new Date(2026, 9, 9, 8, 10).getTime(), fim: new Date(2026, 9, 9, 12, 0).getTime(), motivo: 'fechado' },
+      { inicio: new Date(2026, 9, 8, 19, 0).getTime(), fim: new Date(2026, 9, 9, 1, 30).getTime(), motivo: 'desligando' },
+    ], agora);
+    expect(l[0]).toBe('hoje 08:10–12:00 · fechado');
+    expect(l[1]).toBe('ontem 19:00–hoje 01:30 · PC desligou');
+    expect(linhasDasSessoes(undefined, agora)).toEqual([]);
+  });
+});
