@@ -49,6 +49,8 @@ export default function ChatScreen({
   semCabecalho,
   perguntaPendente,
   onPerguntaEnviada,
+  falaDaEly,
+  onFalaDaElyMostrada,
   pedidoVoz,
   onPedidoVozTratado,
 }: {
@@ -63,6 +65,9 @@ export default function ChatScreen({
   /** Texto que a busca da Início pediu para enviar. Enviado uma vez, ao chegar. */
   perguntaPendente?: string | null;
   onPerguntaEnviada?: () => void;
+  /** Bloco 191: uma pergunta da Ely ("como foi a prova?") que entra como bolha dela. */
+  falaDaEly?: string | null;
+  onFalaDaElyMostrada?: () => void;
   onUnpair: () => void;
   sessionId: string | null;
   onSessionChange: (id: string) => void;
@@ -276,6 +281,16 @@ export default function ChatScreen({
     // A voz neural do PC quando der; a do aparelho quando não (bloco 85).
     falar(reply, pairing);
   }
+
+  // Bloco 191: a pergunta do card "A Ely quer saber" vira a bolha da Ely; o PC já guardou
+  // a mesma fala no histórico, então a resposta digitada chega com contexto.
+  useEffect(() => {
+    if (!falaDaEly) return;
+    const texto = falaDaEly;
+    onFalaDaElyMostrada?.();
+    setMessages((prev) => [...prev, { id: `ely-${Date.now()}`, from: 'reply', text: texto, ts: Date.now() }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [falaDaEly]);
 
   // Pergunta vinda da busca da Início. Limpa ANTES de enviar: se o envio falhar e o
   // componente remontar, a pergunta não pode ser disparada de novo sozinha.

@@ -36,7 +36,7 @@ function restante(ms: number) {
   return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pairing; pedidoTarefas?: number }) {
+export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void }) {
   const { palette, tokens } = useTheme();
   const [painel, setPainel] = useState<PainelHoje | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -120,6 +120,19 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
       } },
     ]);
   }
+  /** Bloco 191: responder abre o Chat com a pergunta como fala da Ely; dispensar some. */
+  async function comoFoi(id: string, responder: boolean) {
+    setPainel(p => p && { ...p, acompanhamentos: (p.acompanhamentos ?? []).filter(a => a.id !== id) });
+    try {
+      if (responder) {
+        const r = await callRpc(pairing, 'acompanhamento.abrir', { id });
+        onResponder?.(r.pergunta);
+      } else {
+        await callRpc(pairing, 'acompanhamento.dispensar', { id });
+      }
+    } catch { /* PC fora: a pergunta volta no próximo painel */ }
+  }
+
   async function abrirTodos() {
     try { setTodos(await callRpc(pairing, 'habitos.list')); }
     catch (e) { Alert.alert('Não consegui ler', errMessage(e)); }
@@ -288,6 +301,20 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0 }: { pairing: Pa
                 </Card>
               </>
             )}
+
+            {/* Fase 19 (bloco 191): "A Ely quer saber" — como foi o compromisso que passou. */}
+            {(painel.acompanhamentos ?? []).map(a => (
+              <Card key={a.id} glass style={[styles.alerta, { borderColor: palette.primary }]}>
+                <Feather name="message-circle" size={16} color={palette.primary} />
+                <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>A Ely quer saber</Text> — {a.pergunta}</Text>
+                <Pressable onPress={() => comoFoi(a.id, true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Responder: ${a.pergunta}`} style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 }}>
+                  <Text variant="caption" color={palette.primary} style={{ fontWeight: '700' }}>Responder</Text>
+                </Pressable>
+                <Pressable onPress={() => comoFoi(a.id, false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dispensar a pergunta" style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="x" size={16} color={palette.textMuted} />
+                </Pressable>
+              </Card>
+            ))}
 
             {painel.alertas.map((a, i) => (
               <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : palette.accent }]}>

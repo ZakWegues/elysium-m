@@ -36,6 +36,8 @@ export default function ChatHub({
   pedidoModo,
   perguntaPendente,
   onPerguntaEnviada,
+  falaDaEly,
+  onFalaDaElyMostrada,
   pedidoVoz,
   onPedidoVozTratado,
 }: {
@@ -51,6 +53,8 @@ export default function ChatHub({
   /** Texto vindo da busca da Início, para o chat da IA enviar assim que abrir. */
   perguntaPendente?: string | null;
   onPerguntaEnviada?: () => void;
+  falaDaEly?: string | null;
+  onFalaDaElyMostrada?: () => void;
   /** "Elysium" ouvido (bloco 129) — vai para o chat da IA, mesmo se o hub estava nos recados. */
   pedidoVoz?: { n: number; texto: string } | null;
   onPedidoVozTratado?: () => void;
@@ -145,6 +149,8 @@ export default function ChatHub({
           <ChatScreen
             perguntaPendente={perguntaPendente}
             onPerguntaEnviada={onPerguntaEnviada}
+            falaDaEly={falaDaEly}
+            onFalaDaElyMostrada={onFalaDaElyMostrada}
             pedidoVoz={pedidoVoz}
             onPedidoVozTratado={onPedidoVozTratado}
             pairing={pairing}

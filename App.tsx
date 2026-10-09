@@ -85,6 +85,8 @@ function AppInner() {
   const setModoChat = useCallback((modo: 'ia' | 'pc') => setPedidoModo(p => ({ modo, n: p.n + 1 })), []);
   /** Texto que a busca da Início mandou para o chat; o ChatScreen envia ao abrir e limpa. */
   const [perguntaPendente, setPerguntaPendente] = useState<string | null>(null);
+  // Fase 19 (bloco 191): "A Ely quer saber" — a pergunta dela abre o Chat como fala da Ely.
+  const [falaDaEly, setFalaDaEly] = useState<string | null>(null);
   /** "Elysium" ouvido (bloco 129): cada disparo é um `n` novo para o Chat ouvir um pedido. */
   const [pedidoVoz, setPedidoVoz] = useState<{ n: number; texto: string } | null>(null);
   // Atualização pelo ar que chega (07/10): procura, baixa e oferece reiniciar.
@@ -444,7 +446,7 @@ function AppInner() {
         )}
         {montadas.has('control') && <AbaViva ativa={screen === 'control'}><ControlScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
         {montadas.has('rotinas') && <AbaViva ativa={screen === 'rotinas'}><RotinasScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
-        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} pedidoTarefas={pedidoTarefas} /></AbaViva>}
+        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} pedidoTarefas={pedidoTarefas} onResponder={(pergunta) => { setFalaDaEly(pergunta); setModoChat('ia'); setScreen('chat'); }} /></AbaViva>}
         {screen === 'conversations' && (
           <AbaViva ativa>
             <ConversationsScreen
@@ -475,6 +477,8 @@ function AppInner() {
               pedidoModo={pedidoModo.n}
               perguntaPendente={perguntaPendente}
               onPerguntaEnviada={() => setPerguntaPendente(null)}
+              falaDaEly={falaDaEly}
+              onFalaDaElyMostrada={() => setFalaDaEly(null)}
               pedidoVoz={pedidoVoz}
               onPedidoVozTratado={() => setPedidoVoz(null)}
             />

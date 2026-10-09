@@ -107,6 +107,8 @@ export type RpcMethod =
   | 'memory.remove'
   | 'memory.edit'
   | 'episodios.list'
+  | 'acompanhamento.abrir'
+  | 'acompanhamento.dispensar'
   | 'episodios.delete'
   | 'episodios.clear'
   | 'memoria.anonimo.get'
@@ -400,6 +402,8 @@ export type Tarefa = {
 /** O briefing do dia (`hoje.painel`, fase 16). */
 export type PainelHoje = {
   saudacao: string; frase: string; data: string;
+  /** Fase 19 (bloco 191): "A Ely quer saber". PC antigo não manda. */
+  acompanhamentos?: { id: string; pergunta: string; em: number }[];
   clima: { cidade: string; temperatura: number; max: number; min: number; descricao: string; icone: string; chuvaHoje: boolean } | null;
   lembretes: { id: string; texto: string; em: number }[];
   /** Fase 17. PC antigo não manda. */
@@ -517,6 +521,8 @@ export type RpcResults = {
   'memory.recusar': { recusada: boolean };
   // Fase 19 (bloco 190): as conversas que a Ely lembra e o modo anônimo.
   'episodios.list': { episodios: Episodio[] };
+  'acompanhamento.abrir': { pergunta: string };
+  'acompanhamento.dispensar': { ok: boolean };
   'episodios.delete': { removed: boolean };
   'episodios.clear': { removidos: number };
   'memoria.anonimo.get': { anonimo: boolean };
