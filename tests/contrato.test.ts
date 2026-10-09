@@ -12,7 +12,8 @@ import { DESTRUCTIVE_METHODS } from '../src/lib/rpc';
 const RAIZ = path.join(__dirname, '..');
 
 function metodosTipados(): string[] {
-  const src = fs.readFileSync(path.join(RAIZ, 'src/lib/rpc.ts'), 'utf8');
+  // Sem CRLF: no Windows o checkout do git troca as quebras de linha (core.autocrlf).
+  const src = fs.readFileSync(path.join(RAIZ, 'src/lib/rpc.ts'), 'utf8').replace(/\r\n/g, '\n');
   const i = src.indexOf('export type RpcMethod =');
   const j = src.indexOf("';\n", i);
   return [...src.slice(i, j + 2).matchAll(/^\s*\| '([^']+)'/gm)].map(m => m[1]);
@@ -41,6 +42,7 @@ describe('contrato RPC', () => {
   it('a cópia é igual à do desktop, quando os dois repos estão lado a lado', () => {
     const doDesktop = path.join(RAIZ, '..', 'elysium', 'contracts', 'rpc-methods.json');
     if (!fs.existsSync(doDesktop)) return;
-    expect(fs.readFileSync(path.join(RAIZ, 'contracts/rpc-methods.json'), 'utf8')).toBe(fs.readFileSync(doDesktop, 'utf8'));
+    const ler = (p: string) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+    expect(ler(path.join(RAIZ, 'contracts/rpc-methods.json'))).toBe(ler(doDesktop));
   });
 });
