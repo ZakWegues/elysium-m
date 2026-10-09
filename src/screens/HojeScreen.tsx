@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { callRpc, Habito, Meta, PainelHoje, Revisao, Tarefa } from '../lib/rpc';
+import { callRpc, Cartao, Habito, Meta, PainelHoje, Revisao, Tarefa } from '../lib/rpc';
 import { falar } from '../lib/falar';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
@@ -13,7 +13,7 @@ import { Reator } from '../components/Reator';
 import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { CardElysium, CardIdeia, CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
-import { CardEstudo } from './hoje/CardEstudo';
+import { CardEstudo, PlanoDeEstudo, Revisao as RevisaoCartoes } from './hoje/CardEstudo';
 import TarefasScreen from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
 
@@ -59,6 +59,10 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
   const [horaNova, setHoraNova] = useState('');
   /** Fase 18: as tarefas em tela cheia ("Ver todas", widget, elysium://tarefas). */
   const [tarefasAbertas, setTarefasAbertas] = useState(false);
+  /** Fase 20: as gavetas do card Estudo moram aqui, na raiz (ver CardEstudo). */
+  const [filaRevisao, setFilaRevisao] = useState<Cartao[] | null>(null);
+  const [planejando, setPlanejando] = useState(false);
+  const [versaoEstudo, setVersaoEstudo] = useState(0);
   const fecharTarefas = useCallback(() => setTarefasAbertas(false), []);
   useEffect(() => { if (pedidoTarefas) setTarefasAbertas(true); }, [pedidoTarefas]);
 
@@ -327,7 +331,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
             {/* Fase 20: pomodoro, cartões de revisão e plano de estudo. */}
             {vis('estudo') && (<>
             {secao('ESTUDO')}
-            <CardEstudo pairing={pairing} />
+            <CardEstudo pairing={pairing} versao={versaoEstudo} aoRevisar={setFilaRevisao} aoPlanejar={() => setPlanejando(true)} />
             </>)}
 
             {vis('habitos-de-hoje') && (<>
@@ -554,6 +558,12 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
         )}
       </ScrollView>
 
+      <GlassModal title="Revisão" visible={filaRevisao !== null} onClose={() => { setFilaRevisao(null); setVersaoEstudo(v => v + 1); }}>
+        {filaRevisao && <RevisaoCartoes pairing={pairing} fila={filaRevisao} aoFechar={() => { setFilaRevisao(null); setVersaoEstudo(v => v + 1); }} />}
+      </GlassModal>
+      <GlassModal title="Plano de estudo" visible={planejando} onClose={() => setPlanejando(false)}>
+        {planejando && <PlanoDeEstudo pairing={pairing} aoTerminar={() => { setPlanejando(false); void carregar(); }} />}
+      </GlassModal>
       <GlassModal title="Concluir" visible={concluindo !== null} onClose={() => setConcluindo(null)}>
         {concluindo && (
           <View style={{ gap: tokens.spacing.md }}>

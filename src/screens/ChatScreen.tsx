@@ -7,7 +7,7 @@ import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRe
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
 import { criarAdiador, gravacaoCurta } from '../lib/adiador';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
-import { useAbaAtiva } from '../components/AbaViva';
+import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -109,8 +109,12 @@ export default function ChatScreen({
   const modo = useModo();
   const [modosLista, setModosLista] = useState<ModoDaLista[] | null>(null);
   useEffect(() => { void sincronizarModo(pairing); }, [pairing]);
+  // A aba fica montada: voltar a ela confere o modo (expirou, ou mudou pela voz sem WS aberto).
+  useAoReativar(() => { void sincronizarModo(pairing); });
   useEffect(() => {
-    if (barra === null || modosLista) return;
+    // Fechou o "/": a lista é buscada de novo na próxima vez (modo criado ou PC que voltou).
+    if (barra === null) { if (modosLista) setModosLista(null); return; }
+    if (modosLista) return;
     callRpc(pairing, 'modos.list').then(r => setModosLista(r.modos)).catch(() => setModosLista([]));
   }, [barra === null, modosLista, pairing]);
   async function escolherModo(id: string | null) {

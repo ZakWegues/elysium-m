@@ -9,7 +9,7 @@ import { haptica } from '../../lib/haptica';
 import { confirmDestructive } from '../../lib/confirm';
 import { useAoReativar } from '../../components/AbaViva';
 import { useTheme } from '../../theme';
-import { Button, Card, GlassModal, Text } from '../../components/ui';
+import { Button, Card, Text } from '../../components/ui';
 
 /**
  * Estudo no Hoje (fase 20): o pomodoro do PC com o relógio, os cartões de revisão do dia
@@ -24,29 +24,44 @@ function relogio(ms: number): string {
   return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export function CardEstudo({ pairing }: { pairing: Pairing }) {
+/**
+ * As gavetas (revisão e plano) moram na raiz do Hoje: o `GlassModal` é uma camada absoluta
+ * DENTRO do pai, e dentro do card (overflow hidden) ela ficava cortada no tamanho do card.
+ * `versao` muda quando uma delas fecha — o card relê os cartões.
+ */
+export function CardEstudo({ pairing, aoRevisar, aoPlanejar, versao = 0 }: { pairing: Pairing; aoRevisar: (fila: Cartao[]) => void; aoPlanejar: () => void; versao?: number }) {
   const { palette, tokens } = useTheme();
   const { estado, diferenca } = usePomodoro();
   const [, tique] = useState(0);
   const [cartoes, setCartoes] = useState<{ cartoes: Cartao[]; vencidos: string[] } | null>(null);
-  const [revisando, setRevisando] = useState(false);
-  const [planejando, setPlanejando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
 
   const carregar = useCallback(() => {
     void sincronizarPomodoro(pairing);
     callRpc(pairing, 'cartoes.list').then(setCartoes).catch(() => setCartoes(null));
   }, [pairing]);
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { carregar(); }, [carregar, versao]);
   useAoReativar(carregar);
-  // O relógio só anda com o pomodoro ligado.
+  // O relógio só anda com o pomodoro ligado. No Hoje o WebSocket pode estar fechado (só a
+  // Início e o PC abrem a telemetria): chegando a zero, pergunta ao PC em que fase está —
+  // senão o card parava em 0:00 e "Pular" pulava a fase seguinte, que ele queria.
   useEffect(() => {
     if (!estado?.ativo) return;
-    const t = setInterval(() => tique(n => n + 1), 1000);
+    let ultimaConsulta = 0;
+    const t = setInterval(() => {
+      tique(n => n + 1);
+      const agora = Date.now();
+      if (restaDoPomodoro(estado, diferenca, agora) <= 0 && agora - ultimaConsulta > 3000) {
+        ultimaConsulta = agora;
+        void sincronizarPomodoro(pairing);
+      }
+    }, 1000);
     return () => clearInterval(t);
-  }, [estado?.ativo]);
+  }, [estado, diferenca, pairing]);
 
   async function pomo(op: 'start' | 'stop' | 'skip', params: Record<string, unknown> = {}) {
+    // Relógio zerado: a fase na tela pode já ter passado no PC — pular agora pularia a errada.
+    if (op === 'skip' && estado?.ativo && restaDoPomodoro(estado, diferenca) <= 0) { void sincronizarPomodoro(pairing); return; }
     setOcupado(true);
     try { await acaoPomodoro(pairing, op, params); haptica.leve(); }
     catch (e) { Alert.alert('Pomodoro', errMessage(e)); }
@@ -94,34 +109,32 @@ export function CardEstudo({ pairing }: { pairing: Pairing }) {
         </Text>
       </View>
       <View style={styles.botoes}>
-        {venc > 0 && botao('Revisar', 'play', () => setRevisando(true), true)}
-        {botao('Plano de estudo', 'calendar', () => setPlanejando(true))}
+        {venc > 0 && cartoes && botao('Revisar', 'play', () => aoRevisar(cartoes.cartoes.filter(c => cartoes.vencidos.includes(c.id))), true)}
+        {botao('Plano de estudo', 'calendar', aoPlanejar)}
       </View>
-
-      <GlassModal title="Revisão" visible={revisando} onClose={() => { setRevisando(false); carregar(); }}>
-        {revisando && cartoes && <Revisao pairing={pairing} fila={cartoes.cartoes.filter(c => cartoes.vencidos.includes(c.id))} aoFechar={() => { setRevisando(false); carregar(); }} />}
-      </GlassModal>
-      <GlassModal title="Plano de estudo" visible={planejando} onClose={() => setPlanejando(false)}>
-        {planejando && <PlanoDeEstudo pairing={pairing} aoTerminar={() => setPlanejando(false)} />}
-      </GlassModal>
     </Card>
   );
 }
 
-function Revisao({ pairing, fila: inicial, aoFechar }: { pairing: Pairing; fila: Cartao[]; aoFechar: () => void }) {
+export function Revisao({ pairing, fila: inicial, aoFechar }: { pairing: Pairing; fila: Cartao[]; aoFechar: () => void }) {
   const { palette, tokens } = useTheme();
   const [fila, setFila] = useState(inicial);
   const [i, setI] = useState(0);
   const [virado, setVirado] = useState(false);
   const [certos, setCertos] = useState(0);
+  // Dois toques rápidos respondiam o mesmo cartão duas vezes e pulavam o seguinte.
+  const [respondendo, setRespondendo] = useState(false);
   const c = fila[i];
 
   async function responder(acertou: boolean) {
+    if (respondendo) return;
+    setRespondendo(true);
     try {
       await callRpc(pairing, 'cartoes.responder', { id: c.id, acertou });
       if (acertou) { setCertos(n => n + 1); haptica.sucesso(); } else haptica.leve();
       setI(n => n + 1); setVirado(false);
     } catch (e) { Alert.alert('Revisão', errMessage(e)); }
+    finally { setRespondendo(false); }
   }
   async function apagar() {
     if ((await confirmDestructive('Apagar este cartão?', c.frente)) !== 'confirmed') return;
@@ -152,8 +165,8 @@ function Revisao({ pairing, fila: inicial, aoFechar }: { pairing: Pairing; fila:
       </Pressable>
       {virado && (
         <View style={{ flexDirection: 'row', gap: tokens.spacing.sm }}>
-          <View style={{ flex: 1 }}><Button title="Acertei" onPress={() => responder(true)} /></View>
-          <View style={{ flex: 1 }}><Button title="Errei" variant="secondary" onPress={() => responder(false)} /></View>
+          <View style={{ flex: 1 }}><Button title="Acertei" disabled={respondendo} onPress={() => responder(true)} /></View>
+          <View style={{ flex: 1 }}><Button title="Errei" variant="secondary" disabled={respondendo} onPress={() => responder(false)} /></View>
         </View>
       )}
       <Pressable onPress={apagar} hitSlop={8} style={{ alignSelf: 'center' }} accessibilityRole="button" accessibilityLabel="Apagar este cartão">
@@ -164,7 +177,7 @@ function Revisao({ pairing, fila: inicial, aoFechar }: { pairing: Pairing; fila:
 }
 
 /** A mesma prévia do despejo: a Ely monta, ele desmarca o que não quer, grava. */
-function PlanoDeEstudo({ pairing, aoTerminar }: { pairing: Pairing; aoTerminar: () => void }) {
+export function PlanoDeEstudo({ pairing, aoTerminar }: { pairing: Pairing; aoTerminar: () => void }) {
   const { palette, tokens } = useTheme();
   const [materia, setMateria] = useState('');
   const [dia, setDia] = useState('');
@@ -182,7 +195,8 @@ function PlanoDeEstudo({ pairing, aoTerminar }: { pairing: Pairing; aoTerminar: 
     if (!m) return null;
     const hoje = new Date();
     const d = new Date(hoje.getFullYear(), Number(m[2]) - 1, Number(m[1]));
-    if (d.getDate() !== Number(m[1])) return null;
+    // "15/13" virava 15 de janeiro do ano seguinte: o mês também tem que bater.
+    if (d.getDate() !== Number(m[1]) || d.getMonth() !== Number(m[2]) - 1) return null;
     if (d < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) d.setFullYear(d.getFullYear() + 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }

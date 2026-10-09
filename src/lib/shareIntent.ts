@@ -38,6 +38,8 @@ export function parseSharedUrl(url: string): string | null {
  * compartilhamento (URL inicial). Esquecer o segundo é o erro clássico — funciona nos
  * testes, porque o app já estava aberto, e falha no uso real.
  */
+let ultimoTratado: string | null = null;
+
 export function useShareIntent(
   pairing: Pairing | null,
   onReceived: (text: string, ok: boolean) => void,
@@ -48,6 +50,10 @@ export function useShareIntent(
 
     async function handle(url: string | null) {
       if (!url || cancelled) return;
+      // O efeito roda de novo quando o pareamento troca de IP, e o `getInitialURL` devolve o
+      // MESMO compartilhamento: sem isto, a pergunta (e o envio) se repetia.
+      if (url === ultimoTratado) return;
+      ultimoTratado = url;
       const text = parseSharedUrl(url);
       if (!text) return;
       // Fase 20 (bloco 201): qualquer página da web abre um `elysium://share?text=…`. Sem esta

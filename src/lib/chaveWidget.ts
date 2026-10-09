@@ -17,8 +17,17 @@ function nova(): string {
   return s;
 }
 
-export async function chaveDoWidget(): Promise<string> {
-  if (emMemoria) return emMemoria;
+let pendente: Promise<string> | null = null;
+
+export function chaveDoWidget(): Promise<string> {
+  if (emMemoria) return Promise.resolve(emMemoria);
+  // Duas chamadas juntas na primeira vez gerariam duas chaves (a última gravada venceria e o
+  // widget desenhado com a outra pararia de funcionar): todas esperam a mesma promessa.
+  pendente ??= gerarOuLer().finally(() => { pendente = null; });
+  return pendente;
+}
+
+async function gerarOuLer(): Promise<string> {
   try {
     const guardada = await AsyncStorage.getItem(CHAVE);
     if (guardada && /^[0-9a-f]{32}$/.test(guardada)) { emMemoria = guardada; return guardada; }

@@ -45,7 +45,7 @@ import { AbaViva } from './src/components/AbaViva';
 import { Aba, abasMontadas, mesmasAbas } from './src/lib/abas';
 import { AvisoOta } from './src/components/AvisoOta';
 import { useAtualizacaoOta } from './src/lib/atualizacaoOta';
-import { atualizarWidgetEstado } from './src/widgets/handler';
+import { atualizarWidgetEstado, atualizarWidgetsEstaticos } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
 
@@ -94,6 +94,9 @@ function AppInner() {
   const ota = useAtualizacaoOta();
   const [palavraOn, setPalavraOn] = useState(false);
   const [appNaFrente, setAppNaFrente] = useState(AppState.currentState === 'active');
+  // Fase 20: o widget Falar só liga o microfone com a chave. Widget posto antes dela (ou
+  // depois de uma atualização só de JS) ainda tem o link sem chave: redesenha ao abrir.
+  useEffect(() => { void atualizarWidgetsEstaticos(); }, []);
   useEffect(() => {
     palavraLigada().then(setPalavraOn);
     const sub = AppState.addEventListener('change', (s) => {
