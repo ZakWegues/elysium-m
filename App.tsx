@@ -32,6 +32,7 @@ import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedirPermissao } fr
 import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/estadoPc';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
+import { urlDoWidget } from './src/lib/chaveWidget';
 import * as QuickActions from 'expo-quick-actions';
 import { callRpc } from './src/lib/rpc';
 import { errMessage } from './src/lib/errors';
@@ -341,7 +342,7 @@ function AppInner() {
   });
 
   // Deep links dos widgets: elysium://busca, elysium://chat, elysium://pc, elysium://rotinas.
-  useDeepLinks(useCallback((destino) => {
+  useDeepLinks(useCallback((destino, url) => {
     if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
     else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
     else if (destino === 'pc') setScreen('control');
@@ -349,7 +350,12 @@ function AppInner() {
     else if (destino === 'hoje') setScreen('hoje');
     else if (destino === 'tarefas') { setScreen('hoje'); setPedidoTarefas(n => n + 1); }
     // Widget "Falar com a Ely" (fase 16): o mesmo pedido de voz do "Ely" e do atalho.
-    else if (destino === 'falar') { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); }
+    // Fase 20: só o NOSSO widget (com a chave) abre já ouvindo; um link de qualquer outro
+    // lugar só abre o Chat — site nenhum liga o microfone sozinho.
+    else if (destino === 'falar') {
+      setModoChat('ia'); setScreen('chat');
+      void urlDoWidget(url).then((nosso) => { if (nosso) setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); });
+    }
     else if (destino === 'inicio') setScreen('home');
   }, []));
 

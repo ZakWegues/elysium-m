@@ -30,12 +30,12 @@ function Rotulo({ p, texto }: { p: Palette; texto: string }) {
 }
 
 /** Falar com a Ely (1×1): abre o chat já ouvindo um pedido. */
-export function WidgetFalar({ p }: { p: Palette }) {
+export function WidgetFalar({ p, chave = '' }: { p: Palette; chave?: string }) {
   return (
     <FlexWidget
       style={{ ...painel(p), height: 'match_parent', width: 'match_parent', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', flexGap: 4 }}
       clickAction="OPEN_URI"
-      clickActionData={{ uri: 'elysium://falar' }}
+      clickActionData={{ uri: chave ? `elysium://falar?k=${chave}` : 'elysium://falar' }}
       accessibilityLabel="Falar com a Ely"
     >
       <FlexWidget style={{ width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: c(p.primary), backgroundColor: c(p.primarySoft), alignItems: 'center', justifyContent: 'center' }}>

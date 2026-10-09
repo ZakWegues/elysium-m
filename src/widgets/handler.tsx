@@ -6,6 +6,7 @@ import { paletaDosWidgets } from './tema';
 import { ClimaWidget, EstadoPc, FocoWidget, RotinasWidget, SaudeWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetFoco, WidgetRotinas, WidgetSaude } from './widgets';
 import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TarefasWidget, TimersWidget, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTarefas, WidgetTimers } from './widgetsStark';
 import { atrasada, quandoTarefa } from '../lib/tarefasUi';
+import { chaveDoWidget } from '../lib/chaveWidget';
 
 /**
  * O handler dos widgets (bloco 73). Roda em segundo plano, sem UI, sempre que o Android
@@ -276,7 +277,7 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
 
     // ── Fase 16 ──
     case WIDGET_FALAR:
-      renderWidget(<WidgetFalar p={p} />);
+      renderWidget(<WidgetFalar p={p} chave={await chaveDoWidget()} />);
       return;
 
     case WIDGET_HOJE: {
@@ -401,6 +402,7 @@ export async function atualizarWidgetsEstaticos(): Promise<void> {
     const p = await paletaDosWidgets();
     await requestWidgetUpdate({ widgetName: WIDGET_BUSCA, renderWidget: () => <WidgetBusca p={p} /> });
     await requestWidgetUpdate({ widgetName: WIDGET_ACOES, renderWidget: () => <WidgetAcoes p={p} /> });
-    await requestWidgetUpdate({ widgetName: WIDGET_FALAR, renderWidget: () => <WidgetFalar p={p} /> });
+    const chave = await chaveDoWidget();
+    await requestWidgetUpdate({ widgetName: WIDGET_FALAR, renderWidget: () => <WidgetFalar p={p} chave={chave} /> });
   } catch { /* idem */ }
 }

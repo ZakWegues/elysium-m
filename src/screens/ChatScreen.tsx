@@ -924,7 +924,7 @@ export default function ChatScreen({
               {item.fontes?.length ? (
                 <View style={styles.fontes}>
                   {item.fontes.map((f, i) => (
-                    <Pressable key={f.url} onPress={() => { Linking.openURL(f.url).catch(() => {}); }}
+                    <Pressable key={f.url} onPress={() => { if (/^https?:\/\//i.test(f.url)) Linking.openURL(f.url).catch(() => {}); }}
                       style={[styles.fonte, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>
                       <Text variant="caption" color={palette.primary}>{i + 1}</Text>
                       <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{hostDe(f.url)}</Text>

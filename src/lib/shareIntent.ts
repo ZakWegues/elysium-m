@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Alert } from 'react-native';
 import * as Linking from 'expo-linking';
 import { Pairing } from './pairing';
 import { sendMessage } from './mailbox';
@@ -49,6 +50,14 @@ export function useShareIntent(
       if (!url || cancelled) return;
       const text = parseSharedUrl(url);
       if (!text) return;
+      // Fase 20 (bloco 201): qualquer página da web abre um `elysium://share?text=…`. Sem esta
+      // pergunta, um site mandava texto para a Caixa do PC sem ninguém ver.
+      const curto = text.length > 160 ? `${text.slice(0, 157)}…` : text;
+      const ok = await new Promise<boolean>((r) => Alert.alert('Mandar para o PC?', curto, [
+        { text: 'Cancelar', style: 'cancel', onPress: () => r(false) },
+        { text: 'Mandar', onPress: () => r(true) },
+      ], { cancelable: true, onDismiss: () => r(false) }));
+      if (!ok || cancelled) return;
 
       try {
         await sendMessage(pairing!, {

@@ -22,13 +22,13 @@ export function destinoDaUrl(url: string): Destino | null {
   }
 }
 
-export function useDeepLinks(aoChegar: (destino: Destino) => void) {
+export function useDeepLinks(aoChegar: (destino: Destino, url: string) => void) {
   useEffect(() => {
     let cancelado = false;
     const tratar = (url: string | null) => {
       if (!url || cancelado) return;
       const d = destinoDaUrl(url);
-      if (d) aoChegar(d);
+      if (d) aoChegar(d, url);
     };
     Linking.getInitialURL().then(tratar);
     const sub = Linking.addEventListener('url', (e) => tratar(e.url));
