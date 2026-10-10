@@ -5,6 +5,7 @@ import AnimatedReanimated, {
 } from 'react-native-reanimated';
 import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
 import { definirFaseDaBolota, nivelDaBolota } from '../lib/bolota';
+import { ehEntradaDoLive, ehSaidaDoLive, SILENCIO_LIVE_MS } from '../lib/live';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
 import { criarAdiador, gravacaoCurta } from '../lib/adiador';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
@@ -422,6 +423,14 @@ export default function ChatScreen({
   async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
     const text = (texto ?? draft).trim();
     if (!text || enviandoRef.current) return;
+    // Fase 21: "modo live" digitado liga a conversa contínua pelo microfone do celular.
+    if (ehEntradaDoLive(text) && micStatus === 'ready' && !turnoRef.current) {
+      setDraft('');
+      setLive(true);
+      haptica.medio();
+      turnoDeVoz();
+      return;
+    }
     // Comando de IA pela barra (bloco 137).
     if (texto === undefined && comandoEscolhido) {
       const alvo = text.slice(comandoEscolhido.nome.length + 1).trim();
@@ -754,6 +763,10 @@ export default function ChatScreen({
   useEffect(() => () => definirFaseDaBolota(null), []);
 
   const turnoRef = useRef(false);
+  // Fase 21: modo live — conversa contínua. O ref é o que os laços leem; o estado, a faixa.
+  const liveRef = useRef(false);
+  const [live, setLiveEstado] = useState(false);
+  const setLive = (v: boolean) => { liveRef.current = v; setLiveEstado(v); };
 
   /**
    * Grava até a pessoa falar e calar. `uri` null = ninguém falou (ou o turno foi cancelado).
@@ -777,7 +790,8 @@ export default function ChatScreen({
         if (nivel > LIMIAR_FALA_DB) { if (!falou) primeiraFalaEm = agora; falou = true; ultimaVoz = agora; }
         else if (falou && nivel > LIMIAR_SILENCIO_DB) ultimaVoz = agora;
         if (falou && agora - ultimaVoz > SILENCIO_PARA_FECHAR_MS) { motivo = 'silencio'; break; }
-        if (!falou && agora - inicio > ESPERA_SEM_FALA_MS) { motivo = 'sem_fala'; break; }
+        // No modo live, espera até um minuto pela fala (fase 21).
+        if (!falou && agora - inicio > (liveRef.current ? SILENCIO_LIVE_MS : ESPERA_SEM_FALA_MS)) { motivo = 'sem_fala'; break; }
         if (agora - inicio > TETO_GRAVACAO_MS) { motivo = 'teto'; break; }
       }
     } finally {
@@ -816,6 +830,8 @@ export default function ChatScreen({
     turnoRef.current = true;
     ocuparMicrofone('gravar');
     let linha: string | null = null;
+    let dito = pedidoColado ?? '';
+    let completo = false;
     try {
       // O reconhecedor do "Ely" acabou de ser abortado; um respiro para ele soltar o microfone.
       await new Promise((r) => setTimeout(r, 300));
@@ -830,31 +846,43 @@ export default function ChatScreen({
         if (!turnoRef.current) return;
         if (!g.uri) {
           linha = resumoRodada({ numero: 1, ...g, caracteres: null });
-          pushError('Não ouvi nenhum pedido. Diga "Ely" de novo quando quiser.');
+          if (liveRef.current) { setLive(false); pushError('Fiquei um minuto sem ouvir nada. Saí do modo live.'); }
+          else pushError('Não ouvi nenhum pedido. Diga "Ely" de novo quando quiser.');
           return;
         }
         setFaseVoz('pensando');
         const r = await enviarAudio(g.uri);
         linha = resumoRodada({ numero: 1, ...g, caracteres: r ? r.transcricao.trim().length : null });
         resposta = r;
+        dito = r?.transcricao ?? '';
       }
+      // Fase 21: "tchau" sai do modo live; "modo live" falado liga (a resposta do PC já veio).
+      if (liveRef.current && ehSaidaDoLive(dito)) setLive(false);
+      else if (!liveRef.current && ehEntradaDoLive(dito)) setLive(true);
       setFaseVoz(null);
       liberarMicrofone('gravar');
       // A fala tem o botão "Interromper" do App (02/10); aqui só espera ela acabar.
       if (resposta && turnoRef.current) await falarResposta(resposta);
       else resposta?.fala?.abortar();
+      completo = !!resposta && turnoRef.current;
     } catch (err) {
       pushError(`Voz: ${errMessage(err)}`);
     } finally {
       turnoRef.current = false;
       setFaseVoz(null);
       liberarMicrofone('gravar');
+      // Modo live: a resposta terminou de falar — volta a ouvir. Turno cancelado ou com erro sai do live.
+      if (liveRef.current) {
+        if (completo) setTimeout(() => { if (liveRef.current && !turnoRef.current && !enviandoRef.current) turnoDeVoz(); }, 400);
+        else setLive(false);
+      }
       // Para o log do PC (bloco 116). Melhor esforço: sem PC, a calibragem só perde este pedido.
       if (linha) callRpc(pairing, 'diag.registrar', { origem: 'voz-ely', linhas: [linha] }).catch(() => {});
     }
   }
 
   function cancelarTurno() {
+    setLive(false);
     turnoRef.current = false;
     pararDeFalar();
     haptica.leve();
@@ -869,6 +897,7 @@ export default function ChatScreen({
   const ativa = useAbaAtiva();
   useEffect(() => {
     if (ativa || faseVoz !== 'ouvindo') return;
+    setLive(false);
     turnoRef.current = false;
     liberarMicrofone('gravar');
   }, [ativa, faseVoz]);
@@ -1058,9 +1087,9 @@ export default function ChatScreen({
         <View style={[styles.faixaVoz, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
           <Feather name={faseVoz === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />
           <Text variant="caption" color={palette.primary} style={{ flex: 1 }}>
-            {faseVoz === 'pensando' ? 'Pensando…' : 'Pode falar o pedido.'}
+            {live ? 'LIVE · ' : ''}{faseVoz === 'pensando' ? 'Pensando…' : live ? 'Pode falar. "Tchau" sai.' : 'Pode falar o pedido.'}
           </Text>
-          <Pressable onPress={cancelarTurno} hitSlop={10} accessibilityLabel="Cancelar pedido por voz">
+          <Pressable onPress={cancelarTurno} hitSlop={10} accessibilityLabel={live ? 'Sair do modo live' : 'Cancelar pedido por voz'}>
             <Feather name="x" size={16} color={palette.primary} />
           </Pressable>
         </View>
