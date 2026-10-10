@@ -4,6 +4,7 @@ import AnimatedReanimated, {
   FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
+import { definirFaseDaBolota, nivelDaBolota } from '../lib/bolota';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
 import { criarAdiador, gravacaoCurta } from '../lib/adiador';
 import { emFluxoExterno } from '../lib/atualizacaoOta';
@@ -733,16 +734,24 @@ export default function ChatScreen({
   // O medidor do gravador alimenta a animação enquanto ela ouve (segurando o mic ou depois do "Ely").
   const ouvindoAgora = recording || faseVoz === 'ouvindo';
   useEffect(() => {
-    if (!ouvindoAgora) { nivelVoz.value = 0; return; }
+    if (!ouvindoAgora) { nivelVoz.value = 0; nivelDaBolota.value = 0; return; }
     const t = setInterval(() => {
       try {
         // dBFS: fala perto do celular fica entre −30 e −10; silêncio, abaixo de −50.
         const db = recorder.getStatus().metering ?? -160;
         nivelVoz.value = Math.max(0, Math.min(1, (db + 55) / 45));
+        nivelDaBolota.value = nivelVoz.value;
       } catch { /* gravador entre estados */ }
     }, 70);
     return () => clearInterval(t);
   }, [ouvindoAgora, recorder, nivelVoz]);
+
+  // Fase 21: a bolota (no App, por cima das abas) acompanha: ciano ouvindo, âmbar pensando —
+  // pela voz ou esperando a resposta de um pedido digitado.
+  useEffect(() => {
+    definirFaseDaBolota(ouvindoAgora ? 'ouvindo' : pensandoVoz || faseVoz === 'pensando' || sending ? 'pensando' : null);
+  }, [ouvindoAgora, pensandoVoz, faseVoz, sending]);
+  useEffect(() => () => definirFaseDaBolota(null), []);
 
   const turnoRef = useRef(false);
 

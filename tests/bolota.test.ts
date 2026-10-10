@@ -1,0 +1,26 @@
+import { describe, expect, it, vi } from "vitest";
+vi.mock("react-native-reanimated", () => ({ makeMutable: (v: number) => ({ value: v }) }));
+import { envelopeDoTrecho, estadoDaBolota, palavrasDoTrecho, prenderNaTela } from "../src/lib/bolota";
+
+describe("bolota do celular (bloco 215)", () => {
+  it("ouvir e pensar ganham da fala", () => {
+    expect(estadoDaBolota(null, false)).toBe("dormindo");
+    expect(estadoDaBolota(null, true)).toBe("falando");
+    expect(estadoDaBolota("ouvindo", true)).toBe("ouvindo");
+    expect(estadoDaBolota("pensando", false)).toBe("pensando");
+  });
+  it("pulso pelo texto: um morro por palavra, quase zero entre elas", () => {
+    const { palavras, durMs } = palavrasDoTrecho("Pronto, chefe. Volume em quarenta.");
+    expect(palavras).toHaveLength(5);
+    expect(durMs).toBeGreaterThan(1500);
+    const env = envelopeDoTrecho(palavras, durMs, 50);
+    expect(Math.max(...env)).toBeGreaterThan(0.6);
+    expect(env.some(v => v < 0.1)).toBe(true);
+    expect(env.every(v => v >= 0 && v <= 1)).toBe(true);
+  });
+  it("posição presa à tela, acima da barra de abas", () => {
+    const tela = { largura: 400, altura: 800, topo: 30, base: 100 };
+    expect(prenderNaTela(1000, 1000, 64, tela)).toEqual({ x: 328, y: 628 });
+    expect(prenderNaTela(-50, 0, 64, tela)).toEqual({ x: 8, y: 38 });
+  });
+});
