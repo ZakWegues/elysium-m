@@ -23,6 +23,7 @@ import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 import { avisarTokenRecusado } from '../lib/erroRpc';
+import { abrirNoCelular, planejarEnvio, resumoDosArquivos, salvarNoCelular } from '../lib/anexos';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -49,7 +50,8 @@ export default function MailboxScreen({
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
-  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [progresso, setProgresso] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [imageCache, setImageCache] = useState<Record<string, string>>({});
   const fetchingImages = useRef<Set<string>>(new Set());
@@ -204,23 +206,28 @@ export default function MailboxScreen({
     if (text) setDraft(text);
   }
 
+  // Fase 21: vários arquivos de uma vez, de qualquer tipo (antes: um só, imagem ou PDF).
   async function handleAttach() {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ['image/*', 'application/pdf'],
+      type: '*/*',
+      multiple: true,
       copyToCacheDirectory: false,
     });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    if (asset.size && asset.size > MAILBOX_MAX_ATTACHMENT_BYTES) {
-      Alert.alert('Arquivo grande demais', 'Limite de 5MB por anexo.');
-      return;
+    if (result.canceled || !result.assets.length) return;
+    const escolhidos: PendingAttachment[] = result.assets.map((a) => ({
+      name: a.name,
+      mimeType: a.mimeType ?? 'application/octet-stream',
+      uri: a.uri,
+      sizeBytes: a.size ?? 0,
+    }));
+    const { aceitos, grandes } = planejarEnvio([...attachments, ...escolhidos], MAILBOX_MAX_ATTACHMENT_BYTES);
+    if (grandes.length) {
+      Alert.alert(
+        grandes.length === 1 ? 'Um arquivo ficou de fora' : `${grandes.length} arquivos ficaram de fora`,
+        `Passam de 5 MB: ${grandes.map((g) => g.name).join(', ')}`,
+      );
     }
-    setAttachment({
-      name: asset.name,
-      mimeType: asset.mimeType ?? 'application/octet-stream',
-      uri: asset.uri,
-      sizeBytes: asset.size ?? 0,
-    });
+    setAttachments(aceitos);
   }
 
   function guessKind(text: string): 'link' | 'note' {
@@ -229,30 +236,33 @@ export default function MailboxScreen({
 
   async function handleSend() {
     const text = draft.trim();
-    if (!text && !attachment) return;
+    if (!text && !attachments.length) return;
     setSending(true);
+    const fila = attachments.slice();
+    let enviados = 0;
 
     try {
-      let attachmentPayload: { name: string; mimeType: string; base64: string } | undefined;
-      if (attachment) {
-        const bytes = new Uint8Array(await new File(attachment.uri).arrayBuffer());
-        if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) {
-          Alert.alert('Arquivo grande demais', 'Limite de 5MB por anexo.');
-          setSending(false);
-          return;
-        }
-        attachmentPayload = { name: attachment.name, mimeType: attachment.mimeType, base64: fromByteArray(bytes) };
+      if (!fila.length) {
+        await sendMessage(pairing, { kind: guessKind(text), text, sessionId: sessionId ?? null });
+      }
+      // Um recado por arquivo (o PC guarda um anexo por recado); o texto vai junto do primeiro.
+      for (const [i, a] of fila.entries()) {
+        setProgresso(fila.length > 1 ? `${i + 1}/${fila.length}` : null);
+        const bytes = new Uint8Array(await new File(a.uri).arrayBuffer());
+        if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) throw new Error(`${a.name} passa de 5 MB`);
+        await sendMessage(pairing, {
+          kind: 'file',
+          text: i === 0 && text ? text : undefined,
+          sessionId: sessionId ?? null,
+          attachment: { name: a.name, mimeType: a.mimeType, base64: fromByteArray(bytes) },
+        });
+        enviados++;
+        // O que já foi não volta para a fila se o próximo falhar.
+        setAttachments((prev) => prev.filter((x) => x.uri !== a.uri));
       }
 
-      await sendMessage(pairing, {
-        kind: attachment ? 'file' : guessKind(text),
-        text: text || undefined,
-        sessionId: sessionId ?? null,
-        attachment: attachmentPayload,
-      });
-
       setDraft('');
-      setAttachment(null);
+      setAttachments([]);
       await refresh();
     } catch (err) {
       if (err instanceof AuthError) {
@@ -260,9 +270,11 @@ export default function MailboxScreen({
         avisarTokenRecusado();
         return;
       }
-      Alert.alert('Falha ao enviar', errMessage(err));
+      if (enviados) { setDraft(''); void refresh(); }
+      Alert.alert('Falha ao enviar', enviados ? `${enviados} de ${fila.length} foram. ${errMessage(err)}` : errMessage(err));
     } finally {
       setSending(false);
+      setProgresso(null);
     }
   }
 
@@ -302,13 +314,33 @@ export default function MailboxScreen({
     }
   }
 
+  /**
+   * Fase 21: o anexo baixa de verdade — antes este toque só mostrava o nome num alerta.
+   * "Abrir" entrega ao app do tipo; "Salvar no celular" grava na pasta escolhida (lembrada).
+   */
   async function handleOpenAttachment(message: MailboxMessage) {
-    if (!message.attachment) return;
+    const meta = message.attachment;
+    if (!meta) return;
+    const escolha = await new Promise<'abrir' | 'salvar' | 'trocar' | null>((r) => Alert.alert(meta.name, `${meta.mimeType} · ${resumoDosArquivos([meta]).replace(/^1 arquivo /, '')}`, [
+      { text: 'Cancelar', style: 'cancel', onPress: () => r(null) },
+      { text: 'Salvar em outra pasta', onPress: () => r('trocar') },
+      { text: 'Salvar no celular', onPress: () => r('salvar') },
+      { text: 'Abrir', onPress: () => r('abrir') },
+    ], { cancelable: true, onDismiss: () => r(null) }));
+    if (!escolha) return;
     try {
-      await fetchMessageContent(pairing, message.id);
-      Alert.alert('Anexo', `${message.attachment.name}\n${message.attachment.mimeType}`);
+      const conteudo = await fetchMessageContent(pairing, message.id);
+      const b64 = conteudo.attachment?.base64;
+      if (!b64) throw new Error('o PC não mandou o arquivo');
+      if (escolha === 'abrir') await abrirNoCelular(meta.name, meta.mimeType, b64);
+      else {
+        const pasta = await salvarNoCelular(meta.name, meta.mimeType, b64, escolha === 'trocar');
+        Alert.alert('Salvo', `${meta.name} está em ${pasta}.`);
+      }
     } catch (err) {
-      Alert.alert('Falha ao abrir', errMessage(err));
+      // Fechar o seletor de pasta não é erro.
+      if (/cancel/i.test(errMessage(err))) return;
+      Alert.alert(escolha === 'abrir' ? 'Não deu para abrir' : 'Não deu para salvar', errMessage(err));
     }
   }
 
@@ -362,7 +394,7 @@ export default function MailboxScreen({
             <Pressable
               style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '80%' }}
               onPress={() => {
-                if (item.attachment && !isImage) handleOpenAttachment(item);
+                if (item.attachment) handleOpenAttachment(item);
               }}
               onLongPress={() => handleLongPress(item)}
             >
@@ -435,17 +467,22 @@ export default function MailboxScreen({
             { borderTopColor: palette.glassBorder, padding: tokens.spacing.md },
           ]}
         >
-        {attachment && (
-          <View style={[styles.attachmentChip, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
+        {attachments.length > 1 && (
+          <Text variant="caption" color={palette.textMuted}>
+            {progresso ? `Enviando ${progresso}…` : resumoDosArquivos(attachments)}
+          </Text>
+        )}
+        {attachments.map((a) => (
+          <View key={a.uri} style={[styles.attachmentChip, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
             <Feather name="paperclip" size={14} color={palette.primary} />
             <Text variant="caption" color={palette.primary} numberOfLines={1} style={{ flex: 1 }}>
-              {attachment.name}
+              {a.name}
             </Text>
-            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={() => setAttachment(null)} hitSlop={8}>
+            <Pressable accessibilityLabel={`Tirar ${a.name}`} accessibilityRole="button" disabled={sending} onPress={() => setAttachments((prev) => prev.filter((x) => x.uri !== a.uri))} hitSlop={8}>
               <Feather name="x" size={14} color={palette.primary} />
             </Pressable>
           </View>
-        )}
+        ))}
         <View style={styles.composerRow}>
           <GlassCircle accessibilityLabel="Colar da área de transferência" onPress={handlePaste}>
             <Feather name="clipboard" size={20} color={palette.primary} />
@@ -464,7 +501,7 @@ export default function MailboxScreen({
           <GlassCircle accessibilityLabel="Enviar"
             ativo
             onPress={handleSend}
-            disabled={sending || (!draft.trim() && !attachment)}
+            disabled={sending || (!draft.trim() && !attachments.length)}
           >
             {sending ? (
               <ActivityIndicator size="small" color={palette.primary} />

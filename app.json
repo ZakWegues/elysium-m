@@ -292,6 +292,19 @@
             "com.google.android.as"
           ]
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0a0c14",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0a0c14"
+          }
+        }
       ]
     ],
     "extra": {

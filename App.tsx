@@ -34,6 +34,7 @@ import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
 import { urlDoWidget } from './src/lib/chaveWidget';
 import * as QuickActions from 'expo-quick-actions';
+import * as SplashScreen from 'expo-splash-screen';
 import { callRpc } from './src/lib/rpc';
 import { errMessage } from './src/lib/errors';
 import { falar } from './src/lib/falar';
@@ -48,6 +49,13 @@ import { useAtualizacaoOta } from './src/lib/atualizacaoOta';
 import { atualizarWidgetEstado, atualizarWidgetsEstaticos } from './src/widgets/handler';
 
 const MAILBOX_BADGE_POLL_MS = 45000;
+
+// Fase 21: a splash era o placeholder do template do Expo (grade cinza esticada em fundo
+// branco) e sumia em cima da tela de carregamento. Agora é a moeda do ícone no fundo do app, e
+// fica até o pareamento ser lido — com uma trava de 5 s para nunca prender o app nela.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({ fade: true, duration: 250 });
+setTimeout(() => SplashScreen.hide(), 5000);
 
 export default function App() {
   return (
@@ -144,7 +152,7 @@ function AppInner() {
       setPairing(p);
       setOnboarding(!visto);
       setLoading(false);
-    });
+    }).finally(() => requestAnimationFrame(() => SplashScreen.hide()));
   }, []);
 
   // O hook troca de endereço sozinho quando o IP do PC muda; persistimos a escolha
