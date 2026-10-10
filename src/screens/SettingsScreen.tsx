@@ -12,7 +12,7 @@ import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { definirNotificacoesAtivas, notificacoesAtivas, pedirPermissao } from '../lib/notificacoes';
 import { listarPcs, Pairing } from '../lib/pairing';
-import { callRpc, Perfil, PushCategory, PushPrefs } from '../lib/rpc';
+import { callRpc, EstadoHermes, Perfil, PushCategory, PushPrefs } from '../lib/rpc';
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
@@ -138,6 +138,7 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
   ];
   return (
     <View style={{ gap: tokens.spacing.sm }}>
+      <CerebroHermes pairing={pairing} />
       <Text variant="subheading">Tamanho das respostas</Text>
       {estilos.map(o => {
         const sel = perfil.estiloResposta === o.valor;
@@ -182,6 +183,41 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
         style={{ minHeight: 110, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }}
       />
       <Button title={salvando ? 'Salvando…' : 'Salvar instruções'} disabled={salvando || rascunho === perfil.instrucoesPessoais} onPress={() => gravar({ instrucoesPessoais: rascunho })} />
+    </View>
+  );
+}
+
+/**
+ * Fase 21: o cérebro do PC. Com o Hermes ligado, ele pensa e age por trás da Ely; fora do ar,
+ * responde a reserva (selo "RESERVA" na bolha). PC anterior à fase 21 não tem o método: some.
+ */
+function CerebroHermes({ pairing }: { pairing: Pairing }) {
+  const { palette, tokens } = useTheme();
+  const [h, setH] = useState<EstadoHermes | null>(null);
+  const [mexendo, setMexendo] = useState(false);
+  useEffect(() => { callRpc(pairing, 'hermes.status').then(setH).catch(() => setH(null)); }, [pairing]);
+  if (!h) return null;
+  const rotulo = { pronto: 'No ar', subindo: 'Subindo…', 'sem-hermes': 'Não instalado no PC', erro: 'Fora do ar — respondendo a reserva', desligado: 'Desligado' }[h.estado];
+  async function alternar(ligar: boolean) {
+    setMexendo(true);
+    try { setH(await callRpc(pairing, 'hermes.set', { cerebro: ligar ? 'hermes' : 'elysium' })); haptica.leve(); }
+    catch (e) { Alert.alert('Cérebro', errMessage(e)); }
+    finally { setMexendo(false); }
+  }
+  return (
+    <View style={{ gap: 4, marginBottom: tokens.spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text variant="subheading">Cérebro Hermes</Text>
+          <Text variant="caption" color={h.ligado && h.estado === 'pronto' ? palette.primary : palette.textMuted}>
+            {h.ligado ? rotulo : 'Desligado — Groq e modelo local'}{h.ligado && h.modelo ? ` · ${h.modelo.split('/').pop()}` : ''}
+          </Text>
+        </View>
+        <Switch value={h.ligado} disabled={mexendo} onValueChange={alternar} trackColor={{ true: palette.primary }} accessibilityLabel="Usar o Hermes como cérebro" />
+      </View>
+      <Text variant="caption" color={palette.textMuted}>
+        O Hermes do PC pensa e age com a voz e o jeito da Ely. Se ele cair ou demorar, responde a reserva.
+      </Text>
     </View>
   );
 }
