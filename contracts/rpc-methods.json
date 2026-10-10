@@ -197,6 +197,14 @@
       "destructive": false
     },
     {
+      "method": "hermes.set",
+      "destructive": false
+    },
+    {
+      "method": "hermes.status",
+      "destructive": false
+    },
+    {
       "method": "hoje.ideia",
       "destructive": false
     },

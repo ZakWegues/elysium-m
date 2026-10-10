@@ -946,7 +946,7 @@ export default function ChatScreen({
               </Pressable>
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
-                <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta do modo local: a nuvem não respondeu">MODO LOCAL</Text>
+                <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">RESERVA</Text>
               ) : null}
               {/* Fontes da busca (bloco 131): um toque abre o site. */}
               {item.fontes?.length ? (

@@ -37,6 +37,8 @@ export type RpcMethod =
   | 'timers.start'
   | 'timers.cancel'
   | 'perfil.set'
+  | 'hermes.status'
+  | 'hermes.set'
   | 'hoje.painel'
   | 'habitos.list'
   | 'habitos.save'
@@ -410,6 +412,15 @@ export type Lista = { id: string; nome: string; atualizadaEm: number; itens: { i
 export type TimerPc = { id: string; nome: string; criadoEm: number; fimEm: number; duracaoMs: number };
 
 /** Jeito de responder (bloco 134), guardado na config do PC. */
+/** Fase 21: o cérebro Hermes no PC (Ajustes → IA). */
+export type EstadoHermes = {
+  estado: 'desligado' | 'sem-hermes' | 'subindo' | 'pronto' | 'erro';
+  erro: string | null;
+  modelo: string | null;
+  perfil: string;
+  latenciaMs: number | null;
+  ligado: boolean;
+};
 export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string; /** Fase 16: como a Ely chama o dono ("chefe"). PC antigo não manda. */ tratamento?: string };
 
 /** Hábito com as contas do PC (fase 16). `mapa`: 30 dias, true feito, false não, null não vale. */
@@ -513,6 +524,8 @@ export type RpcResults = {
   'timers.start': { timer: TimerPc };
   'timers.cancel': { timer: TimerPc };
   'perfil.set': Perfil;
+  'hermes.status': EstadoHermes;
+  'hermes.set': EstadoHermes;
   'hoje.painel': PainelHoje;
   'habitos.list': { habitos: Habito[]; metas: Meta[] };
   'habitos.save': { habito: Habito };
