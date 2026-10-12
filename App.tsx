@@ -41,7 +41,7 @@ import { falar } from './src/lib/falar';
 import { aoMudarPalavra, DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
 import { useMicrofoneLivre } from './src/lib/microfone';
 import { ComandosIa } from './src/components/ComandosIa';
-import { Bolota } from './src/components/Bolota';
+import { FalaFlutuante } from './src/components/FalaFlutuante';
 import { AbaViva } from './src/components/AbaViva';
 import { Aba, abasMontadas, mesmasAbas } from './src/lib/abas';
 import { AvisoOta } from './src/components/AvisoOta';
@@ -524,9 +524,7 @@ function AppInner() {
       {!keyboard.visible && sobreposicoes === 0 && (
         <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
-      {/* Fase 21: a bolota Stark — a pílula "Ely falando" virou o estado aberto dela. Um toque
-          com ela parada começa a ouvir, como o widget Falar. */}
-      <Bolota onFalar={() => { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); }} />
+      <FalaFlutuante />
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />

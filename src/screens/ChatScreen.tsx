@@ -5,6 +5,7 @@ import AnimatedReanimated, {
 } from 'react-native-reanimated';
 import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
 import { definirFaseDaBolota, nivelDaBolota } from '../lib/bolota';
+import { Esfera3D } from '../components/Esfera3D';
 import { ehEntradaDoLive, ehSaidaDoLive, SILENCIO_LIVE_MS } from '../lib/live';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
 import { criarAdiador, gravacaoCurta } from '../lib/adiador';
@@ -934,6 +935,8 @@ export default function ChatScreen({
     // um KeyboardAvoidingView que, somado àquele padding, deslocava a conversa duas
     // vezes — e que de todo modo não funciona no edge-to-edge do Android.
     <View style={{ flex: 1 }}>
+      {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe. */}
+      <Esfera3D vazio={messages.length === 0} />
       {!semCabecalho && (
         <ScreenHeader
           title="ELYSIUM-M"

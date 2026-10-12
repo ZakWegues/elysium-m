@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { makeMutable } from 'react-native-reanimated';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
- * A bolota Stark do celular (fase 21, bloco 215) — o estado que as telas alimentam.
+ * A esfera 3D do Chat do celular (fase 21) — o estado que as telas alimentam.
  *
  * O Chat é quem grava a voz e sabe se está ouvindo ou pensando; a fala da Ely mora em
- * `falar.ts`. A bolota fica no App, por cima de todas as abas, e lê daqui: a fase da voz (um
+ * `falar.ts`. A esfera fica no fundo do Chat e lê daqui: a fase da voz (um
  * ouvinte simples) e o nível do microfone (um valor do Reanimated, lido direto na thread de UI,
  * sem re-render a cada 70 ms).
  *
@@ -81,23 +80,4 @@ export function envelopeDoTrecho(palavras: PalavraBolota[], durMs: number, passo
     }
   }
   return env.map(v => Math.round(v * 100) / 100);
-}
-
-/** Posição solta presa à tela (a bolota nunca some atrás da borda). Pura. */
-export function prenderNaTela(x: number, y: number, tam: number, tela: { largura: number; altura: number; topo: number; base: number }): { x: number; y: number } {
-  return {
-    x: Math.min(Math.max(x, 8), tela.largura - tam - 8),
-    y: Math.min(Math.max(y, tela.topo + 8), tela.altura - tela.base - tam - 8),
-  };
-}
-
-const CHAVE_POS = 'bolota.posicao';
-export async function lerPosicaoDaBolota(): Promise<{ x: number; y: number } | null> {
-  try {
-    const j = JSON.parse((await AsyncStorage.getItem(CHAVE_POS)) ?? 'null');
-    return j && Number.isFinite(j.x) && Number.isFinite(j.y) ? j : null;
-  } catch { return null; }
-}
-export function gravarPosicaoDaBolota(x: number, y: number): void {
-  AsyncStorage.setItem(CHAVE_POS, JSON.stringify({ x: Math.round(x), y: Math.round(y) })).catch(() => {});
 }

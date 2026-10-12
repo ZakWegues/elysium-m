@@ -26,7 +26,7 @@ import { frasesDe, partesDaFala, trechoParaMostrar } from './divisaoFala';
  *
  * 08/10 — o Zak pediu três coisas que mudaram este arquivo:
  * 1. **Trocar de aba não para a fala.** Ninguém mais chama `pararDeFalar()` ao sair de uma
- *    tela; quem para é o botão (a `Bolota`, fase 21) ou uma fala nova.
+ *    tela; quem para é o botão (a pílula `FalaFlutuante`) ou uma fala nova.
  * 2. **Pausar e retomar.** Texto longo vai em partes (`divisaoFala.ts`); a voz do PC pausa o
  *    player, a do aparelho cala e recomeça a frase em que estava.
  * 3. **Continuar com o app minimizado.** O player vira o "ativo da tela de bloqueio": o
