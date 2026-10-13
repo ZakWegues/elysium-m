@@ -5,6 +5,7 @@ import Animated, {
   Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withRepeat, withTiming, cancelAnimation,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme';
+import { FundoRenascenca } from './Ornamentos';
 
 /**
  * Fundo do app: gradiente suave + manchas de cor do tema, EM MOVIMENTO (bloco 71).
@@ -243,6 +244,16 @@ export function AppBackground() {
   // O meio do gradiente clareia no vidro e escurece na noite. Um valor fixo deixaria uma
   // faixa clara atravessando a tela na família escura.
   const middle = noite ? '#12151D' : '#EEF0F6';
+
+  // 13/10: a Renascença troca as manchas e os feixes pela nogueira com damasco e a arte de estudo.
+  if (familiaResolvida === 'renascenca') {
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <FundoRenascenca fundo={palette.background} ouro={palette.primary} pigmento={palette.accent} />
+        <Particulas cor={palette.primary} forca={0.28} />
+      </View>
+    );
+  }
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">

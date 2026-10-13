@@ -21,10 +21,13 @@ export function Text({
   }[variant];
 
   const defaultColor = variant === 'caption' ? palette.textMuted : palette.text;
+  // 13/10: a Renascença escreve em serifa (Noto Serif no Android), com títulos em itálico.
+  const renascenca = palette.familia === 'renascenca';
+  const serifa = renascenca ? { fontFamily: 'serif', ...(variant === 'display' || variant === 'heading' ? { fontStyle: 'italic' as const } : {}) } : null;
 
   return (
     <RNText
-      style={[styles.base, variantStyle, { color: color ?? defaultColor }, style]}
+      style={[styles.base, variantStyle, serifa, { color: color ?? defaultColor }, style]}
       {...rest}
     />
   );

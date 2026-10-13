@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appearance } from 'react-native';
-import { getPalette, Palette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS, ThemeName } from '../theme/palettes';
+import { Familia, getPalette, Palette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS, ThemeName } from '../theme/palettes';
 
 /**
  * A paleta para os widgets, lida do disco (bloco 73).
@@ -11,7 +11,7 @@ import { getPalette, Palette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS, Theme
  */
 export async function paletaDosWidgets(): Promise<Palette> {
   let nome: ThemeName = 'mare';
-  let familia: 'lg' | 'ely' | 'stark' = 'stark';
+  let familia: Familia = 'stark';
   try {
     const [[, tema], [, fam]] = await AsyncStorage.multiGet(['elysium_theme', 'elysium_color_scheme']);
     const t = tema ? (TEMAS_APOSENTADOS[tema] ?? tema) : 'mare';

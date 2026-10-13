@@ -34,6 +34,7 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
   { value: 'stark', label: ROTULO_FAMILIA.stark, icon: 'cpu', nota: 'HUD escuro, azul de reator — o padrão da Ely' },
   { value: 'lg', label: ROTULO_FAMILIA.lg, icon: 'droplet', nota: 'Vidro translúcido, fundo claro' },
   { value: 'ely', label: ROTULO_FAMILIA.ely, icon: 'moon', nota: 'Noite azul com luz dourada e feixes de luz' },
+  { value: 'renascenca', label: ROTULO_FAMILIA.renascenca, icon: 'feather', nota: 'Ouro, molduras ornamentadas e arte de estudo ao fundo' },
   { value: 'auto', label: 'Seguir o aparelho', icon: 'smartphone', nota: 'Vidro no modo claro, ELYSIUM no escuro' },
 ];
 

@@ -36,16 +36,17 @@ export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
  * | mare       | `lg-tide` Maré     | `ely-ether` Éter      |
  * | elisio     | `lg-amber` Âmbar   | `ely` Campos Elísios  |
  */
-export type Familia = 'lg' | 'ely' | 'stark';
+export type Familia = 'lg' | 'ely' | 'stark' | 'renascenca';
 
 /** O que o usuário escolheu. `auto` acompanha o modo do aparelho. */
-export type FamiliaEscolha = 'auto' | 'lg' | 'ely' | 'stark';
+export type FamiliaEscolha = 'auto' | 'lg' | 'ely' | 'stark' | 'renascenca';
 
 /** Nome de cada família na tela. */
 export const ROTULO_FAMILIA: Record<Familia, string> = {
   lg: 'Vidro Líquido',
   ely: 'ELYSIUM',
   stark: 'Stark',
+  renascenca: 'Renascença',
 };
 
 /**
@@ -163,7 +164,7 @@ type Face = {
   primarySoft: string;
 };
 
-const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: Face }> = {
+const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: Face; renascenca: Face }> = {
   elisio: {
     label: 'Elísio',
     light: {
@@ -178,6 +179,11 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: 
     stark: {
       primary: '#ff5a4e', accent: '#ffc857', primarySoft: 'rgba(255,90,78,0.18)',
       background: '#0b0607', surface: '#170c0e', surfaceRaised: '#120909',
+    },
+    // 13/10 — "Renascença — Florença": folha de ouro sobre nogueira, com carmim.
+    renascenca: {
+      primary: '#c9a14a', accent: '#b23a48', primarySoft: 'rgba(201,161,74,0.20)',
+      background: '#120c07', surface: '#1f150d', surfaceRaised: '#180f09',
     },
   },
   mare: {
@@ -195,6 +201,11 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: 
       primary: '#3cc8f0', accent: '#ffb547', primarySoft: 'rgba(60,200,240,0.18)',
       background: '#05080f', surface: '#0b1220', surfaceRaised: '#08101b',
     },
+    // "Renascença — Veneza": ouro e ultramar.
+    renascenca: {
+      primary: '#d4ae5c', accent: '#3d6fd1', primarySoft: 'rgba(212,174,92,0.20)',
+      background: '#0b0d18', surface: '#151a2c', surfaceRaised: '#101423',
+    },
   },
   crepusculo: {
     label: 'Crepúsculo',
@@ -210,6 +221,11 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: 
     stark: {
       primary: '#7fb8d8', accent: '#64ffda', primarySoft: 'rgba(127,184,216,0.18)',
       background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12',
+    },
+    // "Renascença — Roma": ouro e verdete.
+    renascenca: {
+      primary: '#c7a35a', accent: '#6f9a5b', primarySoft: 'rgba(199,163,90,0.20)',
+      background: '#0f0d09', surface: '#1c1810', surfaceRaised: '#16130c',
     },
   },
 };
@@ -243,9 +259,9 @@ export function resolverNomeDeTema(bruto: string | null | undefined): ThemeName 
  * par junto da face duplicaria a cor em dois lugares para acrescentar só um texto.
  */
 const ROTULOS: Record<ThemeName, Record<Familia, string>> = {
-  elisio:     { lg: 'Vidro — Âmbar', ely: 'Campos Elísios', stark: 'Stark — Mark' },
-  mare:       { lg: 'Vidro — Maré',  ely: 'Éter',           stark: 'Stark — Reator' },
-  crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo',     stark: 'Stark — Noite' },
+  elisio:     { lg: 'Vidro — Âmbar', ely: 'Campos Elísios', stark: 'Stark — Mark',   renascenca: 'Renascença — Florença' },
+  mare:       { lg: 'Vidro — Maré',  ely: 'Éter',           stark: 'Stark — Reator', renascenca: 'Renascença — Veneza' },
+  crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo',     stark: 'Stark — Noite',  renascenca: 'Renascença — Roma' },
 };
 
 /** `#rrggbb` → [r, g, b]. Só aceita hex de 6 dígitos, que é o que as faces usam. */
@@ -298,13 +314,15 @@ function vidro(face: Face, familia: Familia) {
 
 function build(name: ThemeName, familia: Familia): Palette {
   const tema = temas[name];
-  const face = familia === 'stark' ? tema.stark : familia === 'ely' ? tema.dark : tema.light;
+  const face = familia === 'stark' ? tema.stark : familia === 'renascenca' ? tema.renascenca : familia === 'ely' ? tema.dark : tema.light;
   const neutros = familiaEscura(familia) ? { ...neutrosEscuro, familia } : neutrosClaro;
   return {
     name, label: tema.label, rotulo: ROTULOS[name][familia],
     ...neutros, ...face, ...vidro(face, familia),
     // Stark: bordas com um fio da cor do reator, como as linhas de um HUD.
     ...(familia === 'stark' ? { border: comAlfa(face.primary, 0.18), glassBorder: comAlfa(face.primary, 0.22) } : {}),
+    // Renascença: filete de ouro e tinta de pergaminho.
+    ...(familia === 'renascenca' ? { border: comAlfa(face.primary, 0.32), glassBorder: comAlfa(face.primary, 0.45), text: '#EFE4C8', textMuted: '#A08F6C', onPrimary: '#2A1A08' } : {}),
   };
 }
 
@@ -331,8 +349,13 @@ export const starkPalettes: Record<ThemeName, Palette> = Object.fromEntries(
   names.map(n => [n, build(n, 'stark')]),
 ) as Record<ThemeName, Palette>;
 
+/** Família Renascença (13/10): ouro, molduras e arte de estudo. */
+export const renascencaPalettes: Record<ThemeName, Palette> = Object.fromEntries(
+  names.map(n => [n, build(n, 'renascenca')]),
+) as Record<ThemeName, Palette>;
+
 export function getPalette(name: ThemeName, familia: Familia): Palette {
-  return familia === 'stark' ? starkPalettes[name] : familia === 'ely' ? darkPalettes[name] : palettes[name];
+  return familia === 'stark' ? starkPalettes[name] : familia === 'renascenca' ? renascencaPalettes[name] : familia === 'ely' ? darkPalettes[name] : palettes[name];
 }
 
 /**
@@ -350,6 +373,7 @@ export function resolverFamiliaEscolhida(bruto: string | null | undefined): Fami
     case 'ely':
     case 'dark':   return 'ely';
     case 'stark':  return 'stark';
+    case 'renascenca': return 'renascenca';
     case 'auto':
     case 'system': return 'auto';
     default:       return null;

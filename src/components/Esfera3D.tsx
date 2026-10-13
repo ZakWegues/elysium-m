@@ -3,6 +3,7 @@ import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedProps, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { useFala } from '../lib/falar';
+import { useTheme } from '../theme';
 import { envelopeDoTrecho, estadoDaBolota, nivelDaBolota, palavrasDoTrecho, useFaseDaBolota } from '../lib/bolota';
 
 /**
@@ -38,7 +39,9 @@ export function Esfera3D({ vazio }: { vazio: boolean }) {
   const fala = useFala();
   const fase = useFaseDaBolota();
   const estado = estadoDaBolota(fase, fala.falando);
-  const cor = CORES[estado];
+  const { palette } = useTheme();
+  // Parada, a esfera é da cor de destaque do tema (dourada na Renascença).
+  const cor = estado === 'dormindo' ? palette.primary : CORES[estado];
   const pontos = useMemo(fibonacci, []);
 
   const tamanho = Math.min(width, height) * (vazio ? 0.62 : 0.86);
