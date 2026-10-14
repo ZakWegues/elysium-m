@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import AnimatedReanimated, {
-  FadeInDown, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
+  FadeInDown, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
-import { definirFaseDaBolota, nivelDaBolota } from '../lib/bolota';
+import { definirFaseDaBolota, inclinarBolota, nivelDaBolota, pulsoDaBolota } from '../lib/bolota';
+import { CICLO_PENSANDO_MS } from '../lib/esferaLogica';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Esfera3D } from '../components/Esfera3D';
 import { ehEntradaDoLive, ehSaidaDoLive, SILENCIO_LIVE_MS } from '../lib/live';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
@@ -424,6 +426,8 @@ export default function ChatScreen({
   async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
     const text = (texto ?? draft).trim();
     if (!text || enviandoRef.current) return;
+    // Fase 22: a esfera "olha" para a mensagem que sai.
+    inclinarBolota();
     // Fase 21: "modo live" digitado liga a conversa contínua pelo microfone do celular.
     if (ehEntradaDoLive(text) && micStatus === 'ready' && !turnoRef.current) {
       setDraft('');
@@ -936,7 +940,20 @@ export default function ChatScreen({
     // vezes — e que de todo modo não funciona no edge-to-edge do Android.
     <View style={{ flex: 1 }}>
       {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe. */}
-      <Esfera3D vazio={messages.length === 0} />
+      {/* Fase 22: vazia = só a boas-vindas. Aí ela fica inteira e pega o dedo: toque pulsa,
+          segurar fala, arrastar inclina, toque duplo liga o modo live. */}
+      <Esfera3D
+        vazio={messages.every(m => m.id === 'welcome')}
+        onToque={() => { haptica.leve(); }}
+        onSegurarInicio={() => { if (!sending && micStatus === 'ready' && faseVoz === null) { haptica.medio(); void handleRecordStart(); } }}
+        onSegurarFim={() => { void handleRecordStop(); }}
+        onDuploToque={() => {
+          if (micStatus !== 'ready' || turnoRef.current || enviandoRef.current) return;
+          haptica.medio();
+          setLive(true);
+          turnoDeVoz();
+        }}
+      />
       {!semCabecalho && (
         <ScreenHeader
           title="ELYSIUM-M"
@@ -964,20 +981,27 @@ export default function ChatScreen({
           const bg = item.from === 'me' ? palette.primary : item.from === 'error' ? palette.errorSoft : palette.surfaceRaised;
           const color = item.from === 'me' ? palette.onPrimary : item.from === 'error' ? palette.error : palette.text;
           return (
+            <GestosDaBolha
+              alinhar={item.from === 'me' ? 'flex-end' : 'flex-start'}
+              deslizavel={item.from === 'reply' && item.id !== 'welcome'}
+              copiavel={item.from !== 'error'}
+              corIcone={palette.primary}
+              onOuvir={() => { falar(textoPuro(item.text), pairing); }}
+              onCopiar={() => Clipboard.setStringAsync(item.from === 'reply' ? textoPuro(item.text) : item.text).catch(() => {})}
+            >
             <BolhaEntrando
               style={[
-                styles.bubble,
                 {
                   borderRadius: tokens.radii.lg,
                   padding: tokens.spacing.md,
                   backgroundColor: bg,
-                  alignSelf: item.from === 'me' ? 'flex-end' : 'flex-start',
                   borderWidth: item.from === 'reply' ? StyleSheet.hairlineWidth : 0,
                   borderColor: palette.border,
                 },
               ]}
             >
-              {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações. */}
+              {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações.
+                  Fase 22: deslizar a bolha da Ely para a esquerda = ouvir de novo; toque duplo = copiar. */}
               <Pressable onLongPress={() => acoesDaBolha(item)} delayLongPress={350}>
                 {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : (
                   <Text variant="body" color={color}>
@@ -1002,6 +1026,7 @@ export default function ChatScreen({
                 </View>
               ) : null}
             </BolhaEntrando>
+            </GestosDaBolha>
           );
         }}
       />
@@ -1128,7 +1153,11 @@ export default function ChatScreen({
             },
           ]}
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={(v) => {
+            // Fase 22: cada tecla é um micro-pulso na esfera (apagar não conta).
+            if (v.length > draft.length) pulsoDaBolota(0.08);
+            setDraft(v);
+          }}
           placeholder="Escreve um comando..."
           placeholderTextColor={palette.textMuted}
           onSubmitEditing={() => handleSend()}
@@ -1247,15 +1276,73 @@ function BolhaPensando() {
 
 function Ponto({ atraso, cor }: { atraso: number; cor: string }) {
   const y = useSharedValue(0);
+  // Fase 22: o ciclo é o mesmo do "pensando" da esfera (2π/4 s ≈ 1,57 s) — pulsam juntos.
+  const quarto = Math.round(CICLO_PENSANDO_MS / 4);
   useEffect(() => {
     y.value = withDelay(atraso, withRepeat(
-      withSequence(withTiming(-4, { duration: 260 }), withTiming(0, { duration: 260 }), withTiming(0, { duration: 280 })),
+      withSequence(withTiming(-4, { duration: quarto }), withTiming(0, { duration: quarto }), withTiming(0, { duration: CICLO_PENSANDO_MS - 2 * quarto })),
       -1,
     ));
-  }, [atraso, y]);
+  }, [atraso, y, quarto]);
   const estilo = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return <AnimatedReanimated.View style={[styles.ponto, { backgroundColor: cor }, estilo]} />;
 }
+
+/**
+ * Gestos da bolha (fase 22). Deslizar a resposta da Ely para a esquerda mostra um 🔊 e, passando
+ * do ponto, fala de novo; toque duplo copia e deixa um ✓ por 1 s. A rolagem vertical da lista
+ * continua livre (o arrasto só pega na horizontal).
+ */
+function GestosDaBolha({ alinhar, deslizavel, copiavel, corIcone, onOuvir, onCopiar, children }: {
+  alinhar: 'flex-start' | 'flex-end'; deslizavel: boolean; copiavel: boolean; corIcone: string;
+  onOuvir: () => void; onCopiar: () => void; children: React.ReactNode;
+}) {
+  const x = useSharedValue(0);
+  const passou = useSharedValue(false);
+  const [copiado, setCopiado] = useState(false);
+  const LIMITE = 72;
+  const copiar = () => {
+    onCopiar();
+    haptica.sucesso();
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 1000);
+  };
+  const ouvir = () => { haptica.medio(); onOuvir(); };
+  const tique = () => { haptica.tique(); };
+  const deslizar = Gesture.Pan().enabled(deslizavel).activeOffsetX(-14).failOffsetY([-12, 12])
+    .onUpdate((e) => {
+      x.value = Math.max(-110, Math.min(0, e.translationX));
+      const alem = x.value < -LIMITE;
+      if (alem !== passou.value) { passou.value = alem; if (alem) runOnJS(tique)(); }
+    })
+    .onEnd(() => { if (x.value < -LIMITE) runOnJS(ouvir)(); })
+    .onFinalize(() => { passou.value = false; x.value = withTiming(0, { duration: 220 }); });
+  const duplo = Gesture.Tap().enabled(copiavel).numberOfTaps(2).onEnd((_e, ok) => { if (ok) runOnJS(copiar)(); });
+  const estiloBolha = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+  const estiloIcone = useAnimatedStyle(() => ({ opacity: Math.min(1, -x.value / LIMITE), transform: [{ scale: 0.7 + Math.min(1, -x.value / LIMITE) * 0.4 }] }));
+  return (
+    <GestureDetector gesture={Gesture.Simultaneous(deslizar, duplo)}>
+      <AnimatedReanimated.View style={[styles.bubble, { alignSelf: alinhar }]}>
+        {deslizavel && (
+          <AnimatedReanimated.View pointerEvents="none" style={[gestosStyles.icone, estiloIcone]}>
+            <Feather name="volume-2" size={18} color={corIcone} />
+          </AnimatedReanimated.View>
+        )}
+        <AnimatedReanimated.View style={estiloBolha}>{children}</AnimatedReanimated.View>
+        {copiado && (
+          <View pointerEvents="none" style={[gestosStyles.ok, { backgroundColor: corIcone }]}>
+            <Feather name="check" size={12} color="#0a0c14" />
+          </View>
+        )}
+      </AnimatedReanimated.View>
+    </GestureDetector>
+  );
+}
+
+const gestosStyles = StyleSheet.create({
+  icone: { position: 'absolute', right: -34, top: 0, bottom: 0, justifyContent: 'center' },
+  ok: { position: 'absolute', top: -14, right: -14, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+});
 
 /** "economia.uol.com.br" de uma URL, para o chip da fonte. */
 function hostDe(url: string): string {

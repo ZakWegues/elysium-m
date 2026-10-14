@@ -83,12 +83,16 @@ const PAINEIS: {
 export default function ControlScreen({
   pairing,
   onUnpair,
+  pedidoTrackpad,
 }: {
   pairing: Pairing;
   onUnpair: () => void;
+  /** Fase 22: atalho "Trackpad" do ícone — cada número novo abre o trackpad. */
+  pedidoTrackpad?: number;
 }) {
   const { palette, tokens } = useTheme();
   const [trackpadOpen, setTrackpadOpen] = useState(false);
+  useEffect(() => { if (pedidoTrackpad) setTrackpadOpen(true); }, [pedidoTrackpad]);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [painel, setPainel] = useState<PainelId | null>(null);
 

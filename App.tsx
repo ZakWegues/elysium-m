@@ -133,6 +133,8 @@ function AppInner() {
 
   /** Fase 18: cada incremento abre as Tarefas em tela cheia (widget e elysium://tarefas). */
   const [pedidoTarefas, setPedidoTarefas] = useState(0);
+  /** Fase 22: cada incremento abre o trackpad (atalho do ícone). */
+  const [pedidoTrackpad, setPedidoTrackpad] = useState(0);
   /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
   const [pedidoBusca, setPedidoBusca] = useState(0);
 
@@ -292,15 +294,21 @@ function AppInner() {
       return;
     }
     if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
+    // Fase 22: o trackpad direto do ícone.
+    else if (destino === 'trackpad') { setScreen('control'); setPedidoTrackpad(n => n + 1); }
+    // Modo live: o mesmo caminho de dizer "modo live" — o Chat liga a conversa contínua.
+    else if (destino === 'live') { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: 'modo live' })); }
     // "Falar com a Ely" já abre ouvindo um pedido, como se tivesse dito "Ely" (02/10).
     else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); setPedidoVoz(prev => ({ n: (prev?.n ?? 0) + 1, texto: '' })); }
   }, []);
   useEffect(() => {
+    // Fase 22: trackpad e modo live no lugar de foco e busca (os destinos antigos continuam
+    // tratados acima, para atalho já fixado na tela inicial).
     QuickActions.setItems([
       { id: 'chat', title: 'Falar com a Ely', params: { destino: 'chat' } },
+      { id: 'trackpad', title: 'Trackpad', params: { destino: 'trackpad' } },
+      { id: 'live', title: 'Modo live', params: { destino: 'live' } },
       { id: 'hoje', title: 'Resumo do dia', params: { destino: 'hoje' } },
-      { id: 'foco', title: 'Modo foco (25 min)', params: { destino: 'foco' } },
-      { id: 'busca', title: 'Buscar ou comandar', params: { destino: 'busca' } },
     ]).catch(() => { /* launcher sem suporte a atalhos */ });
     const sub = QuickActions.addListener((a) => { void atalho(a); });
     return () => sub.remove();
@@ -461,7 +469,7 @@ function AppInner() {
             />
           </AbaViva>
         )}
-        {montadas.has('control') && <AbaViva ativa={screen === 'control'}><ControlScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
+        {montadas.has('control') && <AbaViva ativa={screen === 'control'}><ControlScreen pairing={pairing} onUnpair={handleUnpair} pedidoTrackpad={pedidoTrackpad} /></AbaViva>}
         {montadas.has('rotinas') && <AbaViva ativa={screen === 'rotinas'}><RotinasScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
         {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} pedidoTarefas={pedidoTarefas} onResponder={(pergunta) => { setFalaDaEly(pergunta); setModoChat('ia'); setScreen('chat'); }} /></AbaViva>}
         {screen === 'conversations' && (
