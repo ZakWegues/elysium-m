@@ -21,6 +21,7 @@ import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizac
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
+import { CHAVE_LAYOUT_V2, migrarLayout, resumoDaInicio } from '../lib/layoutInicio';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { EstadoPcLinha } from '../components/EstadoPc';
@@ -76,8 +77,9 @@ export default function HomeScreen({
     processos: [], discos: [], transferencia: '', saude: null, foco: null, aprendi: null, hoje: null, listas: null, timers: null,
   });
   const [ocupado, setOcupado] = useState(false);
-  const [ordem, setOrdem] = useState<string[]>(CARDS_PADRAO);
-  const [ocultos, setOcultos] = useState<string[]>([]);
+  // Os cards fora do padrão entram na ordem já desligados — senão ligá-los em Personalizar não os mostraria.
+  const [ordem, setOrdem] = useState<string[]>(() => CARDS_PADRAO.concat(Object.keys(CARDS).filter(id => !CARDS_PADRAO.includes(id))));
+  const [ocultos, setOcultos] = useState<string[]>(() => Object.keys(CARDS).filter(id => !CARDS_PADRAO.includes(id)));
   /** Fixos ficam no topo e não saem do lugar quando os outros são arrastados. */
   const [fixos, setFixos] = useState<string[]>(['clima']);
   const [editando, setEditando] = useState(false);
@@ -127,7 +129,12 @@ export default function HomeScreen({
   useEffect(() => {
     (async () => {
       try {
-        const bruto = await AsyncStorage.getItem(CHAVE_CARDS);
+        // Fase 22: a migração única para os cinco cards novos (lib/layoutInicio.ts).
+        const [flag, salvoBruto] = await Promise.all([AsyncStorage.getItem(CHAVE_LAYOUT_V2), AsyncStorage.getItem(CHAVE_CARDS)]);
+        const mig = migrarLayout(flag, salvoBruto);
+        if (mig.apagarSalvo) await AsyncStorage.removeItem(CHAVE_CARDS);
+        if (mig.gravarFlag) await AsyncStorage.setItem(CHAVE_LAYOUT_V2, '1');
+        const bruto = mig.usar;
         if (!bruto) return;
         const salvo = JSON.parse(bruto) as {
           ordem?: string[]; ocultos?: string[]; fixos?: string[];
@@ -441,13 +448,6 @@ export default function HomeScreen({
             <GlassCircle accessibilityLabel="Buscar" size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
               <Feather name="search" size={16} color={palette.textMuted} />
             </GlassCircle>
-            <Pressable accessibilityLabel="Opções" accessibilityRole="button"
-              onPress={() => setEditando(v => !v)}
-              hitSlop={10}
-              style={{ marginLeft: 6, marginRight: 4 }}
-            >
-              <Feather name="sliders" size={17} color={editando ? palette.primary : palette.textMuted} />
-            </Pressable>
             {/* Só o ponto: a saudação virou o título e não sobra largura para "PC online"
                 aqui. O texto do estado mora na linha abaixo do cabeçalho. */}
             <View style={[styles.ponto, { backgroundColor: online ? palette.success : palette.error }]} />
@@ -470,15 +470,8 @@ export default function HomeScreen({
           <View style={{ paddingBottom: 2 }}>
             {/* 08/10: o estado do ELYSIUM no PC (na tela, minimizado, bandeja, fechado,
                 desligado), com os detalhes num toque. */}
-            <EstadoPcLinha />
-            {(dados.lembretes.length > 0 || dados.clima) && (
-              <Text variant="caption" color={palette.textMuted} style={{ paddingHorizontal: 4 }}>
-                {[
-                  dados.lembretes.length > 0 ? `${dados.lembretes.length} lembrete${dados.lembretes.length > 1 ? 's' : ''} pendente${dados.lembretes.length > 1 ? 's' : ''}` : '',
-                  dados.clima ? `${Math.round(dados.clima.temperatura)}° lá fora` : '',
-                ].filter(Boolean).join(' · ')}
-              </Text>
-            )}
+            {/* Fase 22: uma linha só — PC, lembretes e clima juntos. */}
+            <EstadoPcLinha extra={resumoDaInicio(dados.lembretes.length, dados.clima ? dados.clima.temperatura : null)} />
           </View>
         )}
 
@@ -486,6 +479,54 @@ export default function HomeScreen({
         {!editando && <NovidadesCelular />}
         {!editando && online && <AvisoAtualizacao pairing={pairing} modo="inicio" />}
 
+        {/* Linha que embrulha: é o que permite dois meios-cards lado a lado. Com todos os
+            cards inteiros, o resultado é idêntico à pilha de antes. */}
+        <View style={styles.grelha}>
+          {visiveis.map((id, i) => {
+            const t = tamanhos[id];
+            return (
+              <CardArrastavel
+                key={id}
+                indice={i}
+                ativo={editando && !fixos.includes(id)}
+                largura={t?.col ?? 1}
+                alturaFixa={t?.alt ?? null}
+                onMover={mover}
+                onArrastando={setArrastando}
+                onRedimensionar={(alt, col) => redimensionar(id, alt, col)}
+                onFimRedimensionar={fimDoRedimensionamento}
+              >
+                {Alca => (
+                  <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt ? 1 : undefined }}>
+                    <View style={styles.cabecalho}>
+                      <Feather name={CARDS[id].icone} size={14} color={palette.textMuted} />
+                      <Text variant="label" color={palette.textMuted}>{CARDS[id].titulo}</Text>
+                      {editando && !fixos.includes(id) && (
+                        <Alca>
+                          <Feather name="menu" size={16} color={palette.primary} />
+                        </Alca>
+                      )}
+                    </View>
+                    {!primeiraLeitura && CARDS[id].precisa.length ? <Esqueleto /> : CARDS[id].corpo(ctx)}
+                  </Card>
+                )}
+              </CardArrastavel>
+            );
+          })}
+        </View>
+
+        {visiveis.length === 0 && (
+          <Text variant="caption" color={palette.textMuted}>
+            Todos os cards estão desligados. Toque em "Personalizar" para escolher.
+          </Text>
+        )}
+
+        {/* Fase 22: o editor saiu do cabeçalho — fica aqui no fim, atrás deste botão. */}
+        <Pressable onPress={() => { haptica.leve(); setEditando(v => !v); }} accessibilityRole="button" hitSlop={6}
+          style={[styles.personalizar, { borderColor: palette.glassBorder, borderRadius: tokens.radii.full }]}>
+          <Feather name={editando ? 'check' : 'sliders'} size={14} color={palette.primary} />
+          <Text variant="label" color={palette.primary}>{editando ? 'Pronto' : 'Personalizar'}</Text>
+        </Pressable>
         {editando && (
           <Card glass style={{ gap: tokens.spacing.sm }}>
             <View style={styles.cabecalho}>
@@ -554,47 +595,6 @@ export default function HomeScreen({
           </Card>
         )}
 
-        {/* Linha que embrulha: é o que permite dois meios-cards lado a lado. Com todos os
-            cards inteiros, o resultado é idêntico à pilha de antes. */}
-        <View style={styles.grelha}>
-          {visiveis.map((id, i) => {
-            const t = tamanhos[id];
-            return (
-              <CardArrastavel
-                key={id}
-                indice={i}
-                ativo={editando && !fixos.includes(id)}
-                largura={t?.col ?? 1}
-                alturaFixa={t?.alt ?? null}
-                onMover={mover}
-                onArrastando={setArrastando}
-                onRedimensionar={(alt, col) => redimensionar(id, alt, col)}
-                onFimRedimensionar={fimDoRedimensionamento}
-              >
-                {Alca => (
-                  <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt ? 1 : undefined }}>
-                    <View style={styles.cabecalho}>
-                      <Feather name={CARDS[id].icone} size={14} color={palette.textMuted} />
-                      <Text variant="label" color={palette.textMuted}>{CARDS[id].titulo}</Text>
-                      {editando && !fixos.includes(id) && (
-                        <Alca>
-                          <Feather name="menu" size={16} color={palette.primary} />
-                        </Alca>
-                      )}
-                    </View>
-                    {!primeiraLeitura && CARDS[id].precisa.length ? <Esqueleto /> : CARDS[id].corpo(ctx)}
-                  </Card>
-                )}
-              </CardArrastavel>
-            );
-          })}
-        </View>
-
-        {visiveis.length === 0 && (
-          <Text variant="caption" color={palette.textMuted}>
-            Todos os cards estão desligados. Toque no ícone acima para escolher.
-          </Text>
-        )}
       </ScrollView>
 
       <BuscaPanel
@@ -624,4 +624,5 @@ const styles = StyleSheet.create({
   linhaCfgAlvo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
   iconeCfg: { paddingHorizontal: 6, paddingVertical: 7 },
   grelha: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' },
+  personalizar: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 9, borderWidth: StyleSheet.hairlineWidth, marginTop: 4 },
 });

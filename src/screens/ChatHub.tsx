@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
@@ -6,11 +6,10 @@ import { Pairing } from '../lib/pairing';
 import { getActiveSessionId, setActiveSessionId } from '../lib/mailboxStore';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassCircle, Popover, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, ScreenHeader, Text } from '../components/ui';
 import ChatScreen from './ChatScreen';
 import MailboxScreen from './MailboxScreen';
 import MailboxHistorico from './MailboxHistorico';
-import PresetsPopover from './PresetsPopover';
 
 /**
  * Chat e Caixa numa tela só, escolhidos por um switch.
@@ -20,8 +19,10 @@ import PresetsPopover from './PresetsPopover';
  * botões dentro do chat. Aqui vira um switch centralizado no topo: à esquerda a IA, à
  * direita os recados que aparecem no PC.
  *
- * O botão redondo no canto direito abre os presets. Não é uma aba: é um popover ancorado,
- * como no desktop.
+ * Fase 22: os presets saíram daqui para o "+" da barra de escrita; no canto direito fica só a
+ * engrenagem de Ajustes, como no PC.
+ * (Antes: o botão redondo no canto direito abria os presets — um popover ancorado,
+ * como no desktop.)
  */
 export default function ChatHub({
   pairing,
@@ -87,20 +88,6 @@ export default function ChatHub({
       .then(id => setMailboxSessionId(id))
       .catch(err => console.warn('[caixa] falha lendo a conversa ativa', err));
   }, []);
-  const [presetsAberto, setPresetsAberto] = useState(false);
-  const [ancora, setAncora] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const botaoRef = useRef<View>(null);
-
-  function abrirPresets() {
-    // `measureInWindow` mesmo com o popover já dentro da árvore: esta tela começa na
-    // origem da janela, então as duas coordenadas coincidem, e medir na janela continua
-    // sendo o único jeito que não depende de quantos pais existem no meio.
-    botaoRef.current?.measureInWindow((x, y, width, height) => {
-      setAncora({ x, y, width, height });
-      setPresetsAberto(true);
-    });
-  }
-
   if (historicoPcAberto) {
     return (
       <MailboxHistorico
@@ -133,13 +120,6 @@ export default function ChatHub({
           </GlassCircle>
         }
         center={<SwitchModo modo={modo} onTroca={setModo} temNovidade={(naoLidos ?? 0) > 0} />}
-        right={
-          <View ref={botaoRef} collapsable={false}>
-            <GlassCircle accessibilityLabel="Opções" size={34} ativo={presetsAberto} onPress={abrirPresets}>
-              <Feather name="sliders" size={17} color={presetsAberto ? palette.primary : palette.textMuted} />
-            </GlassCircle>
-          </View>
-        }
       />
 
       {/* As duas telas continuam inteiras; o que muda é qual delas está montada e que
@@ -170,9 +150,6 @@ export default function ChatHub({
         )}
       </View>
 
-      <Popover visible={presetsAberto} onClose={() => setPresetsAberto(false)} anchor={ancora}>
-        <PresetsPopover pairing={pairing} onFechar={() => setPresetsAberto(false)} />
-      </Popover>
     </View>
   );
 }

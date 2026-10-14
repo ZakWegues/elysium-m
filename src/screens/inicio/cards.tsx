@@ -530,14 +530,16 @@ function Transferencia({ texto }: { texto: string }) {
 function Atalhos({
   navegar, abrirPlayer,
 }: {
-  navegar: (t: 'chat' | 'control') => void;
+  navegar: (t: 'chat' | 'control' | 'rotinas') => void;
   abrirPlayer: () => void;
 }) {
   const { palette, tokens } = useTheme();
+  // Fase 22: Rotinas saiu das abas; daqui abre a gaveta.
   const itens = [
     { chave: 'chat', label: 'Conversar', icone: 'message-circle' as const, acao: () => navegar('chat') },
     { chave: 'control', label: 'Controlar', icone: 'monitor' as const, acao: () => navegar('control') },
     { chave: 'player', label: 'Música', icone: 'music' as const, acao: abrirPlayer },
+    { chave: 'rotinas', label: 'Rotinas', icone: 'repeat' as const, acao: () => navegar('rotinas') },
   ];
   return (
     <View style={styles.grade}>

@@ -39,6 +39,7 @@ export function GlassModal({
   title,
   children,
   altura = 'auto',
+  semRolagem = false,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -50,6 +51,8 @@ export function GlassModal({
    * e para baixo fecha (08/10 — antes a alça era só enfeite e a lista ficava cortada em 85%).
    */
   altura?: 'auto' | 'cheia';
+  /** Fase 22: o conteúdo já rola sozinho (Rotinas) — sem o ScrollView da gaveta em volta. */
+  semRolagem?: boolean;
 }) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -159,6 +162,16 @@ export function GlassModal({
           <View style={styles.handle} />
         </View>
 
+        {semRolagem ? (
+          <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+            {title && (
+              <Text variant="heading" style={{ marginBottom: tokens.spacing.sm, paddingHorizontal: tokens.spacing.lg }}>
+                {title}
+              </Text>
+            )}
+            {children}
+          </View>
+        ) : (
         <ScrollView
           style={expandida ? { flex: 1 } : undefined}
           contentContainerStyle={{
@@ -174,6 +187,7 @@ export function GlassModal({
           )}
           {children}
         </ScrollView>
+        )}
       </Animated.View>
     </View>
   );

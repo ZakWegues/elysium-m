@@ -39,11 +39,13 @@ export type Dados = {
   timers: { lista: TimerPc[]; diferenca: number } | null;
 };
 
+import { CARDS_PADRAO_V2 } from '../../lib/layoutInicio';
+
 export type Ctx = {
   dados: Dados;
   pairing: Pairing;
   ocupado: boolean;
-  navegar: (tela: 'chat' | 'control') => void;
+  navegar: (tela: 'chat' | 'control' | 'rotinas') => void;
   abrirPlayer: () => void;
   energia: (op: PowerOperation, label: string, aviso: string) => void;
   agendarDesligamento: (segundos: number) => void;
@@ -63,5 +65,8 @@ export type DefCard = {
   corpo: (c: Ctx) => React.ReactNode;
 };
 
-/** Ordem de fábrica. Card fora desta lista existe, mas nasce desligado. */
-export const CARDS_PADRAO = ['sugestoes', 'hoje', 'listas', 'timers', 'computador', 'saude', 'aprendi', 'musica', 'lembretes', 'atalhos', 'energia'];
+/**
+ * Ordem de fábrica. Card fora desta lista existe, mas nasce desligado. Fase 22: cinco em vez
+ * de onze (lib/layoutInicio.ts) — o resto fica em "Personalizar".
+ */
+export const CARDS_PADRAO: string[] = [...CARDS_PADRAO_V2];

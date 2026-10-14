@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, FlatList, Linking, Pressable, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
+import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
@@ -33,7 +33,8 @@ import CameraAsk from './CameraAsk';
 import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text } from '../components/ui';
+import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { paraFala, textoPuro } from '../lib/markdown';
 import * as Clipboard from 'expo-clipboard';
@@ -934,6 +935,26 @@ export default function ChatScreen({
   }, [pedidoVoz?.n, micStatus]);
   useEffect(() => () => { if (timerVozRef.current) clearTimeout(timerVozRef.current); }, []);
 
+  // Fase 22: o "+" (câmera, anexo, modos, presets) e o LIVE como botão.
+  const [maisAberto, setMaisAberto] = useState(false);
+  const [presetsAbertos, setPresetsAbertos] = useState(false);
+  function alternarLive() {
+    if (liveRef.current) { cancelarTurno(); return; }
+    if (micStatus !== 'ready' || turnoRef.current || enviandoRef.current) return;
+    haptica.medio();
+    setLive(true);
+    turnoDeVoz();
+  }
+  // Sobre o campo de texto, no máximo DUAS faixas — eram até sete empilhadas. Pela ordem de
+  // importância: o "/" aberto, a voz em curso, o modo ligado, as sugestões, as perguntas de partida.
+  const faixas = ([
+    barra !== null && !comandoEscolhido ? 'barra' : null,
+    faseVoz ? 'voz' : null,
+    modo && barra === null ? 'modo' : null,
+    sugestoes.length > 0 && !sending ? 'sugestoes' : null,
+    starters.length > 0 && messages.length <= 1 && !sending ? 'starters' : null,
+  ].filter(Boolean) as string[]).slice(0, 2);
+
   return (
     // O espaço do teclado é reservado uma vez só, na raiz do app (App.tsx). Aqui havia
     // um KeyboardAvoidingView que, somado àquele padding, deslocava a conversa duas
@@ -1011,7 +1032,13 @@ export default function ChatScreen({
               </Pressable>
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
-                <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">RESERVA</Text>
+                palette.familia === 'renascenca' ? (
+                  <View style={styles.lacre} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">
+                    <Text variant="caption" color="#f6d9c9" style={styles.lacreTexto}>reserva</Text>
+                  </View>
+                ) : (
+                  <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">RESERVA</Text>
+                )
               ) : null}
               {/* Fontes da busca (bloco 131): um toque abre o site. */}
               {item.fontes?.length ? (
@@ -1033,24 +1060,25 @@ export default function ChatScreen({
 
       {sending && !escrevendoId && <BolhaPensando />}
 
-      {/* Próximas perguntas (bloco 132): um toque pergunta. */}
-      {sugestoes.length > 0 && !sending && (
-        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
-          {sugestoes.slice(0, 6).map((t) => (
+      {/* Próximas perguntas (bloco 132): um toque pergunta. Fase 22: uma linha só, até 3. */}
+      {faixas.includes('sugestoes') && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.linhaFaixa, { paddingHorizontal: tokens.spacing.md }]}>
+          {sugestoes.slice(0, 3).map((t) => (
             <Pressable
               key={t}
               onPress={() => { haptica.leve(); handleSend(t); }}
-              style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}
+              style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg, maxWidth: 260 }]}
             >
-              <Text variant="caption" color={palette.text}>{t}</Text>
+              <Text variant="caption" color={palette.text} numberOfLines={1}>{t}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {/* "/" = comandos de IA (bloco 137): toque escolhe, depois escreva ou cole o texto. */}
-      {barra !== null && !comandoEscolhido && (
+      {faixas.includes('barra') && barra !== null && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
           {(modosLista ?? []).filter(m => `modo ${m.nome}`.toLowerCase().includes(barra.trim())).map(m => (
             <Pressable key={`modo-${m.id}`} onPress={() => escolherModo(m.id)} accessibilityLabel={`Ligar o modo ${m.nome}`}
@@ -1069,7 +1097,7 @@ export default function ChatScreen({
       )}
 
       {/* Fase 20: o modo ligado. O ✕ sai; tocar no nome abre a lista pelo "/". */}
-      {modo && barra === null && (
+      {modo && faixas.includes('modo') && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
           <View style={[styles.chipModo, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.full }]}>
             <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel={`Modo ${modo.nome} ligado. Toque para trocar`}>
@@ -1082,8 +1110,9 @@ export default function ChatScreen({
         </View>
       )}
 
-      {starters.length > 0 && messages.length <= 1 && !sending && (
-        <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
+      {faixas.includes('starters') && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.linhaFaixa, { paddingHorizontal: tokens.spacing.md }]}>
           {!modo && (
             <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel="Escolher um modo"
               style={[styles.starter, { borderRadius: tokens.radii.full, borderColor: palette.primary, backgroundColor: palette.primarySoft }]}>
@@ -1103,7 +1132,7 @@ export default function ChatScreen({
               <Text variant="caption" numberOfLines={1}>{t}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
       <VozAoVivo
@@ -1111,15 +1140,33 @@ export default function ChatScreen({
         nivel={nivelVoz}
         acima={faseVoz ? 128 : 86}
       />
-      {faseVoz && (
+      {faseVoz && faixas.includes('voz') && (
         <View style={[styles.faixaVoz, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
           <Feather name={faseVoz === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />
           <Text variant="caption" color={palette.primary} style={{ flex: 1 }}>
-            {live ? 'LIVE · ' : ''}{faseVoz === 'pensando' ? 'Pensando…' : live ? 'Pode falar. "Tchau" sai.' : 'Pode falar o pedido.'}
+            {faseVoz === 'pensando' ? 'Pensando…' : live ? 'Pode falar. "Tchau" sai.' : 'Pode falar o pedido.'}
           </Text>
           <Pressable onPress={cancelarTurno} hitSlop={10} accessibilityLabel={live ? 'Sair do modo live' : 'Cancelar pedido por voz'}>
             <Feather name="x" size={16} color={palette.primary} />
           </Pressable>
+        </View>
+      )}
+
+      {maisAberto && (
+        <View style={[styles.menuMais, { paddingHorizontal: tokens.spacing.md }]}>
+          {([
+            { rotulo: 'Câmera', icone: 'camera', acao: () => setCameraOpen(true), off: sending },
+            { rotulo: 'Anexo', icone: 'paperclip', acao: handleAnexar, off: sending },
+            { rotulo: 'Modos', icone: 'layers', acao: () => setDraft('/modo '), off: false },
+            { rotulo: 'Presets', icone: 'zap', acao: () => setPresetsAbertos(true), off: false },
+          ] as const).map(o => (
+            <Pressable key={o.rotulo} disabled={o.off} accessibilityLabel={o.rotulo}
+              onPress={() => { haptica.leve(); setMaisAberto(false); o.acao(); }}
+              style={[styles.itemMais, { borderColor: palette.glassBorder, borderRadius: tokens.radii.lg, backgroundColor: palette.primarySoft, opacity: o.off ? 0.4 : 1 }]}>
+              <Feather name={o.icone} size={18} color={palette.primary} />
+              <Text variant="caption" color={palette.primary}>{o.rotulo}</Text>
+            </Pressable>
+          ))}
         </View>
       )}
 
@@ -1134,13 +1181,9 @@ export default function ChatScreen({
             { padding: tokens.spacing.md, borderTopColor: palette.glassBorder },
           ]}
         >
-        <GlassCircle size={40} onPress={() => setCameraOpen(true)} disabled={sending} accessibilityLabel="Perguntar sobre uma foto">
-          <Feather name="camera" size={20} color={palette.primary} />
-        </GlassCircle>
-        {/* Anexar fica à esquerda, colado na câmera, nos DOIS lados do switch: são os dois
-            botões que trazem algo de fora para a conversa. */}
-        <GlassCircle size={40} onPress={handleAnexar} disabled={sending} accessibilityLabel="Anexar arquivo">
-          <Feather name="paperclip" size={20} color={palette.primary} />
+        {/* Fase 22: câmera, anexo, modos e presets moram atrás do "+". */}
+        <GlassCircle size={40} ativo={maisAberto} onPress={() => { haptica.leve(); setMaisAberto(v => !v); }} accessibilityLabel="Mais opções">
+          <Feather name={maisAberto ? 'x' : 'plus'} size={20} color={palette.primary} />
         </GlassCircle>
         <TextInput
           style={[
@@ -1188,13 +1231,25 @@ export default function ChatScreen({
           <GlassCircle size={40} ativo onPress={pararResposta} accessibilityLabel="Parar a resposta">
             <Feather name="square" size={17} color={palette.error} />
           </GlassCircle>
-        ) : (
-          <GlassCircle size={40} ativo={!!draft.trim()} onPress={() => handleSend()} disabled={!draft.trim()} accessibilityLabel="Enviar">
-            <Feather name="arrow-up" size={20} color={draft.trim() ? palette.primary : palette.textMuted} />
+        ) : draft.trim() ? (
+          <GlassCircle size={40} ativo onPress={() => handleSend()} accessibilityLabel="Enviar">
+            <Feather name="arrow-up" size={20} color={palette.primary} />
           </GlassCircle>
+        ) : (
+          // Fase 22: o LIVE é um botão — aceso (com anel) enquanto a conversa contínua está ligada.
+          <View style={[styles.anelLive, live && { borderColor: palette.primary }]}>
+            <GlassCircle size={40} ativo={live} pulsando={live} onPress={alternarLive}
+              disabled={micStatus !== 'ready'} accessibilityLabel={live ? 'Sair do modo live' : 'Modo live: conversa contínua'}>
+              <Feather name="activity" size={19} color={live ? palette.primary : palette.textMuted} />
+            </GlassCircle>
+          </View>
         )}
         </View>
       </View>
+
+      <GlassModal title="Presets" visible={presetsAbertos} onClose={() => setPresetsAbertos(false)}>
+        {presetsAbertos && <PresetsPopover pairing={pairing} onFechar={() => setPresetsAbertos(false)} />}
+      </GlassModal>
 
       <CameraAsk
         pairing={pairing}
@@ -1367,6 +1422,16 @@ const styles = StyleSheet.create({
   },
   ponto: { width: 7, height: 7, borderRadius: 4 },
   starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, paddingBottom: 10 },
+  linhaFaixa: { gap: 7, paddingBottom: 10, flexGrow: 1, justifyContent: 'center' },
+  menuMais: { flexDirection: 'row', gap: 8, paddingBottom: 8 },
+  itemMais: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10, borderWidth: StyleSheet.hairlineWidth },
+  anelLive: { borderRadius: 24, borderWidth: 1.5, borderColor: 'transparent', padding: 2 },
+  lacre: {
+    marginTop: 6, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#8c1c13', borderWidth: 1, borderColor: '#5a0e08',
+    shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 3, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
+  lacreTexto: { fontSize: 9, letterSpacing: 0.5, fontVariant: ['small-caps'] },
   chipModo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1 },
   starter: { paddingVertical: 8, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, maxWidth: '100%' },
   inputRow: {

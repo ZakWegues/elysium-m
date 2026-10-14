@@ -227,8 +227,8 @@ export function GlassCircle({
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: palette.familia === 'ely' ? 'transparent' : palette.glassBorder,
+          borderWidth: palette.familia === 'renascenca' ? 1 : StyleSheet.hairlineWidth,
+          borderColor: palette.familia === 'ely' ? 'transparent' : palette.familia === 'renascenca' ? palette.primary : palette.glassBorder,
           opacity: disabled ? 0.45 : 1,
         },
         style,
@@ -237,6 +237,10 @@ export function GlassCircle({
     >
       {/* Meio-termo: o botão tem ícone, não texto corrido, e sobe menos que os painéis. */}
       <GlassFill intensity={45} edge={false} tintColor={ativo ? palette.primarySoft : undefined} />
+      {/* Fase 22: moeda da Renascença — um filete de ouro por dentro da borda. */}
+      {palette.familia === 'renascenca' && (
+        <View pointerEvents="none" style={{ position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderRadius: size / 2, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.primary, opacity: 0.6 }} />
+      )}
       {children}
     </AnimatedPressable>
   );

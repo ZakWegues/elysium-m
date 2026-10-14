@@ -10,7 +10,7 @@ import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
 /** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
-export type Screen = 'home' | 'chat' | 'hoje' | 'control' | 'rotinas' | 'conversations';
+export type Screen = 'home' | 'chat' | 'hoje' | 'control' | 'conversations';
 
 /**
  * Só destinos de verdade.
@@ -30,15 +30,14 @@ const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap
   // como o desktop sempre tratou os dois — um par de modos da mesma conversa, não duas
   // telas. E os Presets viraram um popover ancorado no botão do topo.
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
-  // Fase 16: o briefing do dia, hábitos e metas — a mesma aba Hoje do desktop.
-  { screen: 'hoje', label: 'Hoje', icon: 'sun' },
   // Guia única de controle do PC: espelho da tela aparente ao entrar, e todo o resto
   // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
   // gavetas. Antes eram duas abas separadas, Sistema e Remoto.
   { screen: 'control', label: 'PC', icon: 'monitor' },
-  // O que acontece sozinho, na hora certa: rotinas, lembretes e o que o PC entregou a
-  // este aparelho (bloco 72). Mesma aba do desktop (bloco 68).
-  { screen: 'rotinas', label: 'Rotinas', icon: 'calendar' },
+  // Fase 16: o briefing do dia, hábitos e metas — a mesma aba Hoje do desktop.
+  { screen: 'hoje', label: 'Hoje', icon: 'sun' },
+  // Fase 22: Rotinas saiu da barra — virou gaveta dentro do Hoje (e do card de atalhos).
+  // Quatro destinos, como o Zak pediu: Início, Chat, PC e Hoje.
 ];
 
 const MAX_INDICE = TABS.length - 1;
@@ -190,10 +189,17 @@ export function TabBar({
             pointerEvents="none"
             style={[
               styles.indicador,
-              { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md },
+              palette.familia === 'renascenca'
+                ? { backgroundColor: 'transparent', borderBottomWidth: 1.5, borderBottomColor: palette.primary, borderRadius: 0 }
+                : { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md },
               estiloIndicador,
             ]}
-          />
+          >
+            {/* Fase 22: o fleurão da aba ativa, como no PC. */}
+            {palette.familia === 'renascenca' && (
+              <Text variant="caption" color={palette.primary} style={styles.fleurao}>❦</Text>
+            )}
+          </Animated.View>
           {TABS.map((tab, i) => (
             <Aba
               key={tab.screen}
@@ -308,6 +314,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
   },
+  fleurao: { position: 'absolute', bottom: -9, alignSelf: 'center', fontSize: 11, lineHeight: 12 },
   badge: {
     position: 'absolute',
     top: -4,

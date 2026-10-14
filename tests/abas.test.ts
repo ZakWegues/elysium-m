@@ -9,10 +9,15 @@ describe("abas vivas", () => {
     expect([...m].sort()).toEqual(["hoje", "home"]);
   });
 
-  it("pré-carrega Início, Hoje e Chat, mas não PC nem Rotinas", () => {
+  it("pré-carrega Início, Hoje e Chat, mas não o PC", () => {
     const m = abasMontadas(new Set<Aba>(["home"]), "home", true);
     expect(m.has("hoje") && m.has("chat")).toBe(true);
-    expect(m.has("control") || m.has("rotinas")).toBe(false);
+    expect(m.has("control")).toBe(false);
+  });
+
+  it("fase 22: quatro abas — Rotinas não é mais destino", () => {
+    const m = abasMontadas(new Set<Aba>(["home"]), "control", true);
+    expect([...m].sort()).toEqual(["chat", "control", "hoje", "home"]);
   });
 
   it("Conversas sai ao trocar de aba (abre sempre fresca)", () => {

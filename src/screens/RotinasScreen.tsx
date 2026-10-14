@@ -61,7 +61,11 @@ function quando(epoch: number): string {
   return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`;
 }
 
-export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing; onUnpair: () => void }) {
+/**
+ * Fase 22: Rotinas saiu das abas (o celular ficou com Início, Chat, PC e Hoje) e abre como
+ * gaveta a partir do Hoje e do card de atalhos. `naGaveta` tira o cabeçalho — a gaveta tem o dela.
+ */
+export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing: Pairing; onUnpair: () => void; naGaveta?: boolean }) {
   const { palette, tokens } = useTheme();
   const [rotinas, setRotinas] = useState<Rotina[]>([]);
   const [eventos, setEventos] = useState<{ id: string; rotulo: string }[]>([]);
@@ -155,6 +159,14 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
 
   return (
     <View style={{ flex: 1 }}>
+      {naGaveta ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: tokens.spacing.lg }}>
+          <Pressable onPress={() => setEditando({})} hitSlop={10} accessibilityLabel="Nova rotina" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Feather name="plus-circle" size={20} color={palette.primary} />
+            <Text variant="label" color={palette.primary}>Nova rotina</Text>
+          </Pressable>
+        </View>
+      ) : (
       <ScreenHeader
         title="Rotinas"
         right={(
@@ -163,6 +175,7 @@ export default function RotinasScreen({ pairing, onUnpair }: { pairing: Pairing;
           </Pressable>
         )}
       />
+      )}
 
       <ScrollView
         keyboardShouldPersistTaps="handled"

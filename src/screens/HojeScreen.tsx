@@ -8,7 +8,9 @@ import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { confirmDestructive } from '../lib/confirm';
 import { useTheme } from '../theme';
-import { Button, Card, GlassModal, ScreenHeader, Text } from '../components/ui';
+import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../components/ui';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, tituloComContador } from '../lib/secoesHoje';
 import { Reator } from '../components/Reator';
 import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
@@ -37,7 +39,7 @@ function restante(ms: number) {
   return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void }) {
+export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, onAbrirRotinas }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void; onAbrirRotinas?: () => void }) {
   const { palette, tokens } = useTheme();
   const [painel, setPainel] = useState<PainelHoje | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -244,10 +246,33 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
     catch (e) { Alert.alert('Revisão da semana', errMessage(e)); }
   }
 
+  // Fase 22: seções recolhíveis (lib/secoesHoje.ts). Toque abre/fecha; toque longo oculta.
+  const [secoesSalvas, setSecoesSalvas] = useState<EstadoSecoes>({});
+  useEffect(() => { AsyncStorage.getItem(CHAVE_SECOES_HOJE).then(j => setSecoesSalvas(lerSecoes(j))).catch(() => {}); }, []);
+  const aberta = (chave: string) => estaAberta(chave, secoesSalvas);
+  const alternar = (chave: string) => {
+    haptica.tique();
+    setSecoesSalvas(atual => {
+      const novo = alternarSecao(atual, chave);
+      AsyncStorage.setItem(CHAVE_SECOES_HOJE, JSON.stringify(novo)).catch(() => {});
+      return novo;
+    });
+  };
+  const contagens: Record<string, number | string> = painel ? {
+    'amanha': painel.amanha?.tarefas.length ?? 0,
+    'habitos-de-hoje': habitos.length ? `${feitos}/${habitos.length}` : 0,
+    'metas': painel.metas.length,
+    'lembretes-e-tarefas': painel.tarefas?.length ?? 0,
+    'agenda': agenda.length + painel.timers.length,
+    'listas': painel.listas.length,
+  } : {};
   const secao = (t: string, acao?: { rotulo: string; onPress: () => void; icone?: keyof typeof Feather.glyphMap }, chave = chaveDe(t)) => (
     <View style={styles.secaoTopo}>
-      <Pressable onLongPress={() => perguntarOcultar(t, chave)} accessibilityHint="Toque longo para ocultar a seção" hitSlop={6}>
-        <Text variant="label" color={palette.textMuted} style={styles.secao}>{t}</Text>
+      <Pressable onPress={() => alternar(chave)} onLongPress={() => perguntarOcultar(t, chave)} accessibilityRole="button"
+        accessibilityState={{ expanded: aberta(chave) }} accessibilityHint="Toque para abrir ou fechar; toque longo para ocultar a seção" hitSlop={6}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+        <Feather name={aberta(chave) ? 'chevron-down' : 'chevron-right'} size={14} color={palette.textMuted} />
+        <Text variant="label" color={palette.textMuted} style={styles.secao}>{tituloComContador(t, contagens[chave])}</Text>
       </Pressable>
       {acao && (
         <Pressable onPress={acao.onPress} hitSlop={12} accessibilityRole="button" accessibilityLabel={acao.rotulo} style={styles.secaoAcao}>
@@ -291,6 +316,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
             {painel.amanha && vis('amanha') && (
               <>
                 {secao('MEU AMANHÃ', undefined, 'amanha')}
+                {aberta('amanha') && (<>
                 <Card glass style={{ gap: 8 }}>
                   {painel.amanha.clima && (
                     <Text variant="caption" color={palette.textMuted}>Amanhã: {Math.round(painel.amanha.clima.min)}°–{Math.round(painel.amanha.clima.max)}°</Text>
@@ -304,6 +330,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
                     </View>
                   ))}
                 </Card>
+                </>)}
               </>
             )}
 
@@ -331,11 +358,14 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
             {/* Fase 20: pomodoro, cartões de revisão e plano de estudo. */}
             {vis('estudo') && (<>
             {secao('ESTUDO')}
+            {aberta('estudo') && (<>
             <CardEstudo pairing={pairing} versao={versaoEstudo} aoRevisar={setFilaRevisao} aoPlanejar={() => setPlanejando(true)} />
+            </>)}
             </>)}
 
             {vis('habitos-de-hoje') && (<>
             {secao('HÁBITOS DE HOJE', { rotulo: 'Hábito', onPress: () => setHabitoEdit({}) })}
+            {aberta('habitos-de-hoje') && (<>
             <Pressable onPress={abrirTodos} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-start', minHeight: 28, justifyContent: 'center' }}>
               <Text variant="caption" color={palette.primary}>Ver todos os hábitos e metas</Text>
             </Pressable>
@@ -371,9 +401,11 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
               ))}
             </Card>
             </>)}
+            </>)}
 
             {vis('metas') && (<>
             {secao('METAS', { rotulo: 'Meta', onPress: () => setMetaEdit({ alvo: 10 }) })}
+            {aberta('metas') && (<>
             <Card glass style={{ gap: tokens.spacing.sm }}>
               {painel.metas.length === 0 && <Text variant="caption" color={palette.textMuted}>Sem metas em andamento.</Text>}
               {painel.metas.map(m => {
@@ -396,10 +428,12 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
               })}
             </Card>
             </>)}
+            </>)}
 
             {painel.tarefas && vis('lembretes-e-tarefas') && (
               <>
                 {secao('LEMBRETES E TAREFAS', { rotulo: 'Tela cheia', icone: 'maximize-2', onPress: () => { haptica.leve(); setTarefasAbertas(true); } })}
+                {aberta('lembretes-e-tarefas') && (<>
                 <Card glass style={{ gap: 4 }}>
                   {/* Nova tarefa: com dia ou hora vira lembrete (16h sem hora; prova e consulta avisam na véspera). */}
                   <TextInput
@@ -468,11 +502,13 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
                     </Pressable>
                   )}
                 </Card>
+                </>)}
               </>
             )}
 
             {vis('agenda') && (<>
             {secao('AGENDA')}
+            {aberta('agenda') && (<>
             <Card glass style={{ gap: 8 }}>
               {painel.timers.map(t => (
                 <View key={t.id} style={styles.linha}>
@@ -491,10 +527,26 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
               {!agenda.length && !painel.timers.length && <Text variant="caption" color={palette.textMuted}>Agenda livre hoje.</Text>}
             </Card>
             </>)}
+            </>)}
+
+            {/* Fase 22: Rotinas saiu das abas — daqui abre a gaveta. */}
+            {onAbrirRotinas && (
+              <Toque onPress={onAbrirRotinas} haptico="leve">
+                <Card glass style={styles.linha}>
+                  <Feather name="repeat" size={18} color={palette.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="label">Rotinas</Text>
+                    <Text variant="caption" color={palette.textMuted}>O que acontece sozinho, na hora certa</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={palette.textMuted} />
+                </Card>
+              </Toque>
+            )}
 
             {painel.clima && vis('clima') && (
               <>
                 {secao('CLIMA')}
+                {aberta('clima') && (<>
                 <Card glass style={styles.linha}>
                   <Text variant="heading" color={palette.primary}>{Math.round(painel.clima.temperatura)}°</Text>
                   <View style={{ flex: 1 }}>
@@ -502,33 +554,41 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
                     <Text variant="caption" color={palette.textMuted}>{painel.clima.cidade} · {Math.round(painel.clima.min)}°–{Math.round(painel.clima.max)}°{painel.clima.chuvaHoje ? ' · chuva hoje' : ''}</Text>
                   </View>
                 </Card>
+                </>)}
               </>
             )}
 
             {painel.rotinasHoje && vis('rotinas-de-hoje') && (
               <>
                 {secao('ROTINAS DE HOJE')}
+                {aberta('rotinas-de-hoje') && (<>
                 <CardRotinasHoje painel={painel} />
+                </>)}
               </>
             )}
 
             {painel.ideia && vis('ideia-para-hoje') ? (
               <>
                 {secao('IDEIA PARA HOJE')}
+                {aberta('ideia-para-hoje') && (<>
                 <CardIdeia ideia={painel.ideia} pairing={pairing} />
+                </>)}
               </>
             ) : null}
 
             {painel.elysium && vis('elysium') && (
               <>
                 {secao('ELYSIUM')}
+                {aberta('elysium') && (<>
                 <CardElysium e={painel.elysium} pairing={pairing} />
+                </>)}
               </>
             )}
 
             {painel.listas.length > 0 && vis('listas') && (
               <>
                 {secao('LISTAS')}
+                {aberta('listas') && (<>
                 <Card glass style={{ gap: 8 }}>
                   {painel.listas.map(l => (
                     <View key={l.id}>
@@ -537,15 +597,18 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder }: 
                     </View>
                   ))}
                 </Card>
+                </>)}
               </>
             )}
 
             {vis('manchetes') && (<>
             {secao('MANCHETES')}
+            {aberta('manchetes') && (<>
             <Card glass style={{ gap: 8 }}>
               {manchetes ? <Markdown texto={manchetes} cor={palette.text} /> : <Text variant="caption" color={palette.textMuted}>Sob demanda — a busca vai à internet.</Text>}
               <Button title={buscandoManchetes ? 'Buscando…' : manchetes ? 'Buscar de novo' : 'Buscar manchetes'} variant="secondary" onPress={buscarManchetes} disabled={buscandoManchetes} />
             </Card>
+            </>)}
             </>)}
 
             {ocultos.length > 0 && (

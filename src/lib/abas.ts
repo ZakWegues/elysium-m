@@ -5,12 +5,13 @@
  * voltar ao Hoje refazia o carregamento do zero, a rolagem voltava ao topo, e a fala que a
  * tela tinha começado era cortada junto. Agora cada aba monta na primeira visita e fica
  * montada, só escondida. As três de uso diário montam logo depois do primeiro quadro, para a
- * primeira visita também ser instantânea; PC e Rotinas esperam a primeira visita (a do PC
- * tem espelho e trackpad — não faz sentido pagar por elas sem ninguém olhar).
+ * primeira visita também ser instantânea; o PC espera a primeira visita (tem espelho e
+ * trackpad — não faz sentido pagar por eles sem ninguém olhar). Fase 22: Rotinas deixou de ser
+ * aba (virou gaveta dentro do Hoje).
  *
  * Conversas não fica viva: é uma lista que sai de dentro do Chat e deve sempre abrir fresca.
  */
-export type Aba = 'home' | 'chat' | 'hoje' | 'control' | 'rotinas' | 'conversations';
+export type Aba = 'home' | 'chat' | 'hoje' | 'control' | 'conversations';
 
 export const ABAS_PRE_CARREGADAS: readonly Aba[] = ['home', 'hoje', 'chat'];
 const SOB_DEMANDA: readonly Aba[] = ['conversations'];

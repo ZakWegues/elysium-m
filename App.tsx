@@ -133,6 +133,8 @@ function AppInner() {
 
   /** Fase 18: cada incremento abre as Tarefas em tela cheia (widget e elysium://tarefas). */
   const [pedidoTarefas, setPedidoTarefas] = useState(0);
+  /** Fase 22: Rotinas virou gaveta (do Hoje, do card de atalhos, do link antigo). */
+  const [rotinasAbertas, setRotinasAbertas] = useState(false);
   /** Fase 22: cada incremento abre o trackpad (atalho do ícone). */
   const [pedidoTrackpad, setPedidoTrackpad] = useState(0);
   /** Contador: cada incremento abre a lupa da Início (widget Busca, bloco 73). */
@@ -365,7 +367,8 @@ function AppInner() {
     if (destino === 'busca') { setScreen('home'); setPedidoBusca(n => n + 1); }
     else if (destino === 'chat') { setModoChat('ia'); setScreen('chat'); }
     else if (destino === 'pc') setScreen('control');
-    else if (destino === 'rotinas') setScreen('rotinas');
+    // Fase 22: Rotinas não é mais aba — o link antigo abre o Hoje com a gaveta.
+    else if (destino === 'rotinas') { setScreen('hoje'); setRotinasAbertas(true); }
     else if (destino === 'hoje') setScreen('hoje');
     else if (destino === 'tarefas') { setScreen('hoje'); setPedidoTarefas(n => n + 1); }
     // Widget "Falar com a Ely" (fase 16): o mesmo pedido de voz do "Ely" e do atalho.
@@ -459,7 +462,7 @@ function AppInner() {
           <AbaViva ativa={screen === 'home'}>
             <HomeScreen
               pairing={pairing}
-              onNavigate={setScreen}
+              onNavigate={(s) => { if (s === 'rotinas') setRotinasAbertas(true); else setScreen(s); }}
               onOpenPlayer={() => setPlayerOpen(true)}
               onOpenConversation={(id) => { setActiveSessionId(id); setModoChat('ia'); setScreen('chat'); }}
               onPerguntar={(texto) => { setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat'); }}
@@ -470,8 +473,7 @@ function AppInner() {
           </AbaViva>
         )}
         {montadas.has('control') && <AbaViva ativa={screen === 'control'}><ControlScreen pairing={pairing} onUnpair={handleUnpair} pedidoTrackpad={pedidoTrackpad} /></AbaViva>}
-        {montadas.has('rotinas') && <AbaViva ativa={screen === 'rotinas'}><RotinasScreen pairing={pairing} onUnpair={handleUnpair} /></AbaViva>}
-        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} pedidoTarefas={pedidoTarefas} onResponder={(pergunta) => { setFalaDaEly(pergunta); setModoChat('ia'); setScreen('chat'); }} /></AbaViva>}
+        {montadas.has('hoje') && <AbaViva ativa={screen === 'hoje'}><HojeScreen pairing={pairing} pedidoTarefas={pedidoTarefas} onAbrirRotinas={() => setRotinasAbertas(true)} onResponder={(pergunta) => { setFalaDaEly(pergunta); setModoChat('ia'); setScreen('chat'); }} /></AbaViva>}
         {screen === 'conversations' && (
           <AbaViva ativa>
             <ConversationsScreen
@@ -532,7 +534,8 @@ function AppInner() {
       {!keyboard.visible && sobreposicoes === 0 && (
         <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
-      <FalaFlutuante />
+      {/* Fase 22: no Chat a esfera já mostra a fala — a pílula só aparece nas outras abas. */}
+      {screen !== 'chat' && <FalaFlutuante />}
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
@@ -544,6 +547,9 @@ function AppInner() {
           da barra de abas é a ordem de desenho (mais o zIndex dela). */}
       <GlassModal title="Comandos de IA" visible={textoParaIa !== null} onClose={() => setTextoParaIa(null)}>
         {textoParaIa !== null && <ComandosIa texto={textoParaIa} pairing={pairing} />}
+      </GlassModal>
+      <GlassModal title="Rotinas" visible={rotinasAbertas} onClose={() => setRotinasAbertas(false)} altura="cheia" semRolagem>
+        {rotinasAbertas && <RotinasScreen pairing={pairing} onUnpair={handleUnpair} naGaveta />}
       </GlassModal>
       <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
         <SettingsScreen pairing={pairing} onUnpair={handleUnpair} onTrocarPc={handleTrocarPc} onAdicionarPc={handleAdicionarPc} />
@@ -575,11 +581,12 @@ function TelaAnimada({ chave, children }: { chave: string; children: React.React
     opacidade.value = 0;
     deslocamento.value = 8;
     escala.value = 0.985;
-    opacidade.value = tempo(1, MOV.base);
-    deslocamento.value = tempo(0, MOV.base);
+    // Fase 22: 180 ms — a troca de aba tem que parecer instantânea, só com direção.
+    opacidade.value = tempo(1, 180);
+    deslocamento.value = tempo(0, 180);
     // Um toque de escala junto com o deslocamento (bloco 74) — a tela "chega", em vez de
     // só aparecer. É o mesmo 0,985 → 1 da troca de aba do desktop.
-    escala.value = tempo(1, MOV.base);
+    escala.value = tempo(1, 180);
   }, [chave]);
 
   const estilo = useAnimatedStyle(() => ({

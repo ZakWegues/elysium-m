@@ -95,11 +95,13 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       {secao === 'voz' && <VozSection pairing={pairing} />}
       {secao === 'conversa' && <SecaoConversa pairing={pairing} />}
       {secao === 'modos' && <SecaoModos pairing={pairing} />}
+      {/* Fase 22: uma seção só — o aviso local e o push do PC no mesmo cartão. */}
       {secao === 'avisos' && (
-        <View style={{ gap: tokens.spacing.lg }}>
+        <Card glass style={{ gap: tokens.spacing.md }}>
           <AvisosLocais />
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: palette.glassBorder }} />
           <PushSection pairing={pairing} />
-        </View>
+        </Card>
       )}
       {secao === 'pareamento' && <SecaoPareamento pairing={pairing} onUnpair={onUnpair} onTrocarPc={onTrocarPc} onAdicionarPc={onAdicionarPc} />}
       {secao === 'sobre' && <SecaoSobre pairing={pairing} />}
@@ -473,7 +475,7 @@ function AvisosLocais() {
     haptica.leve();
   }
   return (
-    <Card glass style={{ gap: tokens.spacing.xs }}>
+    <View style={{ gap: tokens.spacing.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
         <Feather name="smartphone" size={18} color={palette.primary} />
         <Text variant="body" style={{ flex: 1 }}>Avisar neste celular</Text>
@@ -483,7 +485,7 @@ function AvisosLocais() {
         Rotinas e lembretes do PC viram notificação aqui — pela rede ou pelo túnel, sem nuvem.
         Lembretes tocam mesmo sem rede (ficam agendados no aparelho).
       </Text>
-    </Card>
+    </View>
   );
 }
 
@@ -564,6 +566,8 @@ function VozSection({ pairing }: { pairing: Pairing }) {
   const [palavra, setPalavra] = useState(true);
   const [ler, setLer] = useState(true);
   const [antecipada, setAntecipada] = useState(true);
+  // Fase 22: só "Ouvir Ely" e "Ler respostas" à vista; o resto mora em Avançado.
+  const [avancado, setAvancado] = useState(false);
   const estado = useEstadoPalavra();
   useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); lerRespostasEscritas().then(setLer); falaAntecipadaLigada().then(setAntecipada); }, []);
   const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
@@ -593,6 +597,12 @@ function VozSection({ pairing }: { pairing: Pairing }) {
         </View>
         <Switch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} trackColor={{ true: palette.primary }} accessibilityLabel="Ler respostas digitadas" />
       </View>
+      <Pressable onPress={() => setAvancado(v => !v)} accessibilityRole="button" accessibilityState={{ expanded: avancado }}
+        hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 }}>
+        <Feather name={avancado ? 'chevron-down' : 'chevron-right'} size={16} color={palette.primary} />
+        <Text variant="label" color={palette.primary}>Avançado</Text>
+      </Pressable>
+      {avancado && (<>
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="fast-forward" size={17} color={antecipada ? palette.primary : palette.textMuted} />
         <View style={{ flex: 1 }}>
@@ -628,6 +638,7 @@ function VozSection({ pairing }: { pairing: Pairing }) {
           </Pressable>
         );
       })}
+      </>)}
     </View>
   );
 }
@@ -692,12 +703,11 @@ function PushSection({ pairing }: { pairing: Pairing }) {
 
   return (
     <View style={{ gap: tokens.spacing.sm }}>
-      <Text variant="subheading">Notificações</Text>
       <Text variant="caption" color={palette.textMuted}>
-        Chegam pela nuvem da Expo, então funcionam mesmo fora da sua rede.
+        Avisos do PC (lembretes, alertas, recados) chegam pela nuvem da Expo — funcionam mesmo fora da sua rede.
       </Text>
 
-      <Card glass style={{ gap: tokens.spacing.md }}>
+      <View style={{ gap: tokens.spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
           <Feather name="bell" size={18} color={palette.primary} />
           <Text variant="body" style={{ flex: 1 }}>
@@ -736,7 +746,7 @@ function PushSection({ pairing }: { pairing: Pairing }) {
             </Pressable>
           );
         })}
-      </Card>
+      </View>
     </View>
   );
 }
