@@ -105,6 +105,8 @@ export type RpcMethod =
   | 'input.scroll'
   | 'input.type'
   | 'input.key'
+  | 'input.combo'
+  | 'input.hscroll'
   | 'memory.list'
   | 'memory.add'
   | 'memory.remove'
@@ -614,6 +616,8 @@ export type RpcResults = {
   'input.scroll': { ok: true };
   'input.type': { ok: true };
   'input.key': { ok: true };
+  'input.combo': { ok: true };
+  'input.hscroll': { ok: true };
   'memory.list': { facts: MemoryFact[] };
   'memory.add': { fact: MemoryFact; created: boolean };
   'memory.remove': { removed: boolean };

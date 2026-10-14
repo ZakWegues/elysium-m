@@ -9,12 +9,11 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
 import {
-  callRpc, AppEntry, CapturedFrame, DiskEntry, Episodio, MediaOperation, MemoryFact,
+  callRpc, AppEntry, CapturedFrame, DiskEntry, Episodio, MemoryFact,
   PowerOperation, ProcessEntry, Reminder, ScreenInfo,
   Janela, Armazenamento,
 } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
-import SliderVolume from '../components/SliderVolume';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { MOV } from '../lib/motion';
@@ -22,6 +21,8 @@ import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/tel
 import { findMetric } from '../lib/telemetryFormat';
 import { useTheme } from '../theme';
 import TrackpadFullscreen from './TrackpadFullscreen';
+import { BarraMidia } from '../components/BarraMidia';
+import { MiniTrackpad } from '../components/MiniTrackpad';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
 import { useAbaAtiva } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
@@ -121,18 +122,8 @@ export default function ControlScreen({
 
         <BarraMidia pairing={pairing} onError={handleError} />
 
-        <Toque onPress={() => setTrackpadOpen(true)} haptico="medio">
-          <Card glass style={styles.linhaHero}>
-            <View style={[styles.iconeHero, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
-              <Feather name="move" size={20} color={palette.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text variant="label">Trackpad e teclado</Text>
-              <Text variant="caption" color={palette.textMuted}>Mouse, rolagem e digitação em tela cheia</Text>
-            </View>
-            <Feather name="maximize-2" size={18} color={palette.textMuted} />
-          </Card>
-        </Toque>
+        {/* Fase 22: botão grande + faixa que já move o cursor aqui mesmo. */}
+        <MiniTrackpad pairing={pairing} onAbrir={() => setTrackpadOpen(true)} />
 
         <View style={styles.grade}>
           {PAINEIS.map((p, i) => (
@@ -375,94 +366,6 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
 
       {error && <Text variant="caption" color={palette.error}>{error}</Text>}
     </View>
-  );
-}
-
-// ── Teclas de mídia e volume ──────────────────────────────────────────────────
-
-const TECLAS_MIDIA: { op: MediaOperation; icone: keyof typeof Feather.glyphMap; rotulo: string }[] = [
-  { op: 'previous', icone: 'skip-back', rotulo: 'Anterior' },
-  { op: 'play', icone: 'play', rotulo: 'Tocar' },
-  { op: 'pause', icone: 'pause', rotulo: 'Pausar' },
-  { op: 'skip', icone: 'skip-forward', rotulo: 'Próxima' },
-];
-
-/**
- * Sempre à vista, sem gaveta: é o que mais se aperta num controle remoto. Funciona com
- * qualquer player — são as teclas de mídia do Windows, não o Spotify (que tem a barra
- * dele logo acima quando está tocando).
- */
-function BarraMidia({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
-  const { palette, tokens } = useTheme();
-  // Leitura real (bloco 86): o número no meio e o mudo que de fato está valendo. PC antigo
-  // sem `volume.get` devolve 404 — aí fica sem número, como antes.
-  const [vol, setVol] = useState<{ nivel: number; mudo: boolean } | null>(null);
-  const lerVolume = useCallback(async () => {
-    try { setVol(await callRpc(pairing, 'volume.get')); } catch { setVol(null); }
-  }, [pairing]);
-  useEffect(() => { lerVolume(); }, [lerVolume]);
-
-  async function media(op: MediaOperation) {
-    try {
-      await callRpc(pairing, 'media.control', { operation: op });
-    } catch (err) {
-      onError(err, 'Falha no controle de mídia');
-    }
-  }
-
-  async function volume(level: 'up' | 'down' | 'mute' | 'unmute' | number) {
-    try {
-      await callRpc(pairing, 'volume.set', { level });
-    } catch (err) {
-      onError(err, 'Falha ao ajustar o volume');
-    }
-    lerVolume();
-  }
-
-  // Durante o arrasto só manda (o slider já limita a um envio a cada 150 ms); a leitura de
-  // volta vem ao soltar — reler a cada envio faria o polegar pular para trás no meio do gesto.
-  async function arrastou(nivel: number, final: boolean) {
-    try { await callRpc(pairing, 'volume.set', { level: nivel }); }
-    catch (err) { if (final) onError(err, 'Falha ao ajustar o volume'); }
-    if (final) lerVolume();
-  }
-
-  return (
-    <Card glass style={{ paddingVertical: tokens.spacing.sm, paddingHorizontal: tokens.spacing.md, gap: tokens.spacing.xs }}>
-      <View style={styles.barraMidia}>
-        <View style={styles.grupoMidia}>
-          {TECLAS_MIDIA.map(t => (
-            <GlassCircle key={t.op} size={38} onPress={() => { haptica.leve(); media(t.op); }}>
-              <Feather name={t.icone} size={17} color={palette.primary} />
-            </GlassCircle>
-          ))}
-        </View>
-        <View style={[styles.divisor, { backgroundColor: palette.glassBorder }]} />
-        <GlassCircle accessibilityLabel="Silenciar" size={38} onPress={() => { haptica.leve(); volume(vol?.mudo ? 'unmute' : 'mute'); }}>
-          <Feather name="volume-x" size={16} color={vol?.mudo ? palette.error : palette.textMuted} />
-        </GlassCircle>
-      </View>
-      {/* O slider (fase 12) precisa da leitura real do volume; PC antigo sem `volume.get`
-          fica com os botões de passo, como antes. */}
-      {vol ? (
-        <View style={styles.grupoMidia}>
-          <Feather name="volume-1" size={15} color={palette.textMuted} />
-          <SliderVolume nivel={vol.nivel} mudo={vol.mudo} aoMudar={arrastou} />
-          <Text variant="caption" color={vol.mudo ? palette.error : palette.textMuted} style={{ minWidth: 38, textAlign: 'right' }}>
-            {vol.mudo ? 'mudo' : `${vol.nivel}%`}
-          </Text>
-        </View>
-      ) : (
-        <View style={[styles.grupoMidia, { justifyContent: 'center' }]}>
-          <GlassCircle accessibilityLabel="Abaixar o volume" size={38} onPress={() => { haptica.leve(); volume('down'); }}>
-            <Feather name="volume-1" size={16} color={palette.primary} />
-          </GlassCircle>
-          <GlassCircle accessibilityLabel="Aumentar o volume" size={38} onPress={() => { haptica.leve(); volume('up'); }}>
-            <Feather name="volume-2" size={16} color={palette.primary} />
-          </GlassCircle>
-        </View>
-      )}
-    </Card>
   );
 }
 

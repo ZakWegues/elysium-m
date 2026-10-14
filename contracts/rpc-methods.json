@@ -237,7 +237,15 @@
       "destructive": false
     },
     {
+      "method": "input.combo",
+      "destructive": false
+    },
+    {
       "method": "input.doubleClick",
+      "destructive": false
+    },
+    {
+      "method": "input.hscroll",
       "destructive": false
     },
     {
