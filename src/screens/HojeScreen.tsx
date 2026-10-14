@@ -12,9 +12,8 @@ import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../componen
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, tituloComContador } from '../lib/secoesHoje';
 import { Reator } from '../components/Reator';
-import { Markdown } from '../components/Markdown';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
-import { CardElysium, CardIdeia, CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
+import { CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
 import { CardEstudo, PlanoDeEstudo, Revisao as RevisaoCartoes } from './hoje/CardEstudo';
 import TarefasScreen from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
@@ -46,7 +45,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
   const [atualizando, setAtualizando] = useState(false);
   const [habitoEdit, setHabitoEdit] = useState<Partial<Habito> | null>(null);
   const [metaEdit, setMetaEdit] = useState<Partial<Meta> | null>(null);
-  const [manchetes, setManchetes] = useState<string | null>(null);
   /**
    * "Todos" (revisão de 07/10): a aba só mostra os hábitos que valem HOJE e as metas em
    * andamento; sem esta lista, um hábito de seg/qua/sex não dava para editar na terça e meta
@@ -144,7 +142,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     try { setTodos(await callRpc(pairing, 'habitos.list')); }
     catch (e) { Alert.alert('Não consegui ler', errMessage(e)); }
   }
-  const [buscandoManchetes, setBuscandoManchetes] = useState(false);
   const [, setTique] = useState(0);
 
   const carregar = useCallback(async () => {
@@ -200,15 +197,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
       if (r.meta.concluidaEm && !m.concluidaEm) { haptica.sucesso(); Alert.alert('Meta concluída', `${r.meta.titulo}: ${r.meta.progresso} de ${r.meta.alvo}.`); }
       setPainel(p => p && { ...p, metas: p.metas.map(x => x.id === m.id ? r.meta : x) });
     } catch (e) { Alert.alert('Não deu para atualizar', errMessage(e)); }
-  }
-
-  async function buscarManchetes() {
-    setBuscandoManchetes(true);
-    try {
-      const r = await callRpc(pairing, 'web.search', { query: 'principais notícias do Brasil e do mundo hoje, em tópicos curtos' }, { timeoutMs: 60000 });
-      setManchetes(r.answer);
-    } catch (e) { setManchetes(`Não consegui buscar agora: ${errMessage(e)}`); }
-    finally { setBuscandoManchetes(false); }
   }
 
   const habitos = painel?.habitos ?? [];
@@ -308,10 +296,13 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
 
             {/* Fase 18: ouvir o resumo inteiro — a fala segue ao trocar de aba ou minimizar. */}
             <OuvirResumo pairing={pairing} />
-            <Pressable onPress={abrirRevisao} accessibilityRole="button" hitSlop={6} style={[styles.linha, { alignSelf: 'flex-start', minHeight: 40 }]}>
-              <Feather name="calendar" size={15} color={palette.primary} />
-              <Text variant="label" color={palette.primary}>{new Date().getDay() === 0 ? 'Revisão da semana (é domingo!)' : 'Revisão da semana'}</Text>
-            </Pressable>
+            {/* 22.1: a revisão da semana só aparece no domingo (todo dia era ruído). */}
+            {new Date().getDay() === 0 && (
+              <Pressable onPress={abrirRevisao} accessibilityRole="button" hitSlop={6} style={[styles.linha, { alignSelf: 'flex-start', minHeight: 40 }]}>
+                <Feather name="calendar" size={15} color={palette.primary} />
+                <Text variant="label" color={palette.primary}>Revisão da semana</Text>
+              </Pressable>
+            )}
 
             {painel.amanha && vis('amanha') && (
               <>
@@ -348,7 +339,8 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
               </Card>
             ))}
 
-            {painel.alertas.map((a, i) => (
+            {/* 22.1: só o que é erro de verdade; os avisos (disco, som, backup) já estão no PC e cansavam. */}
+            {painel.alertas.filter(a => a.nivel === 'erro').map((a, i) => (
               <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : palette.accent }]}>
                 <Feather name="alert-triangle" size={16} color={a.nivel === 'erro' ? palette.error : palette.accent} />
                 <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>{a.titulo}</Text> — {a.detalhe}</Text>
@@ -543,44 +535,13 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
               </Toque>
             )}
 
-            {painel.clima && vis('clima') && (
-              <>
-                {secao('CLIMA')}
-                {aberta('clima') && (<>
-                <Card glass style={styles.linha}>
-                  <Text variant="heading" color={palette.primary}>{Math.round(painel.clima.temperatura)}°</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text variant="body">{painel.clima.descricao}</Text>
-                    <Text variant="caption" color={palette.textMuted}>{painel.clima.cidade} · {Math.round(painel.clima.min)}°–{Math.round(painel.clima.max)}°{painel.clima.chuvaHoje ? ' · chuva hoje' : ''}</Text>
-                  </View>
-                </Card>
-                </>)}
-              </>
-            )}
-
+            {/* 22.1: clima, ideia do dia, card ELYSIUM e manchetes saíram do Hoje do celular — ruído.
+                O clima continua na Início; o resto continua no PC. */}
             {painel.rotinasHoje && vis('rotinas-de-hoje') && (
               <>
                 {secao('ROTINAS DE HOJE')}
                 {aberta('rotinas-de-hoje') && (<>
                 <CardRotinasHoje painel={painel} />
-                </>)}
-              </>
-            )}
-
-            {painel.ideia && vis('ideia-para-hoje') ? (
-              <>
-                {secao('IDEIA PARA HOJE')}
-                {aberta('ideia-para-hoje') && (<>
-                <CardIdeia ideia={painel.ideia} pairing={pairing} />
-                </>)}
-              </>
-            ) : null}
-
-            {painel.elysium && vis('elysium') && (
-              <>
-                {secao('ELYSIUM')}
-                {aberta('elysium') && (<>
-                <CardElysium e={painel.elysium} pairing={pairing} />
                 </>)}
               </>
             )}
@@ -600,16 +561,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                 </>)}
               </>
             )}
-
-            {vis('manchetes') && (<>
-            {secao('MANCHETES')}
-            {aberta('manchetes') && (<>
-            <Card glass style={{ gap: 8 }}>
-              {manchetes ? <Markdown texto={manchetes} cor={palette.text} /> : <Text variant="caption" color={palette.textMuted}>Sob demanda — a busca vai à internet.</Text>}
-              <Button title={buscandoManchetes ? 'Buscando…' : manchetes ? 'Buscar de novo' : 'Buscar manchetes'} variant="secondary" onPress={buscarManchetes} disabled={buscandoManchetes} />
-            </Card>
-            </>)}
-            </>)}
 
             {ocultos.length > 0 && (
               <Pressable onPress={() => void mostrarOcultos()} accessibilityRole="button" style={[styles.linha, { alignSelf: 'center', minHeight: 44 }]}>

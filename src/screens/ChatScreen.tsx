@@ -4,9 +4,8 @@ import AnimatedReanimated, {
   FadeInDown, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { abrirFalaAntecipada, falaAntecipadaLigada, falar, FalaAntecipada, lerRespostasEscritas, pararDeFalar } from '../lib/falar';
-import { definirFaseDaBolota, inclinarBolota, nivelDaBolota, pulsoDaBolota } from '../lib/bolota';
+import { definirFaseDaBolota, nivelDaBolota } from '../lib/bolota';
 import { CICLO_PENSANDO_MS } from '../lib/esferaLogica';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Esfera3D } from '../components/Esfera3D';
 import { ehEntradaDoLive, ehSaidaDoLive, SILENCIO_LIVE_MS } from '../lib/live';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
@@ -41,11 +40,7 @@ import * as Clipboard from 'expo-clipboard';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { sincronizarModo, trocarModo, useModo } from '../lib/modo';
 import type { ModoDaLista } from '../lib/rpc';
-import { VozAoVivo } from '../components/VozAoVivo';
 
-/** Primeiro balão (fase 16, a persona da Ely): era "Pareado com IP:porta", detalhe técnico
- * que ninguém precisava ler ao abrir o chat. O endereço continua em Ajustes → Sobre. */
-const BOAS_VINDAS = "Sistemas no ar. Pode pedir — escrevendo, segurando o microfone ou dizendo \"Ely\".";
 
 type MicStatus = 'checking' | 'ready' | 'denied';
 
@@ -85,17 +80,8 @@ export default function ChatScreen({
   semCabecalho?: boolean;
 }) {
   const { palette, tokens } = useTheme();
-  /**
-   * Perguntas de partida. Sorteadas no desktop (`perguntas.ts`) — as que você repete vêm
-   * primeiro, curadas preenchem o resto. Sortear aqui também daria duas heurísticas para
-   * manter em par, e só o PC vê o que você pergunta.
-   */
-  const [starters, setStarters] = useState<string[]>([]);
-  /** Próximas perguntas sugeridas pelo PC depois da última resposta escrita (bloco 132). */
-  const [sugestoes, setSugestoes] = useState<string[]>([]);
-  const [messages, setMessages] = useState<StoredMessage[]>([
-    { id: 'welcome', from: 'reply', text: BOAS_VINDAS, ts: Date.now() },
-  ]);
+  // 22.1: começa vazia — a esfera é a tela de boas-vindas (a bolha de texto era ruído).
+  const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [draft, setDraft] = useState('');
   /**
    * "/" no começo da mensagem lista os comandos de IA (bloco 137): "/Corrigir português
@@ -200,14 +186,15 @@ export default function ChatScreen({
             sessionIdRef.current = found.id;
             favoriteRef.current = found.favorite;
             createdAtRef.current = found.createdAt;
-            setMessages(found.messages);
+            // 22.1: conversas antigas guardaram a bolha de boas-vindas — ela não volta.
+            setMessages(found.messages.filter(m => m.id !== 'welcome'));
             return;
           }
         }
         sessionIdRef.current = null;
         favoriteRef.current = false;
         createdAtRef.current = Date.now();
-        setMessages([{ id: 'welcome', from: 'reply', text: BOAS_VINDAS, ts: Date.now() }]);
+        setMessages([]);
       } finally {
         carregandoRef.current = false;
         // Bloco 191: a pergunta da Ely que chegou durante o carregamento entra DEPOIS dele —
@@ -297,7 +284,7 @@ export default function ChatScreen({
     if (voiceConnRef.current) return voiceConnRef.current;
     const conn = openVoiceConnection(pairing, () => {
       if (voiceConnRef.current === conn) voiceConnRef.current = null;
-    }, setSugestoes);
+    });
     voiceConnRef.current = conn;
     try {
       await conn.ready;
@@ -330,15 +317,6 @@ export default function ChatScreen({
     if (coladoNoFim.current) listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
-  // Recarrega ao montar a tela: entrar no Chat re-sorteia, como no desktop.
-  useEffect(() => {
-    let vivo = true;
-    callRpc(pairing, "chat.starters")
-      .then(r => { if (vivo) setStarters(r.starters ?? []); })
-      .catch(() => { /* sem PC, sem bolhas — a tela funciona igual */ });
-    return () => { vivo = false; };
-    // O modo troca as bolhas (no modo matemática, "Resolve passo a passo: …").
-  }, [pairing, modo?.id]);
 
   function speakReply(reply: string) {
     // A voz neural do PC quando der; a do aparelho quando não (bloco 85).
@@ -427,8 +405,6 @@ export default function ChatScreen({
   async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
     const text = (texto ?? draft).trim();
     if (!text || enviandoRef.current) return;
-    // Fase 22: a esfera "olha" para a mensagem que sai.
-    inclinarBolota();
     // Fase 21: "modo live" digitado liga a conversa contínua pelo microfone do celular.
     if (ehEntradaDoLive(text) && micStatus === 'ready' && !turnoRef.current) {
       setDraft('');
@@ -443,8 +419,6 @@ export default function ChatScreen({
       if (alvo) { rodarComandoIa(comandoEscolhido, alvo); return; }
     }
     setDraft('');
-    setStarters([]);   // a fileira só faz sentido enquanto a tela está em branco
-    setSugestoes([]);  // as da resposta anterior já não servem
     // Refazer (bloco 130): a pergunta já está na tela; só a resposta antiga saiu.
     if (!opcoes.refazer) setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
@@ -946,13 +920,12 @@ export default function ChatScreen({
     turnoDeVoz();
   }
   // Sobre o campo de texto, no máximo DUAS faixas — eram até sete empilhadas. Pela ordem de
-  // importância: o "/" aberto, a voz em curso, o modo ligado, as sugestões, as perguntas de partida.
+  // importância: o "/" aberto, a voz em curso, o modo ligado. (22.1: sugestões e perguntas de
+  // partida saíram — eram ruído e, num ScrollView horizontal sem flexGrow: 0, ficavam gigantes.)
   const faixas = ([
     barra !== null && !comandoEscolhido ? 'barra' : null,
     faseVoz ? 'voz' : null,
     modo && barra === null ? 'modo' : null,
-    sugestoes.length > 0 && !sending ? 'sugestoes' : null,
-    starters.length > 0 && messages.length <= 1 && !sending ? 'starters' : null,
   ].filter(Boolean) as string[]).slice(0, 2);
 
   return (
@@ -960,21 +933,9 @@ export default function ChatScreen({
     // um KeyboardAvoidingView que, somado àquele padding, deslocava a conversa duas
     // vezes — e que de todo modo não funciona no edge-to-edge do Android.
     <View style={{ flex: 1 }}>
-      {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe. */}
-      {/* Fase 22: vazia = só a boas-vindas. Aí ela fica inteira e pega o dedo: toque pulsa,
-          segurar fala, arrastar inclina, toque duplo liga o modo live. */}
-      <Esfera3D
-        vazio={messages.every(m => m.id === 'welcome')}
-        onToque={() => { haptica.leve(); }}
-        onSegurarInicio={() => { if (!sending && micStatus === 'ready' && faseVoz === null) { haptica.medio(); void handleRecordStart(); } }}
-        onSegurarFim={() => { void handleRecordStop(); }}
-        onDuploToque={() => {
-          if (micStatus !== 'ready' || turnoRef.current || enviandoRef.current) return;
-          haptica.medio();
-          setLive(true);
-          turnoDeVoz();
-        }}
-      />
+      {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe.
+          22.1: só fundo (sem toque). Chat vazio = ela sozinha no meio, como no PC. */}
+      <Esfera3D vazio={messages.length === 0} />
       {!semCabecalho && (
         <ScreenHeader
           title="ELYSIUM-M"
@@ -1002,17 +963,11 @@ export default function ChatScreen({
           const bg = item.from === 'me' ? palette.primary : item.from === 'error' ? palette.errorSoft : palette.surfaceRaised;
           const color = item.from === 'me' ? palette.onPrimary : item.from === 'error' ? palette.error : palette.text;
           return (
-            <GestosDaBolha
-              alinhar={item.from === 'me' ? 'flex-end' : 'flex-start'}
-              deslizavel={item.from === 'reply' && item.id !== 'welcome'}
-              copiavel={item.from !== 'error'}
-              corIcone={palette.primary}
-              onOuvir={() => { falar(textoPuro(item.text), pairing); }}
-              onCopiar={() => Clipboard.setStringAsync(item.from === 'reply' ? textoPuro(item.text) : item.text).catch(() => {})}
-            >
             <BolhaEntrando
               style={[
+                styles.bubble,
                 {
+                  alignSelf: item.from === 'me' ? 'flex-end' : 'flex-start',
                   borderRadius: tokens.radii.lg,
                   padding: tokens.spacing.md,
                   backgroundColor: bg,
@@ -1032,13 +987,7 @@ export default function ChatScreen({
               </Pressable>
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
-                palette.familia === 'renascenca' ? (
-                  <View style={styles.lacre} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">
-                    <Text variant="caption" color="#f6d9c9" style={styles.lacreTexto}>reserva</Text>
-                  </View>
-                ) : (
-                  <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">RESERVA</Text>
-                )
+                <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">reserva</Text>
               ) : null}
               {/* Fontes da busca (bloco 131): um toque abre o site. */}
               {item.fontes?.length ? (
@@ -1053,28 +1002,11 @@ export default function ChatScreen({
                 </View>
               ) : null}
             </BolhaEntrando>
-            </GestosDaBolha>
           );
         }}
       />
 
       {sending && !escrevendoId && <BolhaPensando />}
-
-      {/* Próximas perguntas (bloco 132): um toque pergunta. Fase 22: uma linha só, até 3. */}
-      {faixas.includes('sugestoes') && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[styles.linhaFaixa, { paddingHorizontal: tokens.spacing.md }]}>
-          {sugestoes.slice(0, 3).map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => { haptica.leve(); handleSend(t); }}
-              style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg, maxWidth: 260 }]}
-            >
-              <Text variant="caption" color={palette.text} numberOfLines={1}>{t}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {/* "/" = comandos de IA (bloco 137): toque escolhe, depois escreva ou cole o texto. */}
@@ -1110,36 +1042,6 @@ export default function ChatScreen({
         </View>
       )}
 
-      {faixas.includes('starters') && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[styles.linhaFaixa, { paddingHorizontal: tokens.spacing.md }]}>
-          {!modo && (
-            <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel="Escolher um modo"
-              style={[styles.starter, { borderRadius: tokens.radii.full, borderColor: palette.primary, backgroundColor: palette.primarySoft }]}>
-              <Text variant="caption" color={palette.primary}>Modos…</Text>
-            </Pressable>
-          )}
-          {starters.map((t) => (
-            <Pressable
-              key={t}
-              onPress={() => handleSend(t)}
-              style={[styles.starter, {
-                borderRadius: tokens.radii.full,
-                borderColor: palette.glassBorder,
-                backgroundColor: palette.primarySoft,
-              }]}
-            >
-              <Text variant="caption" numberOfLines={1}>{t}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      <VozAoVivo
-        fase={ouvindoAgora ? 'ouvindo' : pensandoVoz || faseVoz === 'pensando' ? 'pensando' : null}
-        nivel={nivelVoz}
-        acima={faseVoz ? 128 : 86}
-      />
       {faseVoz && faixas.includes('voz') && (
         <View style={[styles.faixaVoz, { backgroundColor: palette.primarySoft, borderColor: palette.glassBorder }]}>
           <Feather name={faseVoz === 'pensando' ? 'loader' : 'mic'} size={15} color={palette.primary} />
@@ -1196,11 +1098,7 @@ export default function ChatScreen({
             },
           ]}
           value={draft}
-          onChangeText={(v) => {
-            // Fase 22: cada tecla é um micro-pulso na esfera (apagar não conta).
-            if (v.length > draft.length) pulsoDaBolota(0.08);
-            setDraft(v);
-          }}
+          onChangeText={setDraft}
           placeholder="Escreve um comando..."
           placeholderTextColor={palette.textMuted}
           onSubmitEditing={() => handleSend()}
@@ -1293,16 +1191,10 @@ function BolhaEntrando({ style, children }: { style: StyleProp<ViewStyle>; child
  * lado da resposta. Substitui o spinner com "Pensando..." solto no rodapé, que ficava
  * fora da conversa e não dizia de onde a resposta ia sair.
  *
- * Depois de 6 s a bolha explica a demora: o `llama3.1:8b` recarrega em ~18 s a frio
- * (§22, bloco 41), e sem uma palavra na tela esse intervalo parece o app travado.
+ * 22.1: o "acordando o cérebro…" depois de 6 s saiu — só os três pontos.
  */
 function BolhaPensando() {
   const { palette, tokens } = useTheme();
-  const [demorando, setDemorando] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setDemorando(true), 6000);
-    return () => clearTimeout(t);
-  }, []);
 
   return (
     <View style={{ paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm }}>
@@ -1319,11 +1211,6 @@ function BolhaPensando() {
         ]}
       >
         {[0, 1, 2].map(i => <Ponto key={i} atraso={i * 160} cor={palette.textMuted} />)}
-        {demorando && (
-          <Text variant="caption" color={palette.textMuted} style={{ marginLeft: 6 }}>
-            acordando o cérebro…
-          </Text>
-        )}
       </AnimatedReanimated.View>
     </View>
   );
@@ -1342,62 +1229,6 @@ function Ponto({ atraso, cor }: { atraso: number; cor: string }) {
   const estilo = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return <AnimatedReanimated.View style={[styles.ponto, { backgroundColor: cor }, estilo]} />;
 }
-
-/**
- * Gestos da bolha (fase 22). Deslizar a resposta da Ely para a esquerda mostra um 🔊 e, passando
- * do ponto, fala de novo; toque duplo copia e deixa um ✓ por 1 s. A rolagem vertical da lista
- * continua livre (o arrasto só pega na horizontal).
- */
-function GestosDaBolha({ alinhar, deslizavel, copiavel, corIcone, onOuvir, onCopiar, children }: {
-  alinhar: 'flex-start' | 'flex-end'; deslizavel: boolean; copiavel: boolean; corIcone: string;
-  onOuvir: () => void; onCopiar: () => void; children: React.ReactNode;
-}) {
-  const x = useSharedValue(0);
-  const passou = useSharedValue(false);
-  const [copiado, setCopiado] = useState(false);
-  const LIMITE = 72;
-  const copiar = () => {
-    onCopiar();
-    haptica.sucesso();
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 1000);
-  };
-  const ouvir = () => { haptica.medio(); onOuvir(); };
-  const tique = () => { haptica.tique(); };
-  const deslizar = Gesture.Pan().enabled(deslizavel).activeOffsetX(-14).failOffsetY([-12, 12])
-    .onUpdate((e) => {
-      x.value = Math.max(-110, Math.min(0, e.translationX));
-      const alem = x.value < -LIMITE;
-      if (alem !== passou.value) { passou.value = alem; if (alem) runOnJS(tique)(); }
-    })
-    .onEnd(() => { if (x.value < -LIMITE) runOnJS(ouvir)(); })
-    .onFinalize(() => { passou.value = false; x.value = withTiming(0, { duration: 220 }); });
-  const duplo = Gesture.Tap().enabled(copiavel).numberOfTaps(2).onEnd((_e, ok) => { if (ok) runOnJS(copiar)(); });
-  const estiloBolha = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
-  const estiloIcone = useAnimatedStyle(() => ({ opacity: Math.min(1, -x.value / LIMITE), transform: [{ scale: 0.7 + Math.min(1, -x.value / LIMITE) * 0.4 }] }));
-  return (
-    <GestureDetector gesture={Gesture.Simultaneous(deslizar, duplo)}>
-      <AnimatedReanimated.View style={[styles.bubble, { alignSelf: alinhar }]}>
-        {deslizavel && (
-          <AnimatedReanimated.View pointerEvents="none" style={[gestosStyles.icone, estiloIcone]}>
-            <Feather name="volume-2" size={18} color={corIcone} />
-          </AnimatedReanimated.View>
-        )}
-        <AnimatedReanimated.View style={estiloBolha}>{children}</AnimatedReanimated.View>
-        {copiado && (
-          <View pointerEvents="none" style={[gestosStyles.ok, { backgroundColor: corIcone }]}>
-            <Feather name="check" size={12} color="#0a0c14" />
-          </View>
-        )}
-      </AnimatedReanimated.View>
-    </GestureDetector>
-  );
-}
-
-const gestosStyles = StyleSheet.create({
-  icone: { position: 'absolute', right: -34, top: 0, bottom: 0, justifyContent: 'center' },
-  ok: { position: 'absolute', top: -14, right: -14, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-});
 
 /** "economia.uol.com.br" de uma URL, para o chip da fonte. */
 function hostDe(url: string): string {
@@ -1422,7 +1253,6 @@ const styles = StyleSheet.create({
   },
   ponto: { width: 7, height: 7, borderRadius: 4 },
   starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, paddingBottom: 10 },
-  linhaFaixa: { gap: 7, paddingBottom: 10, flexGrow: 1, justifyContent: 'center' },
   menuMais: { flexDirection: 'row', gap: 8, paddingBottom: 8 },
   itemMais: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10, borderWidth: StyleSheet.hairlineWidth },
   anelLive: { borderRadius: 24, borderWidth: 1.5, borderColor: 'transparent', padding: 2 },
@@ -1433,7 +1263,6 @@ const styles = StyleSheet.create({
   },
   lacreTexto: { fontSize: 9, letterSpacing: 0.5, fontVariant: ['small-caps'] },
   chipModo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1 },
-  starter: { paddingVertical: 8, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, maxWidth: '100%' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

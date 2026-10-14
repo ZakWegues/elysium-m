@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { makeMutable } from 'react-native-reanimated';
-import { pulsoDeTecla } from './esferaLogica';
 
 /**
  * A esfera 3D do Chat do celular (fase 21) — o estado que as telas alimentam.
@@ -20,25 +19,6 @@ export type EstadoBolota = 'dormindo' | 'ouvindo' | 'pensando' | 'falando';
 /** Nível do microfone, 0–1 (o Chat escreve, a bolota lê na thread de UI). */
 export const nivelDaBolota = makeMutable(0);
 
-/**
- * Fase 22: os toques pequenos que a esfera sente. `impulso` é um piso de nível que decai
- * sozinho (a esfera lê e abaixa a cada quadro); `ondaTecla` faz a onda leve no lado de baixo;
- * `chute` é um empurrão na mola da inclinação (a esfera "olha" para a mensagem enviada).
- */
-export const impulsoDaBolota = makeMutable(0);
-export const ondaTeclaDaBolota = makeMutable(0);
-export const chuteDaBolota = makeMutable(0);
-
-/** Uma tecla no campo de texto: micro-pulso (+0,08, teto 0,35) e a onda do lado de baixo. */
-export function pulsoDaBolota(quanto = 0.08): void {
-  impulsoDaBolota.value = pulsoDeTecla(impulsoDaBolota.value, quanto);
-  ondaTeclaDaBolota.value = 1;
-}
-
-/** Mensagem enviada: a esfera inclina para baixo e a mola a traz de volta. */
-export function inclinarBolota(): void {
-  chuteDaBolota.value = chuteDaBolota.value + 0.07;
-}
 
 let fase: FaseVozBolota = null;
 const ouvintes = new Set<(f: FaseVozBolota) => void>();

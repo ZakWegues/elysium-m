@@ -20,18 +20,3 @@ describe("esfera do celular (fase 21)", () => {
   });
 });
 
-describe("esfera do celular — toques (fase 22)", () => {
-  it("pulso de tecla sobe até 0,35 e acende a onda", async () => {
-    const b = await import("../src/lib/bolota");
-    b.impulsoDaBolota.value = 0;
-    for (let i = 0; i < 10; i++) b.pulsoDaBolota();
-    expect(b.impulsoDaBolota.value).toBeCloseTo(0.35);
-    expect(b.ondaTeclaDaBolota.value).toBe(1);
-  });
-  it("enviar dá um chute na inclinação", async () => {
-    const b = await import("../src/lib/bolota");
-    b.chuteDaBolota.value = 0;
-    b.inclinarBolota();
-    expect(b.chuteDaBolota.value).toBeCloseTo(0.07);
-  });
-});
