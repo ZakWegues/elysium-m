@@ -6,6 +6,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme';
 import { FundoRenascenca } from './Ornamentos';
+import { useFala } from '../../lib/falar';
+import { estadoDaBolota, useFaseDaBolota } from '../../lib/bolota';
 
 /**
  * Fundo do app: gradiente suave + manchas de cor do tema, EM MOVIMENTO (bloco 71).
@@ -237,6 +239,25 @@ function Particulas({ cor, forca }: { cor: string; forca: number }) {
   );
 }
 
+/**
+ * Fase 23: o fundo "vivo" do PC — quando a Ely ouve, pensa ou fala, uma luz larga acende no
+ * meio da tela e apaga quando ela termina. Só opacidade (compositor), nada repinta.
+ */
+function BrilhoVivo({ cor }: { cor: string }) {
+  const fala = useFala();
+  const estado = estadoDaBolota(useFaseDaBolota(), fala.falando);
+  const op = useSharedValue(0);
+  useEffect(() => {
+    op.value = withTiming(estado === 'dormindo' ? 0 : 1, { duration: estado === 'dormindo' ? 1200 : 500, reduceMotion: ReduceMotion.System });
+  }, [estado, op]);
+  const estilo = useAnimatedStyle(() => ({ opacity: op.value }));
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, estilo]} pointerEvents="none">
+      <Mancha cor={cor} opacidade={0.32} tamanho={520} style={styles.vivo} deriva={{ dx: 20, dy: -30, ms: 9_000, escala: 1.1 }} />
+    </Animated.View>
+  );
+}
+
 export function AppBackground() {
   const { palette, familiaResolvida } = useTheme();
   const noite = familiaResolvida !== 'lg';
@@ -251,6 +272,7 @@ export function AppBackground() {
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <FundoRenascenca fundo={palette.background} ouro={palette.primary} pigmento={palette.accent} />
         <Particulas cor={palette.primary} forca={0.28} />
+        <BrilhoVivo cor={palette.primary} />
       </View>
     );
   }
@@ -275,6 +297,7 @@ export function AppBackground() {
         deriva={{ dx: -40, dy: -60, ms: 26_000, escala: 1.15 }} />
       <Tracos cor={palette.primary} forca={noite ? 0.05 : 0.07} />
       <Particulas cor={noite ? '#FFFFFF' : palette.primary} forca={noite ? 0.22 : 0.16} />
+      <BrilhoVivo cor={palette.primary} />
       {noite && (
         <>
           <Feixe cor={palette.primary} opacidade={0.07} left="-5%" rot="-18deg" ms={40_000} dx={70} />
@@ -290,6 +313,7 @@ const styles = StyleSheet.create({
   bottom: { position: 'absolute', bottom: 10, left: -150 },
   meioEsq: { position: 'absolute', top: '32%', left: -120 },
   meioDir: { position: 'absolute', top: '54%', right: -90 },
+  vivo: { position: 'absolute', top: '22%', left: '50%', marginLeft: -260 },
   // Fino e longo: comprimento maior que a diagonal da tela para o giro não deixar ponta à
   // vista, e 2 px de altura porque acima disso deixa de ser traço e vira faixa.
   traco: { position: 'absolute', left: '-30%', width: '160%', height: 2 },

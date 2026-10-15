@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedProps, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { interpolateColor, useAnimatedProps, useDerivedValue, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { useFala } from '../lib/falar';
 import { useTheme } from '../theme';
@@ -60,6 +60,17 @@ export function Esfera3D({ vazio }: { vazio: boolean }) {
   const giro = useSharedValue(1), respira = useSharedValue(1), brilho = useSharedValue(1);
 
   useEffect(() => { modo.value = estado === 'ouvindo' ? 1 : estado === 'pensando' ? 2 : estado === 'falando' ? 3 : 0; }, [estado, modo]);
+
+  // Fase 23: a cor passa de um estado para o outro em 450 ms — antes saltava.
+  const corDe = useSharedValue(cor), corPara = useSharedValue(cor), mistura = useSharedValue(1);
+  useEffect(() => {
+    if (corPara.value === cor) return;
+    corDe.value = interpolateColor(mistura.value, [0, 1], [corDe.value, corPara.value]) as string;
+    corPara.value = cor;
+    mistura.value = 0;
+    mistura.value = withTiming(1, { duration: 450 });
+  }, [cor, corDe, corPara, mistura]);
+  const corViva = useDerivedValue(() => interpolateColor(mistura.value, [0, 1], [corDe.value, corPara.value]) as string);
   useEffect(() => { opac.value = withTiming(vazio ? 0.95 : 0.3, { duration: 500 }); }, [vazio, opac]);
 
   // De noite (22h–6h): mais devagar e mais apagada. Confere a cada minuto.
@@ -96,15 +107,16 @@ export function Esfera3D({ vazio }: { vazio: boolean }) {
   });
 
   const meio = tamanho / 2;
-  // Um worklet que desenha uma faixa de profundidade; os três useAnimatedProps ficam no topo.
-  const caminho = (faixa: number): string => {
-    'worklet';
+  // Fase 23: UM passe por quadro desenha as três faixas de profundidade (eram três passes,
+  // cada um girando os 240 pontos). E sem toFixed: arredondar na mão é bem mais barato.
+  const r1 = (v: number) => { 'worklet'; return Math.round(v * 10) / 10; };
+  const caminhos = useDerivedValue((): [string, string, string] => {
     const n = nivel.value;
     const R = tamanho * 0.3 * (1 + 0.03 * Math.sin(t.value * 1.4 * respira.value) + n * 0.14);
     const sy = Math.sin(rot.value), cyR = Math.cos(rot.value);
     const rx = 0.42 + Math.sin(t.value * 0.23) * 0.12;
     const sx = Math.sin(rx), cx = Math.cos(rx);
-    let d = '';
+    let d0 = '', d1 = '', d2 = '';
     for (let i = 0; i < N; i++) {
       const px = pontos[i * 3], py = pontos[i * 3 + 1], pz = pontos[i * 3 + 2];
       const onda = 0.012 * Math.sin(4 * py + t.value * 1.8 * respira.value)
@@ -115,19 +127,19 @@ export function Esfera3D({ vazio }: { vazio: boolean }) {
       const y2 = y * cx - z1 * sx, z2 = y * sx + z1 * cx;
       // Camada pela profundidade: 0 = atrás, 1 = meio, 2 = frente.
       const c = z2 < -0.33 ? 0 : z2 < 0.33 ? 1 : 2;
-      if (c !== faixa) continue;
-      const f = 2.8 / (2.8 - z2);
+      const f = 2.8 / (2.8 - Math.min(2.2, z2));
       const X = meio + x1 * R * f, Y = meio + y2 * R * f;
-      const rr = (0.7 + (z2 + 1) * 0.8) * f * (1 + n * 0.35);
-      d += `M${(X - rr).toFixed(1)} ${Y.toFixed(1)}a${rr.toFixed(1)} ${rr.toFixed(1)} 0 1 0 ${(2 * rr).toFixed(1)} 0a${rr.toFixed(1)} ${rr.toFixed(1)} 0 1 0 ${(-2 * rr).toFixed(1)} 0`;
+      const rr = r1(Math.max(0.3, (0.7 + (z2 + 1) * 0.8) * f * (1 + n * 0.35)));
+      const s = `M${r1(X - rr)} ${r1(Y)}a${rr} ${rr} 0 1 0 ${r1(2 * rr)} 0a${rr} ${rr} 0 1 0 ${r1(-2 * rr)} 0`;
+      if (c === 0) d0 += s; else if (c === 1) d1 += s; else d2 += s;
     }
-    return d;
-  };
-  const atras = useAnimatedProps(() => ({ d: caminho(0), opacity: opac.value * brilho.value * 0.25 }));
-  const meioP = useAnimatedProps(() => ({ d: caminho(1), opacity: opac.value * brilho.value * 0.55 }));
-  const frente = useAnimatedProps(() => ({ d: caminho(2), opacity: opac.value * brilho.value * 0.95 }));
+    return [d0, d1, d2];
+  });
+  const atras = useAnimatedProps(() => ({ d: caminhos.value[0], fill: corViva.value, opacity: opac.value * brilho.value * 0.25 }));
+  const meioP = useAnimatedProps(() => ({ d: caminhos.value[1], fill: corViva.value, opacity: opac.value * brilho.value * 0.55 }));
+  const frente = useAnimatedProps(() => ({ d: caminhos.value[2], fill: corViva.value, opacity: opac.value * brilho.value * 0.95 }));
   const halo = useAnimatedProps(() => ({ r: tamanho * 0.42 * (1 + nivel.value * 0.12), opacity: opac.value * brilho.value * (0.55 + nivel.value * 0.45) }));
-  const anel = useAnimatedProps(() => ({ r: tamanho * 0.3 * (1.32 + nivel.value * 0.08), opacity: opac.value * brilho.value * (0.18 + nivel.value * 0.35) }));
+  const anel = useAnimatedProps(() => ({ r: tamanho * 0.3 * (1.32 + nivel.value * 0.08), stroke: corViva.value, opacity: opac.value * brilho.value * (0.18 + nivel.value * 0.35) }));
 
   const aoMedir = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -150,10 +162,10 @@ export function Esfera3D({ vazio }: { vazio: boolean }) {
               </RadialGradient>
             </Defs>
             <AnimatedCircle cx={meio} cy={meio} fill="url(#nucleoEsfera)" animatedProps={halo} />
-            <AnimatedPath fill={cor} animatedProps={atras} />
-            <AnimatedPath fill={cor} animatedProps={meioP} />
-            <AnimatedPath fill={cor} animatedProps={frente} />
-            <AnimatedCircle cx={meio} cy={meio} stroke={cor} strokeWidth={1.2} fill="none" animatedProps={anel} />
+            <AnimatedPath animatedProps={atras} />
+            <AnimatedPath animatedProps={meioP} />
+            <AnimatedPath animatedProps={frente} />
+            <AnimatedCircle cx={meio} cy={meio} strokeWidth={1.2} fill="none" animatedProps={anel} />
           </Svg>
         </View>
       )}
