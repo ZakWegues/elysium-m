@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
+import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
+import { TextoComLinks } from '../components/TextoComLinks';
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
@@ -686,20 +687,24 @@ export default function ChatScreen({
   function acoesDaBolha(item: StoredMessage) {
     if (item.from === 'error' || item.id === 'welcome') return;
     haptica.leve();
-    const copiar = { text: 'Copiar', onPress: () => { Clipboard.setStringAsync(item.from === 'reply' ? textoPuro(item.text) : item.text).catch(() => {}); } };
-    if (item.from === 'me') { Alert.alert('Mensagem', undefined, [copiar], { cancelable: true }); return; }
+    const puro = item.from === 'reply' ? textoPuro(item.text) : item.text;
+    const copiar = { text: 'Copiar', onPress: () => { Clipboard.setStringAsync(puro).catch(() => {}); } };
+    // Fase 23: compartilhar com qualquer app (folha do Android).
+    const compartilhar = { text: 'Compartilhar', onPress: () => { Share.share({ message: puro }).catch(() => {}); } };
+    if (item.from === 'me') { Alert.alert('Mensagem', undefined, [copiar, compartilhar], { cancelable: true }); return; }
     const ouvir = { text: 'Ouvir', onPress: () => { falar(textoPuro(item.text), pairing); } };
     // Refazer só a última resposta, e só se a pergunta dela foi digitada (áudio não tem texto para reenviar).
     const ultima = [...messages].reverse().find(m => m.from === 'reply');
     const indice = messages.findIndex(m => m.id === item.id);
     const pergunta = [...messages.slice(0, indice)].reverse().find(m => m.from === 'me');
     const podeRefazer = ultima?.id === item.id && pergunta && !pergunta.text.startsWith('🎤') && !pergunta.text.startsWith('📎') && !sending;
+    // O Alert do Android mostra até 3 botões: Copiar, Compartilhar e (Refazer | Ouvir).
     const botoes = podeRefazer
-      ? [copiar, ouvir, { text: 'Refazer', onPress: () => {
+      ? [copiar, compartilhar, { text: 'Refazer', onPress: () => {
           setMessages(prev => prev.filter(m => m.id !== item.id));
           handleSend(pergunta!.text, { refazer: true });
         } }]
-      : [copiar, ouvir];
+      : [copiar, compartilhar, ouvir];
     Alert.alert('Resposta', undefined, botoes, { cancelable: true });
   }
 
@@ -979,11 +984,7 @@ export default function ChatScreen({
               {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações.
                   Fase 22: deslizar a bolha da Ely para a esquerda = ouvir de novo; toque duplo = copiar. */}
               <Pressable onLongPress={() => acoesDaBolha(item)} delayLongPress={350}>
-                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : (
-                  <Text variant="body" color={color}>
-                    {item.text}
-                  </Text>
-                )}
+                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : <TextoComLinks texto={item.text} cor={color} />}
               </Pressable>
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (

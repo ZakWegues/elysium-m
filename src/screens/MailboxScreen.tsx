@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import { TextoComLinks } from '../components/TextoComLinks';
 import { useAbaAtiva } from '../components/AbaViva';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
@@ -289,14 +290,21 @@ export default function MailboxScreen({
    * contrato do mailbox (§16, C15).
    */
   function handleLongPress(message: MailboxMessage) {
-    Alert.alert('Recado', message.text ?? message.attachment?.name ?? 'Sem conteúdo', [
-      {
-        text: favorites[message.id] ? 'Desfavoritar' : 'Favoritar',
-        onPress: () => handleToggleFavorite(message.id),
-      },
+    // Fase 23: copiar e compartilhar (o Zak pediu nas duas conversas).
+    // O Alert do Android mostra no máximo 3 botões: com texto, "Mais…" leva a favoritar/apagar.
+    const texto = message.text ?? '';
+    const titulo = message.text ?? message.attachment?.name ?? 'Sem conteúdo';
+    const mais = () => Alert.alert('Recado', undefined, [
+      { text: favorites[message.id] ? 'Desfavoritar' : 'Favoritar', onPress: () => handleToggleFavorite(message.id) },
       { text: 'Apagar', style: 'destructive', onPress: () => apagarRecado(message) },
       { text: 'Cancelar', style: 'cancel' },
-    ]);
+    ], { cancelable: true });
+    if (!texto) { mais(); return; }
+    Alert.alert('Recado', titulo, [
+      { text: 'Copiar', onPress: () => { Clipboard.setStringAsync(texto).catch(() => {}); } },
+      { text: 'Compartilhar', onPress: () => { Share.share({ message: texto }).catch(() => {}); } },
+      { text: 'Mais…', onPress: mais },
+    ], { cancelable: true });
   }
 
   async function apagarRecado(message: MailboxMessage) {
@@ -430,9 +438,7 @@ export default function MailboxScreen({
                     </View>
                   )
                 ) : (
-                  <Text variant="body" color={color}>
-                    {item.text ?? item.attachment?.name ?? '(sem conteúdo)'}
-                  </Text>
+                  <TextoComLinks texto={item.text ?? item.attachment?.name ?? '(sem conteúdo)'} cor={color} />
                 )}
 
                 {isImage && favorites[item.id] && (
@@ -441,9 +447,7 @@ export default function MailboxScreen({
                   </View>
                 )}
                 {isImage && item.text && (
-                  <Text variant="caption" color={color} style={{ marginTop: tokens.spacing.xs }}>
-                    {item.text}
-                  </Text>
+                  <TextoComLinks texto={item.text} cor={color} variant="caption" style={{ marginTop: tokens.spacing.xs }} />
                 )}
               </View>
               <Text
