@@ -17,6 +17,7 @@ import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text, Toque } from '../components/ui';
+import { PainelMemoria } from './ControlScreen';
 import { falaAntecipadaLigada, falar, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 import { trocarModo, useModo } from '../lib/modo';
@@ -44,7 +45,7 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
  * "Desparear" no fim de tudo. Agora a gaveta abre num hub; cada azulejo mostra o valor que
  * está valendo e abre a seção, com uma seta para voltar.
  */
-type Secao = 'aparencia' | 'voz' | 'conversa' | 'modos' | 'avisos' | 'pareamento' | 'sobre';
+type Secao = 'aparencia' | 'voz' | 'conversa' | 'modos' | 'memoria' | 'avisos' | 'pareamento' | 'sobre';
 
 export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens, familiaResolvida, name } = useTheme();
@@ -60,6 +61,8 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
     { id: 'modos', titulo: 'Modos', icone: 'layers', resumo: modo ? `Ligado: ${modo.nome}` : 'Matemática, inglês… e os seus' },
+    // Fase 23: a memória da Ely também mora aqui (é o mesmo painel da aba PC).
+    { id: 'memoria', titulo: 'O que a Ely sabe', icone: 'bookmark', resumo: 'Ver, corrigir e esquecer' },
     { id: 'avisos', titulo: 'Notificações', icone: 'bell', resumo: avisos ? 'Avisando neste celular' : 'Desligadas' },
     { id: 'pareamento', titulo: 'Pareamento', icone: 'wifi', resumo: `${pairing.activeIp}:${pairing.port}` },
     { id: 'sobre', titulo: 'Sobre', icone: 'info', resumo: `Versão ${versaoInstalada()} · atualizações` },
@@ -95,6 +98,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       {secao === 'voz' && <VozSection pairing={pairing} />}
       {secao === 'conversa' && <SecaoConversa pairing={pairing} />}
       {secao === 'modos' && <SecaoModos pairing={pairing} />}
+      {secao === 'memoria' && <PainelMemoria pairing={pairing} onError={(err, ctx) => Alert.alert(ctx, errMessage(err))} />}
       {/* Fase 22: uma seção só — o aviso local e o push do PC no mesmo cartão. */}
       {secao === 'avisos' && (
         <Card glass style={{ gap: tokens.spacing.md }}>

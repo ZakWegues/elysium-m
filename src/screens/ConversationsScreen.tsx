@@ -167,7 +167,7 @@ export default function ConversationsScreen({
         <Text variant="caption" color={offline ? palette.error : palette.textMuted}>
           {offline
             ? 'PC fora de alcance — mostrando a cópia local. Sincroniza sozinho quando voltar.'
-            : 'Sincronizado com o PC. As 5 mais recentes ficam guardadas; favoritar tira dessa contagem.'}
+            : 'Sincronizado com o PC. As 5 mais recentes ficam guardadas; a estrela fixa no topo e tira dessa contagem.'}
         </Text>
 
         {!achados && !loading && sessions.length === 0 && (
@@ -180,7 +180,8 @@ export default function ConversationsScreen({
           </Animated.View>
         )}
 
-        {!achados && sessions.map((session) => (
+        {/* Fase 23: favoritar = fixar no topo (o sort é estável: dentro de cada grupo, a mais recente primeiro). */}
+        {!achados && [...sessions].sort((a, b) => Number(b.favorite) - Number(a.favorite)).map((session) => (
           <Animated.View key={session.id} layout={LAYOUT} entering={ENTRA} exiting={SAI}>
             <Card glass style={styles.row}>
               {renomeando === session.id ? (
@@ -210,7 +211,7 @@ export default function ConversationsScreen({
               >
                 <Feather name="edit-2" size={17} color={palette.textMuted} />
               </Pressable>
-              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={12} style={{ marginRight: 8 }} accessibilityRole="button" accessibilityLabel={session.favorite ? 'Tirar dos favoritos' : 'Favoritar'}>
+              <Pressable onPress={() => handleToggleFavorite(session.id)} hitSlop={12} style={{ marginRight: 8 }} accessibilityRole="button" accessibilityLabel={session.favorite ? 'Desafixar' : 'Fixar no topo'}>
                 <Feather name="star" size={20} color={session.favorite ? '#F5A623' : palette.border} />
               </Pressable>
               <Pressable

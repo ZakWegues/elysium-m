@@ -66,7 +66,7 @@ const PAINEIS: {
   cor?: string;
 }[] = [
   { id: 'lembretes', titulo: 'Lembretes', icone: 'bell', resumo: 'Ver e cancelar' },
-  { id: 'memoria', titulo: 'Memória', icone: 'bookmark', resumo: 'O que ele lembra' },
+  { id: 'memoria', titulo: 'O que a Ely sabe', icone: 'bookmark', resumo: 'Fatos e conversas' },
   { id: 'monitor', titulo: 'Monitor', icone: 'activity', resumo: 'CPU, RAM e discos' },
   { id: 'processos', titulo: 'Processos', icone: 'cpu', resumo: 'Encerrar à força' },
   { id: 'programas', titulo: 'Programas', icone: 'grid', resumo: 'Abertos, abrir e fechar' },
@@ -434,7 +434,7 @@ function PainelLembretes({ pairing, onError }: { pairing: Pairing; onError: Erro
 
 // ── Memória ───────────────────────────────────────────────────────────────────
 
-function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+export function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
   const { palette, tokens } = useTheme();
   const [facts, setFacts] = useState<MemoryFact[]>([]);
   const [draft, setDraft] = useState('');
