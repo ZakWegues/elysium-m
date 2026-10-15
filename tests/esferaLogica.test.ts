@@ -17,3 +17,14 @@ describe("esfera — fator noturno (fase 22)", () => {
     expect(CICLO_PENSANDO_MS).toBe(1571);
   });
 });
+
+describe("svg da esfera para o widget (fase 23)", () => {
+  it("tem os pontos nas três camadas e a cor pedida", async () => {
+    const { svgDaEsfera } = await import("../src/lib/esferaLogica");
+    const s = svgDaEsfera("#c9a14a", 200, 120);
+    expect(s.startsWith("<svg")).toBe(true);
+    expect((s.match(/<circle cx=/g) ?? []).length).toBe(120 + 2);
+    expect(s).toContain('fill="#c9a14a"');
+    expect(s).not.toContain("NaN");
+  });
+});

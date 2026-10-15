@@ -4,7 +4,7 @@ import { loadPairing, Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { paletaDosWidgets } from './tema';
 import { ClimaWidget, EstadoPc, FocoWidget, RotinasWidget, SaudeWidget, WidgetAcoes, WidgetBusca, WidgetClima, WidgetEstado, WidgetFoco, WidgetRotinas, WidgetSaude } from './widgets';
-import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TarefasWidget, TimersWidget, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTarefas, WidgetTimers } from './widgetsStark';
+import { HabitosWidget, HojeWidget, ListasWidget, MusicaWidget, TarefasWidget, TimersWidget, WidgetEsfera, WidgetFalar, WidgetHabitos, WidgetHoje, WidgetListas, WidgetMusica, WidgetTarefas, WidgetTimers } from './widgetsStark';
 import { atrasada, quandoTarefa } from '../lib/tarefasUi';
 import { chaveDoWidget } from '../lib/chaveWidget';
 
@@ -27,6 +27,7 @@ export const WIDGET_FOCO = 'Foco';
 export const WIDGET_SAUDE = 'Saude';
 // Fase 16.
 export const WIDGET_FALAR = 'Falar';
+export const WIDGET_ESFERA = 'Esfera';
 export const WIDGET_HOJE = 'Hoje';
 export const WIDGET_HABITOS = 'Habitos';
 export const WIDGET_TIMERS = 'Timers';
@@ -280,6 +281,10 @@ registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
       renderWidget(<WidgetFalar p={p} chave={await chaveDoWidget()} />);
       return;
 
+    case WIDGET_ESFERA:
+      renderWidget(<WidgetEsfera p={p} chave={await chaveDoWidget()} />);
+      return;
+
     case WIDGET_HOJE: {
       const pairing = await loadPairing();
       renderWidget(<WidgetHoje p={p} h={await lerHoje(pairing)} />);
@@ -404,5 +409,6 @@ export async function atualizarWidgetsEstaticos(): Promise<void> {
     await requestWidgetUpdate({ widgetName: WIDGET_ACOES, renderWidget: () => <WidgetAcoes p={p} /> });
     const chave = await chaveDoWidget();
     await requestWidgetUpdate({ widgetName: WIDGET_FALAR, renderWidget: () => <WidgetFalar p={p} chave={chave} /> });
+    await requestWidgetUpdate({ widgetName: WIDGET_ESFERA, renderWidget: () => <WidgetEsfera p={p} chave={chave} /> });
   } catch { /* idem */ }
 }

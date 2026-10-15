@@ -1,5 +1,6 @@
 import React from 'react';
-import { FlexWidget, TextWidget, type ColorProp } from 'react-native-android-widget';
+import { FlexWidget, SvgWidget, TextWidget, type ColorProp } from 'react-native-android-widget';
+import { svgDaEsfera } from '../lib/esferaLogica';
 import type { Palette } from '../theme/palettes';
 
 /**
@@ -42,6 +43,21 @@ export function WidgetFalar({ p, chave = '' }: { p: Palette; chave?: string }) {
         <TextWidget text="🎙" style={{ fontSize: 20 }} />
       </FlexWidget>
       <TextWidget text="Ely" style={{ fontSize: 11, fontWeight: 'bold', color: c(p.primary), letterSpacing: 1 }} />
+    </FlexWidget>
+  );
+}
+
+/** Fase 23: a esfera da Ely (2×2). Parada (widget é bitmap); toque = falar com a Ely. */
+export function WidgetEsfera({ p, chave = '' }: { p: Palette; chave?: string }) {
+  return (
+    <FlexWidget
+      style={{ ...painel(p), height: 'match_parent', width: 'match_parent', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', flexGap: 2 }}
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: chave ? `elysium://falar?k=${chave}` : 'elysium://falar' }}
+      accessibilityLabel="Falar com a Ely"
+    >
+      <SvgWidget svg={svgDaEsfera(p.primary, 200)} style={{ height: 112, width: 112 }} />
+      <TextWidget text="Ely" style={{ fontSize: 12, fontWeight: 'bold', color: c(p.primary), letterSpacing: 2 }} />
     </FlexWidget>
   );
 }

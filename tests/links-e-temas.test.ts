@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("expo-share-intent", () => ({ useShareIntent: () => ({}) }));
+vi.mock("expo-file-system", () => ({ File: class {}, Paths: {} }));
 import { destinoDaUrl } from "../src/lib/deepLinks";
-import { parseSharedUrl } from "../src/lib/shareIntent";
+import { lerCompartilhado, parseSharedUrl } from "../src/lib/shareIntent";
 import { getPalette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS } from "../src/theme/palettes";
 
 describe("deep links dos widgets (bloco 73)", () => {
@@ -59,4 +61,15 @@ describe('família Stark (fase 16)', async () => {
     expect(familiaEscura('lg')).toBe(false);
     expect(resolverFamiliaEscolhida('stark')).toBe('stark');
   });
+});
+
+describe("compartilhar do Android (fase 23)", () => {
+  it("texto ou link", () => {
+    expect(lerCompartilhado({ text: " https://youtu.be/x " })).toEqual({ texto: "https://youtu.be/x", arquivo: null });
+    expect(lerCompartilhado({ text: null, webUrl: "https://a.com" })?.texto).toBe("https://a.com");
+  });
+  it("imagem", () => {
+    expect(lerCompartilhado({ files: [{ path: "file:///x.jpg", fileName: "x.jpg", mimeType: "image/jpeg", size: 10 }] })?.arquivo).toEqual({ uri: "file:///x.jpg", nome: "x.jpg", mimeType: "image/jpeg", bytes: 10 });
+  });
+  it("nada", () => { expect(lerCompartilhado({ text: "  " })).toBeNull(); });
 });
