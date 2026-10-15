@@ -107,6 +107,8 @@ export type Palette = {
   glassSheet: string;
   /** Tinta da BlurView: precisa acompanhar o modo, senão o vidro clareia o escuro. */
   blurTint: 'light' | 'dark';
+  /** Fase 23.1: cores das manchas do fundo (iguais às do desktop). */
+  blobs: readonly [string, string, string];
 };
 
 /** Neutros da família Vidro Líquido, comuns às três cores. */
@@ -162,26 +164,32 @@ type Face = {
   surfaceRaised: string;
   /** Pastel sólido no claro; translúcido no escuro, senão vira um bloco leitoso. */
   primarySoft: string;
+  /** Fase 23.1: as três cores das manchas do fundo — as MESMAS do `blobs` do THEMES do desktop. */
+  blobs: readonly [string, string, string];
 };
 
 const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: Face; renascenca: Face }> = {
   elisio: {
     label: 'Elísio',
     light: {
+      blobs: ['#f7d4b3', '#f2e2b0', '#f6e3d2'],
       primary: '#c2602c', accent: '#c9971f', primarySoft: '#F7E7D6',
       background: '#f8f3ec', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
     },
     dark: {
+      blobs: ['#8a6a2e', '#2f5d57', '#4a3f6b'],
       primary: '#d9b168', accent: '#9fd8cf', primarySoft: 'rgba(217,177,104,0.20)',
       background: '#0a0c14', surface: '#131726', surfaceRaised: '#0e1220',
     },
     // "Stark — Mark": o vermelho e o dourado da armadura.
     stark: {
+      blobs: ['#5a1414', '#5a4214', '#2a1010'],
       primary: '#ff5a4e', accent: '#ffc857', primarySoft: 'rgba(255,90,78,0.18)',
       background: '#0b0607', surface: '#170c0e', surfaceRaised: '#120909',
     },
     // 13/10 — "Renascença — Florença": folha de ouro sobre nogueira, com carmim.
     renascenca: {
+      blobs: ['#5a3a14', '#5a1c22', '#3a2814'],
       primary: '#c9a14a', accent: '#b23a48', primarySoft: 'rgba(201,161,74,0.20)',
       background: '#120c07', surface: '#1f150d', surfaceRaised: '#180f09',
     },
@@ -189,20 +197,24 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: 
   mare: {
     label: 'Maré',
     light: {
+      blobs: ['#b6d8f7', '#b3ecdf', '#cfe6f5'],
       primary: '#1e7fd4', accent: '#17b8a6', primarySoft: '#DCEBF9',
       background: '#eef4f9', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
     },
     dark: {
+      blobs: ['#33506b', '#2b5f59', '#3a4560'],
       primary: '#a8c4d8', accent: '#7fd4c8', primarySoft: 'rgba(168,196,216,0.20)',
       background: '#080b12', surface: '#111624', surfaceRaised: '#0c101c',
     },
     // "Stark — Reator": o azul do reator com detalhes âmbar. É o padrão da fase 16.
     stark: {
+      blobs: ['#0f3a52', '#123047', '#3a2a12'],
       primary: '#3cc8f0', accent: '#ffb547', primarySoft: 'rgba(60,200,240,0.18)',
       background: '#05080f', surface: '#0b1220', surfaceRaised: '#08101b',
     },
     // "Renascença — Veneza": ouro e ultramar.
     renascenca: {
+      blobs: ['#1c2c5a', '#5a4214', '#22204a'],
       primary: '#d4ae5c', accent: '#3d6fd1', primarySoft: 'rgba(212,174,92,0.20)',
       background: '#0b0d18', surface: '#151a2c', surfaceRaised: '#101423',
     },
@@ -210,20 +222,24 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: 
   crepusculo: {
     label: 'Crepúsculo',
     light: {
+      blobs: ['#cbb9ff', '#b8ecf3', '#ded7ff'],
       primary: '#6d4aff', accent: '#22b8cf', primarySoft: '#E6E0FF',
       background: '#f2f1f7', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
     },
     dark: {
+      blobs: ['#7a4520', '#6b2f47', '#3b2a6b'],
       primary: '#f0a850', accent: '#e07a9b', primarySoft: 'rgba(240,168,80,0.20)',
       background: '#0b0818', surface: '#171232', surfaceRaised: '#110d26',
     },
     // "Stark — Noite": azul frio e verde de terminal, para pouca luz.
     stark: {
+      blobs: ['#1a2a3a', '#123a35', '#20283a'],
       primary: '#7fb8d8', accent: '#64ffda', primarySoft: 'rgba(127,184,216,0.18)',
       background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12',
     },
     // "Renascença — Roma": ouro e verdete.
     renascenca: {
+      blobs: ['#3a4a24', '#5a4214', '#2a2416'],
       primary: '#c7a35a', accent: '#6f9a5b', primarySoft: 'rgba(199,163,90,0.20)',
       background: '#0f0d09', surface: '#1c1810', surfaceRaised: '#16130c',
     },
@@ -278,7 +294,7 @@ function misturar(a: string, b: string, t: number): string {
   return `#${[c(ar, br), c(ag, bg), c(ab, bb)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
-function comAlfa(hex: string, alfa: number): string {
+export function comAlfa(hex: string, alfa: number): string {
   const [r, g, b] = canais(hex);
   return `rgba(${r},${g},${b},${alfa})`;
 }
@@ -297,13 +313,15 @@ function comAlfa(hex: string, alfa: number): string {
  */
 function vidro(face: Face, familia: Familia) {
   const noite = familiaEscura(familia);
-  const base = noite ? misturar(face.surface, face.primary, 0.14) : misturar('#FFFFFF', face.primary, 0.10);
+  // Fase 23.1: na noite a base é a superfície do tema com só 4% da primária (era 14%): no PC
+  // o card é a `--surface` quase pura, e a tinta forte deixava o celular "colorido demais".
+  const base = noite ? misturar(face.surface, face.primary, 0.04) : misturar('#FFFFFF', face.primary, 0.10);
   // 🔴 Bloco 70: a noite quase não tem desfoque (GlassFill limita a 10), então a tinta é
   // o que segura a leitura — subiu de 0,26/0,42 para 0,62/0,74. O dia baixou um pouco
   // (0,34 → 0,30) porque ganhou aresta especular e lente, que já dão presença ao card.
   return {
     // Bloco 128: a noite virou painel quase sólido (era 0,62/0,74) — sem vidro, só o véu do blur leve.
-    glassSurface: comAlfa(base, noite ? 0.84 : 0.30),
+    glassSurface: comAlfa(base, noite ? 0.9 : 0.30),
     glassSurfaceStrong: comAlfa(base, noite ? 0.90 : 0.48),
     // Gaveta e painel são quase opacos de propósito: o critério de aceite é texto legível
     // sobre QUALQUER fundo, inclusive sobre uma mancha clara passando por baixo.

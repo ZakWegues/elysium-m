@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import Animated, { interpolateColor, useAnimatedProps, useDerivedValue, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Text } from './ui';
+import Animated, { FadeIn, interpolateColor, useAnimatedProps, useDerivedValue, useFrameCallback, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { useFala } from '../lib/falar';
 import { useTheme } from '../theme';
@@ -39,7 +40,7 @@ function fibonacci(): number[] {
   return p;
 }
 
-export function Esfera3D({ vazio }: { vazio: boolean }) {
+export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: string; dica?: string }) {
   const [caixa, setCaixa] = useState({ w: 0, h: 0 });
   const fala = useFala();
   const fase = useFaseDaBolota();
@@ -169,6 +170,13 @@ export function Esfera3D({ vazio }: { vazio: boolean }) {
           </Svg>
         </View>
       )}
+      {/* Fase 23.1: como no PC — a saudação e uma dica curta embaixo da esfera, só com o chat vazio. */}
+      {caixa.h > 0 && vazio && titulo ? (
+        <Animated.View entering={FadeIn.duration(500)} style={{ position: 'absolute', left: 24, right: 24, top: topo + tamanho * 0.94, alignItems: 'center', gap: 6 }}>
+          <Text variant="heading" style={{ textAlign: 'center' }}>{titulo}</Text>
+          {dica ? <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center' }}>{dica}</Text> : null}
+        </Animated.View>
+      ) : null}
     </View>
   );
 }

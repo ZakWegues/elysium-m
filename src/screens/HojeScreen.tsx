@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { callRpc, Cartao, Habito, Meta, PainelHoje, Revisao, Tarefa } from '../lib/rpc';
@@ -12,6 +12,7 @@ import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../componen
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, tituloComContador } from '../lib/secoesHoje';
 import { Reator } from '../components/Reator';
+import { estourarNoToque, fogos } from '../components/Estouros';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
 import { CardEstudo, PlanoDeEstudo, Revisao as RevisaoCartoes } from './hoje/CardEstudo';
@@ -40,6 +41,7 @@ function restante(ms: number) {
 
 export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, onAbrirRotinas }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void; onAbrirRotinas?: () => void }) {
   const { palette, tokens } = useTheme();
+  const { width: largura, height: altura } = useWindowDimensions();
   const [painel, setPainel] = useState<PainelHoje | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizando, setAtualizando] = useState(false);
@@ -182,7 +184,13 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     setPainel(p => p && { ...p, habitos: p.habitos.map(x => x.id === h.id ? { ...x, feitoHoje: !x.feitoHoje } : x) });
     try {
       const r = await callRpc(pairing, 'habitos.marcar', { id: h.id, feito: !h.feitoHoje });
-      if (!h.feitoHoje) haptica.sucesso();
+      if (!h.feitoHoje) {
+        haptica.sucesso();
+        // Fase 23.1: estouro no check e, se este fechou o dia, fogos — como no PC.
+        estourarNoToque();
+        const outros = (painel?.habitos ?? []).filter(x => x.id !== h.id);
+        if (outros.length && outros.every(x => x.feitoHoje)) setTimeout(() => fogos(largura, altura), 250);
+      }
       setPainel(p => p && { ...p, habitos: p.habitos.map(x => x.id === h.id ? r.habito : x) });
     } catch (e) {
       Alert.alert('Não deu para marcar', errMessage(e));

@@ -27,7 +27,7 @@ import { avisarTokenRecusado } from '../lib/erroRpc';
 import { EstadoPcLinha } from '../components/EstadoPc';
 
 /** O nome do dono, copiado da config do PC (fase 13). Chave nova, nada renomeado. */
-const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
+import { CHAVE_NOME } from './inicio/tipos';
 /**
  * Tela inicial: um catálogo de cards, não uma tela fixa.
  *

@@ -73,3 +73,12 @@ describe("compartilhar do Android (fase 23)", () => {
   });
   it("nada", () => { expect(lerCompartilhado({ text: "  " })).toBeNull(); });
 });
+
+describe("fundo igual ao do PC (fase 23.1)", () => {
+  it("as manchas usam as cores `blobs` do THEMES do desktop", () => {
+    expect(getPalette("mare", "stark").blobs).toEqual(["#0f3a52", "#123047", "#3a2a12"]);
+    expect(getPalette("elisio", "ely").blobs).toEqual(["#8a6a2e", "#2f5d57", "#4a3f6b"]);
+    expect(getPalette("crepusculo", "lg").blobs).toEqual(["#cbb9ff", "#b8ecf3", "#ded7ff"]);
+    expect(getPalette("elisio", "renascenca").blobs).toEqual(["#5a3a14", "#5a1c22", "#3a2814"]);
+  });
+});

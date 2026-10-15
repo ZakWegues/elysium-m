@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CHAVE_NOME, saudacao } from './inicio/tipos';
 import AnimatedReanimated, {
   FadeInDown, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
@@ -32,8 +34,9 @@ import { MAILBOX_MAX_ATTACHMENT_BYTES, sendMessage } from '../lib/mailbox';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV } from '../lib/motion';
-import { useTheme } from '../theme';
+import { comAlfa, useTheme } from '../theme';
 import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text } from '../components/ui';
+import { CantosOrnamentados } from '../components/ui/Ornamentos';
 import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { paraFala, textoPuro } from '../lib/markdown';
@@ -83,6 +86,9 @@ export default function ChatScreen({
   const { palette, tokens } = useTheme();
   // 22.1: começa vazia — a esfera é a tela de boas-vindas (a bolha de texto era ruído).
   const [messages, setMessages] = useState<StoredMessage[]>([]);
+  // Fase 23.1: o nome que a Início guardou, para a saudação sob a esfera.
+  const [nomeDono, setNomeDono] = useState('');
+  useEffect(() => { AsyncStorage.getItem(CHAVE_NOME).then(n => { if (n) setNomeDono(n); }).catch(() => {}); }, []);
   const [draft, setDraft] = useState('');
   /**
    * "/" no começo da mensagem lista os comandos de IA (bloco 137): "/Corrigir português
@@ -940,7 +946,7 @@ export default function ChatScreen({
     <View style={{ flex: 1 }}>
       {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe.
           22.1: só fundo (sem toque). Chat vazio = ela sozinha no meio, como no PC. */}
-      <Esfera3D vazio={messages.length === 0} />
+      <Esfera3D vazio={messages.length === 0} titulo={nomeDono ? `${saudacao()}, ${nomeDono}.` : `${saudacao()}.`} dica="Pergunte, peça, mande abrir. Segure o microfone para falar." />
       {!semCabecalho && (
         <ScreenHeader
           title="ELYSIUM-M"
@@ -965,27 +971,34 @@ export default function ChatScreen({
         }}
         scrollEventThrottle={64}
         renderItem={({ item }) => {
-          const bg = item.from === 'me' ? palette.primary : item.from === 'error' ? palette.errorSoft : palette.surfaceRaised;
-          const color = item.from === 'me' ? palette.onPrimary : item.from === 'error' ? palette.error : palette.text;
+          // Fase 23.1: as bolhas do PC. A minha é translúcida na cor do tema (18% + borda de
+          // 35%), não um bloco sólido; a da Ely é a superfície com borda fina. Renascença: a
+          // minha vai no pigmento, em itálico, e a da Ely ganha a moldura dourada.
+          const ren = palette.familia === 'renascenca';
+          const tinta = ren ? palette.accent : palette.primary;
+          const bg = item.from === 'me' ? comAlfa(tinta, ren ? 0.16 : 0.18) : item.from === 'error' ? palette.errorSoft : (palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)');
+          const color = item.from === 'error' ? palette.error : palette.text;
           return (
             <BolhaEntrando
               style={[
                 styles.bubble,
                 {
                   alignSelf: item.from === 'me' ? 'flex-end' : 'flex-start',
-                  borderRadius: tokens.radii.lg,
+                  borderRadius: ren ? 4 : tokens.radii.lg,
                   padding: tokens.spacing.md,
+                  ...(ren && item.from === 'reply' ? { paddingHorizontal: tokens.spacing.lg } : {}),
                   backgroundColor: bg,
-                  borderWidth: item.from === 'reply' ? StyleSheet.hairlineWidth : 0,
-                  borderColor: palette.border,
+                  borderWidth: item.from === 'error' ? 0 : 1,
+                  borderColor: item.from === 'me' ? comAlfa(tinta, ren ? 0.55 : 0.35) : palette.border,
                 },
               ]}
             >
               {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações.
                   Fase 22: deslizar a bolha da Ely para a esquerda = ouvir de novo; toque duplo = copiar. */}
               <Pressable onLongPress={() => acoesDaBolha(item)} delayLongPress={350}>
-                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : <TextoComLinks texto={item.text} cor={color} />}
+                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : <TextoComLinks texto={item.text} cor={color} style={ren && item.from === 'me' ? { fontStyle: 'italic' } : undefined} />}
               </Pressable>
+              {ren && item.from === 'reply' ? <CantosOrnamentados cor={palette.primary} tamanho={16} /> : null}
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
                 <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">reserva</Text>
@@ -1100,7 +1113,7 @@ export default function ChatScreen({
           ]}
           value={draft}
           onChangeText={setDraft}
-          placeholder="Escreve um comando..."
+          placeholder="Converse com a Ely…"
           placeholderTextColor={palette.textMuted}
           onSubmitEditing={() => handleSend()}
           returnKeyType="send"

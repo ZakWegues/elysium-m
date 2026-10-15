@@ -1,7 +1,7 @@
 import { StyleSheet, View, ViewProps } from 'react-native';
 import { useTheme } from '../../theme';
 import { GlassFill } from './GlassSurface';
-import { CantosOrnamentados } from './Ornamentos';
+import { CantosHud, CantosOrnamentados } from './Ornamentos';
 
 /**
  * `glass` dá a tinta e a borda de vidro; `blur` — desligado por padrão — é que liga o
@@ -17,7 +17,8 @@ export function Card({ glass = false, blur = false, style, children, ...rest }: 
     <View
       style={[
         {
-          borderRadius: renascenca ? 5 : tokens.radii.lg,
+          // Stark: canto mais reto, senão o arredondado engole as cantoneiras HUD.
+          borderRadius: renascenca ? 5 : palette.familia === 'stark' ? 8 : tokens.radii.lg,
           borderWidth: glass ? 1 : StyleSheet.hairlineWidth,
           borderColor: glass ? palette.glassBorder : palette.border,
           padding: tokens.spacing.lg,
@@ -30,6 +31,7 @@ export function Card({ glass = false, blur = false, style, children, ...rest }: 
     >
       {glass && <GlassFill intensity={45} blur={blur} />}
       {renascenca && <CantosOrnamentados cor={palette.primary} />}
+      {palette.familia === 'stark' && <CantosHud cor={palette.primary} />}
       {children}
     </View>
   );

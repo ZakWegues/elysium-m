@@ -8,6 +8,9 @@ import type { TelemetryFrame } from '../../lib/telemetry';
 
 export const CHAVE_CARDS = 'elysium_home_cards';
 
+/** O nome do dono, guardado pela Início (o Chat usa na saudação sob a esfera). */
+export const CHAVE_NOME = 'elysium_nome_do_usuario_v1';
+
 export function saudacao(): string {
   const h = new Date().getHours();
   if (h < 5) return 'Boa madrugada';

@@ -1,324 +1,266 @@
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withRepeat, withTiming, cancelAnimation,
+  cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming,
 } from 'react-native-reanimated';
+import Svg, { Defs, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { FundoRenascenca } from './Ornamentos';
 import { useFala } from '../../lib/falar';
 import { estadoDaBolota, useFaseDaBolota } from '../../lib/bolota';
 
 /**
- * Fundo do app: gradiente suave + manchas de cor do tema, EM MOVIMENTO (bloco 71).
+ * Fundo do app — fase 23.1: PORTE CAMADA A CAMADA do `css/fundo.css` do desktop.
  *
- * Não é decoração à toa — vidro só parece vidro se houver algo variado por baixo pra
- * desfocar. Sobre um fundo chapado, qualquer blur devolve exatamente a mesma cor chapada.
+ * O Zak: "o desktop ainda tá bizarramente melhor que o mobile… plano de fundo, animações e
+ * muito mais devem ser compartilhados igualmente". A versão anterior inventava um fundo
+ * próprio: manchas nas cores PRIMÁRIA e DE ACENTO (fortes — no Stark viravam bolhas laranja)
+ * feitas de sete círculos empilhados, que aparecem como ANÉIS. Agora é o mesmo desenho do PC:
  *
- * 🔴 A REGRA "MAIS ELEMENTOS, MENOS MOVIMENTO" FOI REVISTA. O bloco 47 mediu que animar
- * dois GRADIENTES em tela cheia custava quadro — e custava mesmo: gradiente muda a
- * pintura, e repintar a tela inteira por quadro é caro. O que anima agora é outra coisa:
- * o `transform` (translate/scale) e a `opacity` de views já pintadas, que o compositor
- * move sem repintar nada. É a mesma classe de custo do polegar da TabBar. O Zak pediu
- * ("o fundo está muito parado e muito esquisito, principalmente no mobile"), e o caminho
- * barato existe:
+ *   · manchas: as cinco `.lg-blob` do PC, com as cores `blobs` do tema (as mesmas do
+ *     `THEMES` do desktop), opacidades e ciclos de deriva/respiração iguais. Cada mancha é um
+ *     gradiente radial de SVG — queda suave de verdade, sem anel;
+ *   · aurora: os dois discos girando em sentidos opostos (90 s e 130 s);
+ *   · feixes de luz (só ELYSIUM): três faixas diagonais pulsando;
+ *   · traços finos (três linhas de 1 px) e poeira (oito pontos);
+ *   · Stark: sem manchas — grade técnica de 46 px com a varredura descendo (11 s);
+ *   · Renascença: o damasco/estudo vitruviano de `Ornamentos` (já era porte do PC);
+ *   · "vivo" (ouvindo/pensando/falando): a aurora acende, como o `body.vivo` do PC.
  *
- *   · cada mancha deriva (até ~60 px) e respira (escala e opacidade) num ciclo próprio de
- *     14–26 s — ciclos que não coincidem é o que tira a cara de loop;
- *   · uma AURORA: um gradiente cônico grande girando devagar (110 s). Um `rotate`, nada
- *     mais;
- *   · tudo roda na thread de UI (`withRepeat` de valores compartilhados) e para de vez com
- *     "reduzir movimento" (`ReduceMotion.System`).
- *
- * Tudo continua `pointerEvents="none"`.
+ * Os tamanhos do PC são para uma janela de ~1024 px; aqui escalam pela largura da tela.
+ * Tudo é transform/opacidade de views já desenhadas (compositor) e para com "reduzir
+ * movimento" (`ReduceMotion.System`). `pointerEvents="none"` em tudo.
  */
 
-/** Quantas camadas formam cada mancha. Mais que isto não muda o que o olho vê. */
-const CAMADAS = 7;
+const DUR = (ms: number) => ({ duration: ms, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System });
 
-/**
- * 🔴 O React Native não tem equivalente ao `filter: blur()`.
- *
- * Sem dependência nova, a saída é somar círculos concêntricos: o de fora é o maior e o mais
- * fraco, o de dentro é o menor e o mais forte. A soma das opacidades cria uma queda suave da
- * borda para o centro — uma gaussiana barata, que é o que o olho lê como desfoque.
- */
-function Mancha({ cor, opacidade, tamanho, style, deriva }: {
-  cor: string;
-  opacidade: number;
-  tamanho: number;
-  style: object;
-  /** Amplitude (px) e período (ms) do movimento desta mancha. */
-  deriva: { dx: number; dy: number; ms: number; escala: number };
+/** Valor 0 → 1 → 0 para sempre (o `alternate` do CSS). */
+function useVaiVem(ms: number, atrasoMs = 0) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withDelay(atrasoMs, withRepeat(withTiming(1, DUR(ms)), -1, true));
+    return () => cancelAnimation(t);
+  }, [ms, atrasoMs, t]);
+  return t;
+}
+
+/** Uma `.lg-blob`: disco com queda radial (o `filter: blur(36px)` do PC), deriva e respiração. */
+function Mancha({ id, cor, lado, pos, opac, deriva, respira }: {
+  id: string; cor: string; lado: number;
+  pos: { top?: number | `${number}%`; left?: number | `${number}%`; right?: number | `${number}%`; bottom?: number | `${number}%` };
+  /** Opacidade de/até da respiração (`lg-respira-N`). */
+  opac: [number, number];
+  /** Deriva do `lg-drift-N`: até onde vai (px, já escalado), escala final e período. */
+  deriva: { dx: number; dy: number; escala: number; ms: number };
+  respira: number;
 }) {
-  const t = useSharedValue(0);
-
-  useEffect(() => {
-    // 0 → 1 → 0, para sempre. `reverse: true` evita o salto de volta ao início.
-    t.value = withRepeat(
-      withTiming(1, { duration: deriva.ms, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-      -1,
-      true,
-    );
-    return () => cancelAnimation(t);
-  }, [deriva.ms, t]);
-
+  const d = useVaiVem(deriva.ms);
+  const r = useVaiVem(respira, 700);
   const estilo = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: t.value * deriva.dx },
-      { translateY: t.value * deriva.dy },
-      { scale: 1 + (deriva.escala - 1) * t.value },
-    ],
-    // Respira ~15% junto com a deriva; a opacidade base já está nas camadas.
-    opacity: 0.86 + 0.14 * t.value,
-  }));
-
-  return (
-    <Animated.View style={[{ width: tamanho, height: tamanho }, style, estilo]} pointerEvents="none">
-      {Array.from({ length: CAMADAS }, (_, i) => {
-        // A camada 0 é a maior e a mais fraca; a última é a menor e a mais concentrada.
-        const fracao = 1 - i / CAMADAS;
-        const lado = tamanho * fracao;
-        return (
-          <View
-            key={i}
-            style={{
-              position: 'absolute',
-              top: (tamanho - lado) / 2,
-              left: (tamanho - lado) / 2,
-              width: lado,
-              height: lado,
-              borderRadius: lado / 2,
-              backgroundColor: cor,
-              // Dividir pelas camadas: empilhar sete vezes a opacidade cheia daria um disco
-              // sólido de novo. Como a composição é 1-(1-a)^n, o pico no centro fica em
-              // ~84% do valor pedido (0,42 vira 0,35) e a borda em ~6% — que é justamente
-              // a queda suave que se quer.
-              opacity: opacidade / CAMADAS,
-            }}
-          />
-        );
-      })}
-    </Animated.View>
-  );
-}
-
-/**
- * A aurora: um disco maior que a tela com um gradiente em faixas nas cores do tema,
- * girando devagar. Como o gradiente é linear (não há cônico no expo-linear-gradient), as
- * faixas diagonais girando produzem o mesmo efeito de "luz que varre" — e a rotação é o
- * único valor animado, composto na GPU.
- */
-function Aurora({ cores, opacidade }: { cores: [string, string, string]; opacidade: number }) {
-  const angulo = useSharedValue(0);
-
-  useEffect(() => {
-    angulo.value = withRepeat(
-      withTiming(360, { duration: 110_000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
-      -1,
-      false,
-    );
-    return () => cancelAnimation(angulo);
-  }, [angulo]);
-
-  const estilo = useAnimatedStyle(() => ({ transform: [{ rotate: `${angulo.value}deg` }] }));
-
-  return (
-    <Animated.View style={[styles.aurora, { opacity: opacidade }, estilo]} pointerEvents="none">
-      <LinearGradient
-        colors={['transparent', cores[0], 'transparent', cores[1], 'transparent', cores[2], 'transparent']}
-        locations={[0, 0.18, 0.36, 0.52, 0.68, 0.84, 1]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={StyleSheet.absoluteFill}
-      />
-    </Animated.View>
-  );
-}
-
-/**
- * Feixes de luz — o elemento que só a família ELYSIUM tem.
- *
- * É a contrapartida do `#ely-shafts` do `dashboard.html`: duas faixas diagonais bem
- * fracas, como luz entrando de cima. Deslizam devagar (translateX, 40 s e 56 s).
- */
-function Feixe({ cor, opacidade, left, rot, ms, dx }: { cor: string; opacidade: number; left: `${number}%`; rot: string; ms: number; dx: number }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.value = withRepeat(withTiming(1, { duration: ms, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }), -1, true);
-    return () => cancelAnimation(t);
-  }, [ms, t]);
-  const estilo = useAnimatedStyle(() => ({
-    transform: [{ translateX: t.value * dx }, { rotate: rot }],
-    opacity: opacidade * (0.7 + 0.3 * t.value),
+    transform: [{ translateX: d.value * deriva.dx }, { translateY: d.value * deriva.dy }, { scale: 1 + (deriva.escala - 1) * d.value }],
+    opacity: opac[0] + (opac[1] - opac[0]) * r.value,
   }));
   return (
-    <Animated.View style={[styles.feixe, { left }, estilo]} pointerEvents="none">
-      <LinearGradient
-        colors={['transparent', cor, 'transparent']}
-        locations={[0.15, 0.5, 0.85]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: lado, height: lado }, pos, estilo]}>
+      <Svg width={lado} height={lado}>
+        <Defs>
+          <RadialGradient id={id} cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={cor} stopOpacity={1} />
+            <Stop offset="0.45" stopColor={cor} stopOpacity={0.85} />
+            <Stop offset="0.75" stopColor={cor} stopOpacity={0.32} />
+            <Stop offset="1" stopColor={cor} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width={lado} height={lado} fill={`url(#${id})`} />
+      </Svg>
     </Animated.View>
   );
 }
 
-/**
- * Traços de luz: linhas finas e longas, quase invisíveis, atravessando a tela na diagonal.
- * São o que dá DIREÇÃO ao fundo — as manchas dão profundidade, mas não dizem para onde a
- * luz vai. Duas bastam; três já lê como padrão de papel de parede. Ficam paradas: linha
- * de 2 px em movimento vira cintilação.
- */
-function Tracos({ cor, forca }: { cor: string; forca: number }) {
+/** As cinco manchas do `fundo.css`, nas posições e ritmos de lá (escala `k` pela largura). */
+function Manchas({ blobs, k }: { blobs: readonly [string, string, string]; k: number }) {
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <LinearGradient
-        colors={['transparent', cor, 'transparent']}
-        locations={[0.1, 0.5, 0.9]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.traco, { top: '28%', opacity: forca, transform: [{ rotate: '-32deg' }] }]}
-      />
-      <LinearGradient
-        colors={['transparent', cor, 'transparent']}
-        locations={[0.2, 0.5, 0.8]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.traco, { top: '62%', opacity: forca * 0.7, transform: [{ rotate: '-28deg' }] }]}
-      />
-    </View>
+    <>
+      <Mancha id="b1" cor={blobs[0]} lado={620 * k} pos={{ top: -230 * k, right: -170 * k }} opac={[0.5, 0.66]} respira={11_000} deriva={{ dx: 120 * k, dy: 80 * k, escala: 1.14, ms: 16_000 }} />
+      <Mancha id="b2" cor={blobs[1]} lado={640 * k} pos={{ bottom: -280 * k, left: -190 * k }} opac={[0.55, 0.38]} respira={13_000} deriva={{ dx: -110 * k, dy: -130 * k, escala: 1.1, ms: 20_000 }} />
+      <Mancha id="b3" cor={blobs[2]} lado={400 * k} pos={{ top: '46%', left: '48%' }} opac={[0.4, 0.58]} respira={9_000} deriva={{ dx: -90 * k, dy: 110 * k, escala: 0.88, ms: 14_000 }} />
+      <Mancha id="b4" cor={blobs[1]} lado={300 * k} pos={{ top: '8%', left: '14%' }} opac={[0.26, 0.42]} respira={15_000} deriva={{ dx: 150 * k, dy: -70 * k, escala: 1.2, ms: 24_000 }} />
+      <Mancha id="b5" cor={blobs[0]} lado={340 * k} pos={{ bottom: '6%', right: '18%' }} opac={[0.22, 0.36]} respira={17_000} deriva={{ dx: -130 * k, dy: -90 * k, escala: 1.12, ms: 22_000 }} />
+    </>
   );
 }
 
 /**
- * As partículas.
- *
- * 🔴 AS POSIÇÕES SÃO UMA CONSTANTE DE MÓDULO, não um `Math.random()` no corpo do
- * componente. Sorteadas na render, elas mudariam de lugar a cada troca de tema ou de
- * orientação — o fundo piscaria. Percentuais, para acompanharem qualquer tamanho de tela.
- * A camada inteira deriva 18 px num ciclo lento — um movimento só para 15 pontos.
+ * A aurora do PC: dois discos com faixas nas cores das manchas, girando em sentidos opostos.
+ * O PC usa `conic-gradient` com `blur(60px)`; aqui faixas lineares bem suaves girando dão a
+ * mesma luz que varre. `vivo` acende (0,16 → 0,30, como o `body.vivo .aurora`).
  */
-const PARTICULAS = [
-  { x: '12%', y: '14%', d: 3 }, { x: '31%', y: '7%',  d: 2 }, { x: '68%', y: '11%', d: 2 },
-  { x: '84%', y: '22%', d: 3 }, { x: '22%', y: '33%', d: 2 }, { x: '57%', y: '29%', d: 4 },
-  { x: '78%', y: '41%', d: 2 }, { x: '15%', y: '52%', d: 3 }, { x: '44%', y: '58%', d: 2 },
-  { x: '88%', y: '63%', d: 2 }, { x: '27%', y: '71%', d: 4 }, { x: '62%', y: '77%', d: 3 },
-  { x: '9%',  y: '84%', d: 2 }, { x: '73%', y: '89%', d: 2 }, { x: '40%', y: '93%', d: 3 },
+function Aurora({ cores, base, vivo, lado }: { cores: readonly [string, string, string]; base: number; vivo: boolean; lado: number }) {
+  const a1 = useSharedValue(0), a2 = useSharedValue(0), luz = useSharedValue(base);
+  useEffect(() => {
+    a1.value = withRepeat(withTiming(360, { duration: 90_000, easing: Easing.linear, reduceMotion: ReduceMotion.System }), -1, false);
+    a2.value = withRepeat(withTiming(-360, { duration: 130_000, easing: Easing.linear, reduceMotion: ReduceMotion.System }), -1, false);
+    return () => { cancelAnimation(a1); cancelAnimation(a2); };
+  }, [a1, a2]);
+  useEffect(() => { luz.value = withTiming(vivo ? base * 1.9 : base, { duration: 1200 }); }, [vivo, base, luz]);
+  const e1 = useAnimatedStyle(() => ({ opacity: luz.value, transform: [{ rotate: `${a1.value}deg` }] }));
+  const e2 = useAnimatedStyle(() => ({ opacity: luz.value * 0.62, transform: [{ rotate: `${a2.value}deg` }] }));
+  const disco = { position: 'absolute' as const, width: lado, height: lado, borderRadius: lado / 2, top: '50%' as const, left: '50%' as const, marginTop: -lado / 2, marginLeft: -lado / 2, overflow: 'hidden' as const };
+  const faixas = (
+    <LinearGradient
+      colors={['transparent', cores[0], 'transparent', cores[1], 'transparent', cores[2], 'transparent']}
+      locations={[0, 0.17, 0.33, 0.55, 0.72, 0.89, 1]}
+      start={{ x: 0, y: 0.3 }} end={{ x: 1, y: 0.7 }}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[disco, e1]}>{faixas}</Animated.View>
+      <Animated.View pointerEvents="none" style={[disco, e2]}>{faixas}</Animated.View>
+    </>
+  );
+}
+
+/** Um `.ely-shaft`: faixa diagonal de luz, deslizando e pulsando (0,06 ↔ 0,12). */
+function Feixe({ cor, left, largura, de, ate, ms, pulso, fraco, altura }: {
+  cor: string; left: `${number}%`; largura: `${number}%`; de: number; ate: number; ms: number; pulso: number; fraco?: boolean; altura: number;
+}) {
+  const d = useVaiVem(ms);
+  const p = useVaiVem(pulso, fraco ? 6000 : 0);
+  const [o0, o1] = fraco ? [0.04, 0.08] : [0.06, 0.12];
+  const estilo = useAnimatedStyle(() => ({
+    opacity: o0 + (o1 - o0) * p.value,
+    transform: [{ translateX: de + (ate - de) * d.value }, { rotate: '14deg' }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -altura * 0.3, height: altura * 1.6, left, width: largura }, estilo]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <RadialGradient id={`feixe${left.replace("%", "")}`} cx="50%" cy="50%" rx="50%" ry="50%">
+            <Stop offset="0" stopColor={cor} stopOpacity={1} />
+            <Stop offset="0.6" stopColor={cor} stopOpacity={0.45} />
+            <Stop offset="1" stopColor={cor} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#feixe${left.replace("%", "")})`} />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** Os três `.bg-traco`: linhas de 1 px inclinadas, quase invisíveis, deslizando bem devagar. */
+function Tracos({ cor, cor2, altura }: { cor: string; cor2: string; altura: number }) {
+  const linhas = [
+    { left: '22%' as const, rot: '9deg', de: -40, ate: 60, ms: 68_000, c: cor },
+    { left: '54%' as const, rot: '-7deg', de: 50, ate: -70, ms: 84_000, c: cor2 },
+    { left: '81%' as const, rot: '5deg', de: 30, ate: -50, ms: 76_000, c: cor },
+  ];
+  return <>{linhas.map((l) => <Traco key={l.left} {...l} altura={altura} />)}</>;
+}
+function Traco({ left, rot, de, ate, ms, c, altura }: { left: `${number}%`; rot: string; de: number; ate: number; ms: number; c: string; altura: number }) {
+  const t = useVaiVem(ms);
+  const estilo = useAnimatedStyle(() => ({ transform: [{ translateX: de + (ate - de) * t.value }, { rotate: rot }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -altura * 0.2, height: altura * 1.4, width: 1, left, opacity: 0.09 }, estilo]}>
+      <LinearGradient colors={['transparent', c, 'transparent']} style={StyleSheet.absoluteFill} />
+    </Animated.View>
+  );
+}
+
+/** `#bg-poeira`: oito pontos de 2 px, cada um no seu ritmo (posições fixas, não sorteadas). */
+const POEIRA = [
+  { x: '12%', y: '18%', d: 46_000, a: 0.22 }, { x: '34%', y: '72%', d: 58_000, a: 0.18 },
+  { x: '58%', y: '24%', d: 52_000, a: 0.26 }, { x: '82%', y: '58%', d: 64_000, a: 0.2 },
+  { x: '24%', y: '44%', d: 40_000, a: 0.16 }, { x: '70%', y: '84%', d: 56_000, a: 0.22 },
+  { x: '46%', y: '9%', d: 48_000, a: 0.18 }, { x: '90%', y: '30%', d: 60_000, a: 0.24 },
 ] as const;
-
-function Particulas({ cor, forca }: { cor: string; forca: number }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.value = withRepeat(withTiming(1, { duration: 38_000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }), -1, true);
-    return () => cancelAnimation(t);
-  }, [t]);
-  const estilo = useAnimatedStyle(() => ({
-    transform: [{ translateX: t.value * 18 }, { translateY: -t.value * 24 }],
-  }));
-  return (
-    <Animated.View style={[StyleSheet.absoluteFill, estilo]} pointerEvents="none">
-      {PARTICULAS.map((p, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            left: p.x,
-            top: p.y,
-            width: p.d,
-            height: p.d,
-            borderRadius: p.d / 2,
-            backgroundColor: cor,
-            // As maiores um pouco mais fortes: uniformizar tira a leitura de distância.
-            opacity: forca * (0.6 + p.d / 10),
-          }}
-        />
-      ))}
-    </Animated.View>
-  );
+function Grao({ x, y, d, a, cor }: { x: string; y: string; d: number; a: number; cor: string }) {
+  const t = useVaiVem(d);
+  const estilo = useAnimatedStyle(() => ({ transform: [{ translateX: t.value * 26 }, { translateY: t.value * -34 }] }));
+  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: x as `${number}%`, top: y as `${number}%`, width: 2, height: 2, borderRadius: 1, backgroundColor: cor, opacity: a }, estilo]} />;
+}
+function Poeira({ cor }: { cor: string }) {
+  return <>{POEIRA.map((p) => <Grao key={p.x + p.y} {...p} cor={cor} />)}</>;
 }
 
 /**
- * Fase 23: o fundo "vivo" do PC — quando a Ely ouve, pensa ou fala, uma luz larga acende no
- * meio da tela e apaga quando ela termina. Só opacidade (compositor), nada repinta.
+ * Stark: a grade técnica de 46 px do `stark.css`, que some para as bordas (a máscara radial
+ * de lá vira um véu radial da cor do fundo por cima), e a varredura — uma faixa de 140 px
+ * descendo a tela a cada 11 s (4 s com a Ely viva).
  */
-function BrilhoVivo({ cor }: { cor: string }) {
-  const fala = useFala();
-  const estado = estadoDaBolota(useFaseDaBolota(), fala.falando);
-  const op = useSharedValue(0);
+function GradeStark({ cor, fundo, largura, altura, vivo }: { cor: string; fundo: string; largura: number; altura: number; vivo: boolean }) {
+  const passo = 46;
+  const verticais = useMemo(() => Array.from({ length: Math.ceil(largura / passo) + 1 }, (_, i) => i * passo), [largura]);
+  const horizontais = useMemo(() => Array.from({ length: Math.ceil(altura / passo) + 1 }, (_, i) => i * passo), [altura]);
+  const y = useSharedValue(-160);
   useEffect(() => {
-    op.value = withTiming(estado === 'dormindo' ? 0 : 1, { duration: estado === 'dormindo' ? 1200 : 500, reduceMotion: ReduceMotion.System });
-  }, [estado, op]);
-  const estilo = useAnimatedStyle(() => ({ opacity: op.value }));
+    y.value = -160;
+    y.value = withRepeat(withTiming(altura * 1.2, { duration: vivo ? 4000 : 11_000, easing: Easing.linear, reduceMotion: ReduceMotion.System }), -1, false);
+    return () => cancelAnimation(y);
+  }, [vivo, altura, y]);
+  const varre = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, estilo]} pointerEvents="none">
-      <Mancha cor={cor} opacidade={0.32} tamanho={520} style={styles.vivo} deriva={{ dx: 20, dy: -30, ms: 9_000, escala: 1.1 }} />
-    </Animated.View>
+    <>
+      <Svg width={largura} height={altura} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id="mascaraGrade" cx="50%" cy="35%" rx="70%" ry="60%">
+            <Stop offset="0.3" stopColor={fundo} stopOpacity={0} />
+            <Stop offset="1" stopColor={fundo} stopOpacity={1} />
+          </RadialGradient>
+        </Defs>
+        {verticais.map((x) => <Line key={`v${x}`} x1={x} y1={0} x2={x} y2={altura} stroke={cor} strokeOpacity={0.06} strokeWidth={1} />)}
+        {horizontais.map((h) => <Line key={`h${h}`} x1={0} y1={h} x2={largura} y2={h} stroke={cor} strokeOpacity={0.06} strokeWidth={1} />)}
+        <Rect width={largura} height={altura} fill="url(#mascaraGrade)" />
+      </Svg>
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: 140 }, varre]}>
+        <LinearGradient colors={['transparent', cor, 'transparent']} style={[StyleSheet.absoluteFill, { opacity: 0.07 }]} />
+      </Animated.View>
+    </>
   );
+}
+
+/** A Ely está ouvindo, pensando ou falando — o `body.vivo` do PC. */
+function useVivo(): boolean {
+  const fala = useFala();
+  return estadoDaBolota(useFaseDaBolota(), fala.falando) !== 'dormindo';
 }
 
 export function AppBackground() {
   const { palette, familiaResolvida } = useTheme();
-  const noite = familiaResolvida !== 'lg';
+  const { width, height } = useWindowDimensions();
+  const vivo = useVivo();
+  // O PC desenha para uma janela de ~1024 px; aqui tudo escala pela largura da tela.
+  const k = Math.max(0.42, Math.min(1, width / 1024)) * 1.25;
+  const lado = Math.max(width, height) * 1.4;
 
-  // O meio do gradiente clareia no vidro e escurece na noite. Um valor fixo deixaria uma
-  // faixa clara atravessando a tela na família escura.
-  const middle = noite ? '#12151D' : '#EEF0F6';
-
-  // 13/10: a Renascença troca as manchas e os feixes pela nogueira com damasco e a arte de estudo.
   if (familiaResolvida === 'renascenca') {
     return (
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
         <FundoRenascenca fundo={palette.background} ouro={palette.primary} pigmento={palette.accent} />
-        <Particulas cor={palette.primary} forca={0.28} />
-        <BrilhoVivo cor={palette.primary} />
+        <Poeira cor={palette.primary} />
       </View>
     );
   }
 
+  const stark = familiaResolvida === 'stark';
+  const ely = familiaResolvida === 'ely';
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <LinearGradient
-        colors={[palette.background, middle, palette.background]}
-        locations={[0, 0.55, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <Aurora cores={[palette.primary, palette.accent, palette.primarySoft]} opacidade={noite ? 0.10 : 0.16} />
-      {/* Mais forte na noite: sobre fundo quase preto, pouca opacidade some. */}
-      <Mancha cor={palette.primary} opacidade={noite ? 0.42 : 0.26} tamanho={420} style={styles.top}
-        deriva={{ dx: -50, dy: 40, ms: 16_000, escala: 1.12 }} />
-      <Mancha cor={palette.accent}  opacidade={noite ? 0.34 : 0.22} tamanho={440} style={styles.bottom}
-        deriva={{ dx: 60, dy: -50, ms: 21_000, escala: 1.08 }} />
-      {/* As duas do meio existem para o vidro ter variação onde ficam os cards. */}
-      <Mancha cor={palette.accent}  opacidade={noite ? 0.22 : 0.15} tamanho={300} style={styles.meioEsq}
-        deriva={{ dx: 45, dy: 30, ms: 14_000, escala: 0.9 }} />
-      <Mancha cor={palette.primary} opacidade={noite ? 0.20 : 0.13} tamanho={260} style={styles.meioDir}
-        deriva={{ dx: -40, dy: -60, ms: 26_000, escala: 1.15 }} />
-      <Tracos cor={palette.primary} forca={noite ? 0.05 : 0.07} />
-      <Particulas cor={noite ? '#FFFFFF' : palette.primary} forca={noite ? 0.22 : 0.16} />
-      <BrilhoVivo cor={palette.primary} />
-      {noite && (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background, overflow: 'hidden' }]} pointerEvents="none">
+      <Aurora cores={palette.blobs} base={ely ? 0.1 : 0.16} vivo={vivo} lado={lado} />
+      {stark
+        ? <GradeStark cor={palette.primary} fundo={palette.background} largura={width} altura={height} vivo={vivo} />
+        : <Manchas blobs={palette.blobs} k={k} />}
+      {ely && (
         <>
-          <Feixe cor={palette.primary} opacidade={0.07} left="-5%" rot="-18deg" ms={40_000} dx={70} />
-          <Feixe cor={palette.primary} opacidade={0.045} left="35%" rot="-24deg" ms={56_000} dx={-90} />
+          <Feixe cor={palette.primary} left="6%" largura="42%" de={-40 * k} ate={150 * k} ms={24_000} pulso={9_000} altura={height} />
+          <Feixe cor={palette.primary} left="56%" largura="42%" de={40 * k} ate={-170 * k} ms={30_000} pulso={12_000} altura={height} />
+          <Feixe cor={palette.primary} left="44%" largura="26%" de={90 * k} ate={-90 * k} ms={36_000} pulso={15_000} fraco altura={height} />
         </>
       )}
+      <Tracos cor={palette.primary} cor2={palette.accent} altura={height} />
+      <Poeira cor={palette.primary} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  top: { position: 'absolute', top: -130, right: -110 },
-  bottom: { position: 'absolute', bottom: 10, left: -150 },
-  meioEsq: { position: 'absolute', top: '32%', left: -120 },
-  meioDir: { position: 'absolute', top: '54%', right: -90 },
-  vivo: { position: 'absolute', top: '22%', left: '50%', marginLeft: -260 },
-  // Fino e longo: comprimento maior que a diagonal da tela para o giro não deixar ponta à
-  // vista, e 2 px de altura porque acima disso deixa de ser traço e vira faixa.
-  traco: { position: 'absolute', left: '-30%', width: '160%', height: 2 },
-  // Mais alto que a tela para a diagonal não deixar canto vazio ao girar.
-  feixe: { position: 'absolute', top: '-25%', width: '55%', height: '150%' },
-  // Disco maior que a diagonal de qualquer telefone (≈ 1000 px), centrado.
-  aurora: { position: 'absolute', width: 1400, height: 1400, borderRadius: 700, top: '50%', left: '50%', marginTop: -700, marginLeft: -700 },
-});

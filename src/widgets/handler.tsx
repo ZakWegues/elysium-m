@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { registerWidgetTaskHandler, requestWidgetUpdate, type WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { loadPairing, Pairing } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
@@ -212,7 +213,8 @@ async function executarAcao(acao: string, pairing: Pairing | null): Promise<stri
   }
 }
 
-registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
+// Só no Android (a prévia web do app, usada para comparar as telas com o PC, não tem widget).
+if (Platform.OS === 'android') registerWidgetTaskHandler(async (props: WidgetTaskHandlerProps) => {
   const { widgetInfo, widgetAction, renderWidget, clickAction, clickActionData } = props;
   if (widgetAction === 'WIDGET_DELETED') return;
   const p = await paletaDosWidgets();

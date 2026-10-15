@@ -21,6 +21,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
 import { AjustesProvider, AppBackground, BlurTargetProvider, GlassModal, SobreposicaoContext } from './src/components/ui';
+import { CamadaEstouros, registrarToque } from './src/components/Estouros';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
@@ -457,7 +458,8 @@ function AppInner() {
     // de abas porque gaveta não é destino de navegação.
     <AjustesProvider abrir={() => setSettingsModalVisible(true)}>
     <SobreposicaoContext.Provider value={sobreposicao}>
-    <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}>
+    <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}
+      onTouchStart={(e) => registrarToque(e.nativeEvent.pageX, e.nativeEvent.pageY)}>
       {/* Só o fundo entra no alvo de desfoque. Incluir as telas faria cada card de
           vidro tentar desfocar uma árvore que o contém. */}
       <BlurTargetProvider>
@@ -560,6 +562,8 @@ function AppInner() {
       <GlassModal title="Ajustes" visible={settingsModalVisible} onClose={() => setSettingsModalVisible(false)}>
         <SettingsScreen pairing={pairing} onUnpair={handleUnpair} onTrocarPc={handleTrocarPc} onAdicionarPc={handleAdicionarPc} />
       </GlassModal>
+      {/* Fase 23.1: estouros e fogos por cima de tudo (micro-detalhes do PC). */}
+      <CamadaEstouros />
     </View>
     </SobreposicaoContext.Provider>
     </AjustesProvider>

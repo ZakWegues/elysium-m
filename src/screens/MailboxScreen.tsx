@@ -21,7 +21,7 @@ import { loadFavorites, saveCache, loadCache, toggleFavorite as toggleFavoriteSt
 import { callRpc } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
-import { useTheme } from '../theme';
+import { comAlfa, useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { abrirNoCelular, planejarEnvio, resumoDosArquivos, salvarNoCelular } from '../lib/anexos';
@@ -395,8 +395,9 @@ export default function MailboxScreen({
         scrollEventThrottle={64}
         renderItem={({ item }) => {
           const mine = item.from === 'mobile';
-          const bg = mine ? palette.primary : palette.surfaceRaised;
-          const color = mine ? palette.onPrimary : palette.text;
+          // Fase 23.1: mesma bolha do chat da Ely e do PC — translúcida, não um bloco sólido.
+          const bg = mine ? comAlfa(palette.familia === 'renascenca' ? palette.accent : palette.primary, 0.18) : (palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)');
+          const color = palette.text;
           const isImage = item.attachment?.mimeType.startsWith('image/') ?? false;
           return (
             <Pressable
@@ -413,8 +414,8 @@ export default function MailboxScreen({
                     borderRadius: tokens.radii.lg,
                     padding: isImage ? tokens.spacing.xs : tokens.spacing.md,
                     backgroundColor: bg,
-                    borderWidth: mine ? 0 : StyleSheet.hairlineWidth,
-                    borderColor: palette.border,
+                    borderWidth: 1,
+                    borderColor: mine ? comAlfa(palette.familia === 'renascenca' ? palette.accent : palette.primary, 0.35) : palette.border,
                   },
                 ]}
               >
@@ -434,7 +435,7 @@ export default function MailboxScreen({
                     />
                   ) : (
                     <View style={[styles.previewImage, styles.previewLoading, { borderRadius: tokens.radii.md }]}>
-                      <ActivityIndicator size="small" color={mine ? palette.onPrimary : palette.primary} />
+                      <ActivityIndicator size="small" color={palette.primary} />
                     </View>
                   )
                 ) : (

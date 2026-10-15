@@ -11,6 +11,7 @@ import { haptica } from '../lib/haptica';
 import { agruparTarefas, atrasada, filtrarTarefas, mascaraHora, montarQuando, proximosDias, quandoTarefa, validarHora } from '../lib/tarefasUi';
 import { useTheme } from '../theme';
 import { Button, GlassModal, Snackbar, SobreposicaoContext, Text, useDesfazer } from '../components/ui';
+import { estourarNoToque } from '../components/Estouros';
 import { useAbaAtiva } from '../components/AbaViva';
 
 /**
@@ -85,6 +86,7 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
   // ── ações ──
   async function concluirRapido(t: Tarefa) {
     haptica.sucesso();
+    estourarNoToque();
     setTodas(l => l && l.map(x => (x.id === t.id ? { ...x, feita: true, feitaEm: Date.now() } : x)));
     try {
       const r = await callRpc(pairing, 'tarefas.concluir', { id: t.id });

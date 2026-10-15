@@ -191,7 +191,10 @@ export function TabBar({
               styles.indicador,
               palette.familia === 'renascenca'
                 ? { backgroundColor: 'transparent', borderBottomWidth: 1.5, borderBottomColor: palette.primary, borderRadius: 0 }
-                : { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md },
+                // Fase 23.1: no Stark a aba ativa é um contorno fino na cor do reator, como no PC.
+                : palette.familia === 'stark'
+                  ? { backgroundColor: 'rgba(0,0,0,0)', borderWidth: 1, borderColor: palette.primary, borderRadius: tokens.radii.md }
+                  : { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md },
               estiloIndicador,
             ]}
           >
@@ -256,13 +259,13 @@ function Aba({
       <View style={styles.camadas}>
         <View style={styles.camada}>
           <Feather name={tab.icon} size={22} color={palette.textMuted} />
-          <Text variant="caption" color={palette.textMuted} style={styles.label} maxFontSizeMultiplier={1.2} numberOfLines={1}>
+          <Text variant="caption" color={palette.textMuted} style={[styles.label, palette.familia === 'stark' && styles.labelStark]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
             {tab.label}
           </Text>
         </View>
         <Animated.View style={[styles.camada, styles.camadaAcesa, aceso]}>
           <Feather name={tab.icon} size={22} color={palette.primary} />
-          <Text variant="caption" color={palette.primary} style={styles.label} maxFontSizeMultiplier={1.2} numberOfLines={1}>
+          <Text variant="caption" color={palette.primary} style={[styles.label, palette.familia === 'stark' && styles.labelStark]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
             {tab.label}
           </Text>
         </Animated.View>
@@ -305,6 +308,8 @@ const styles = StyleSheet.create({
   // anda — só `transform`, como manda a escala do bloco 24.
   // Altura fixa em vez de `bottom`: a linha cresce com o inset da barra de gestos do
   // Android, e um polegar preso ao rodapé escorregaria para dentro dessa faixa vazia.
+  // Fase 23.1: o rótulo técnico do Stark do PC (maiúsculas espaçadas).
+  labelStark: { textTransform: 'uppercase', letterSpacing: 1.2, fontSize: 10 },
   indicador: {
     position: 'absolute',
     left: 0,
