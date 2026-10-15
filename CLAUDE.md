@@ -18,3 +18,7 @@ cada conversa. O conteúdo histórico está no git.
   cliente no mesmo trabalho.
 - Build do APK: `npm run build:local` (aqui, ~3 min). Correção só de JS: `npm run update "msg"`.
 - Antes de escrever código, veja o `AGENTS.md`: leia a doc versionada do Expo v57.
+
+## Compact instructions
+Ao compactar, preserve: arquivos modificados, decisões tomadas, erros ainda não resolvidos,
+versões/OTAs publicadas (com o runtime Android) e o próximo passo.
