@@ -3,7 +3,7 @@
     "name": "ELYSIUM-M",
     "slug": "neuroaxis-portal",
     "scheme": "elysium",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "orientation": "portrait",
     "updates": {
       "url": "https://u.expo.dev/a9c62871-2d6d-4e05-b458-1e58655449b5",
@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.zak.elysium.m",
-      "versionCode": 22,
+      "versionCode": 23,
       "adaptiveIcon": {
         "backgroundColor": "#0a0c14",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -188,6 +188,19 @@
               "updatePeriodMillis": 1800000
             },
             {
+              "name": "Esfera",
+              "label": "ELYSIUM — Esfera da Ely",
+              "description": "A esfera da Ely na tela inicial. Um toque e ela já está ouvindo.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "250dp",
+              "maxResizeHeight": "250dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 0
+            },
+            {
               "name": "Falar",
               "label": "ELYSIUM — Falar com a Ely",
               "description": "Um toque e a Ely já está ouvindo o seu pedido.",
@@ -305,7 +318,8 @@
             "backgroundColor": "#0a0c14"
           }
         }
-      ]
+      ],
+      ["expo-share-intent", { "androidIntentFilters": ["text/*", "image/*"], "disableIOS": true }]
     ],
     "extra": {
       "eas": {

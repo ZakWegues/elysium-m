@@ -1,6 +1,6 @@
 {
   "name": "elysium-m",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "main": "index.ts",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -25,6 +25,7 @@
     "expo-notifications": "~57.0.8",
     "expo-quick-actions": "^6.0.2",
     "expo-secure-store": "~57.0.1",
+    "expo-share-intent": "8.0.1",
     "expo-speech": "~57.0.1",
     "expo-speech-recognition": "^57.1.0",
     "expo-splash-screen": "~57.0.9",
