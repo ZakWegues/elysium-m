@@ -137,10 +137,6 @@ export function useFala(): EstadoFala {
   }, []);
   return e;
 }
-/** Compatível com quem só queria saber se está falando (02/10). Pausada conta como falando. */
-export function useFalando(): boolean {
-  return useFala().falando;
-}
 
 /**
  * Pausa/retomada. Cada modo de fala registra aqui como pausar e retomar o que está tocando;

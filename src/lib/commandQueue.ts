@@ -52,9 +52,6 @@ export async function removeFromQueue(id: string): Promise<void> {
   await writeQueue(items.filter(i => i.id !== id));
 }
 
-export async function clearQueue(): Promise<void> {
-  await AsyncStorage.removeItem(KEY());
-}
 
 /**
  * Reenvia tudo que está na fila, na ordem original.

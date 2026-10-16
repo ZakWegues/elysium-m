@@ -124,11 +124,6 @@ export const SUAVE_UI = EasingUI.bezier(0.2, 0.8, 0.2, 1);
  */
 export const MOLA_UI = { stiffness: 380, damping: 22, mass: 1 } as const;
 
-/** Duração já respeitando a acessibilidade, do lado da UI. */
-export function durUI(ms: number): number {
-  'worklet';
-  return reduzirUI.value ? 0 : ms;
-}
 
 /**
  * 🔴 VALOR PADRÃO EM PARÂMETRO DE WORKLET DERRUBA O APP.

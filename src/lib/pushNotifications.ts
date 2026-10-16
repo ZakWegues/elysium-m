@@ -112,9 +112,6 @@ export async function registerForPush(pairing: Pairing): Promise<PushRegistratio
   return { status: 'registered', token };
 }
 
-export async function unregisterFromPush(pairing: Pairing, token: string): Promise<void> {
-  await callRpc(pairing, 'push.unregister', { token });
-}
 
 /** Para a tela de Ajustes explicar a situação antes de o usuário tentar. */
 export function pushAvailability(): { available: boolean; reason?: string } {

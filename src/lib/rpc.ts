@@ -820,16 +820,3 @@ export async function callRpc<M extends RpcMethod>(
   return body.result;
 }
 
-/** Métodos que o desktop conectado expõe — útil quando as versões divergem. */
-export async function listRemoteMethods(
-  pairing: Pairing
-): Promise<{ method: string; destructive: boolean }[]> {
-  const res = await fetchWithTimeout(
-    `${baseUrl(pairing)}/api/rpc`,
-    { headers: { Authorization: `Bearer ${pairing.token}` } },
-    DEFAULT_TIMEOUT_MS
-  );
-  if (!res.ok) return [];
-  const body = (await res.json()) as { methods?: { method: string; destructive: boolean }[] };
-  return body.methods ?? [];
-}

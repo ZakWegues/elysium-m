@@ -25,17 +25,6 @@ export const METRICS: MetricDef[] = [
 // timestamp é metadado do frame, battery_charging é consumido junto da métrica de bateria.
 export const HIDDEN_KEYS = new Set(['timestamp', 'battery_charging']);
 
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = n / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
-}
 
 export function findMetric(key: string): MetricDef | undefined {
   return METRICS.find((m) => m.keys.includes(key));

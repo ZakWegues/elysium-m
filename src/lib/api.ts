@@ -1,24 +1,12 @@
 import { baseUrl, Pairing } from './pairing';
 import {
-  AuthError, fetchWithTimeout, COMMAND_TIMEOUT_MS, PROBE_TIMEOUT_MS,
+  AuthError, fetchWithTimeout, COMMAND_TIMEOUT_MS,
 } from './http';
 
 // Reexportado porque várias telas já importam AuthError daqui; a definição vive
 // em http.ts para não criar ciclo com pairing.ts.
 export { AuthError } from './http';
 
-export async function checkHealth(pairing: Pairing): Promise<boolean> {
-  try {
-    const res = await fetchWithTimeout(
-      `${baseUrl(pairing)}/api/health`,
-      { headers: { Authorization: `Bearer ${pairing.token}` } },
-      PROBE_TIMEOUT_MS
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 export async function sendCommand(pairing: Pairing, text: string, canal: 'voz' | 'texto' = 'voz'): Promise<string> {
   const res = await fetchWithTimeout(
