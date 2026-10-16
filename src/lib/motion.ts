@@ -43,20 +43,16 @@ import {
 
 export const MOV = {
   /** hover, foco, toggle */
-  micro: 120,
+  micro: 140,
   /** troca de tela, card entrando */
-  base: 220,
+  base: 260,
   /** saída é sempre mais rápida que entrada */
-  saida: 140,
+  saida: 160,
 } as const;
 
-/** Equivalente ao `cubic-bezier(0.2, 0, 0.2, 1)` do desktop. */
-export const CURVA = Easing.bezier(0.2, 0, 0.2, 1);
-/** Equivalente ao `cubic-bezier(0.2, 0.8, 0.2, 1)`. */
-export const SUAVE = Easing.bezier(0.2, 0.8, 0.2, 1);
+/** Equivalente ao `cubic-bezier(0.22, 1, 0.36, 1)` do desktop (ease-out quint, fase 23.2). */
+export const SUAVE = Easing.bezier(0.22, 1, 0.36, 1);
 
-/** Mola do popover: passa um pouco do alvo e volta. */
-export const MOLA = { tension: 380, friction: 22, useNativeDriver: true } as const;
 
 /**
  * Quem liga "reduzir movimento" no Android costuma ter um motivo físico. A leitura é
@@ -112,8 +108,8 @@ export function anima(
 
 /** `cubic-bezier(0.2, 0, 0.2, 1)` — a curva do micro, para worklets. */
 export const CURVA_UI = EasingUI.bezier(0.2, 0, 0.2, 1);
-/** `cubic-bezier(0.2, 0.8, 0.2, 1)` — a curva padrão, para worklets. */
-export const SUAVE_UI = EasingUI.bezier(0.2, 0.8, 0.2, 1);
+/** `cubic-bezier(0.22, 1, 0.36, 1)` — a curva padrão, para worklets. */
+export const SUAVE_UI = EasingUI.bezier(0.22, 1, 0.36, 1);
 
 /**
  * A mola do popover, traduzida.
@@ -151,7 +147,7 @@ export function tempo(
 ) {
   'worklet';
   const duracao = reduzirUI.value ? 0 : (ms ?? 220);
-  const curva = easing ?? EasingUI.bezier(0.2, 0.8, 0.2, 1);
+  const curva = easing ?? EasingUI.bezier(0.22, 1, 0.36, 1);
   return withTiming(para, { duration: duracao, easing: curva }, aoFim);
 }
 

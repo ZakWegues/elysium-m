@@ -9,11 +9,11 @@ export const spacing = {
 } as const;
 
 export const radii = {
-  sm: 10,
-  md: 14,
-  lg: 20,
-  xl: 28,
-  '2xl': 34,
+  sm: 12,
+  md: 16,
+  lg: 24,
+  xl: 30,
+  '2xl': 36,
   full: 999,
 } as const;
 

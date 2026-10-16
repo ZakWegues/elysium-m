@@ -18,7 +18,7 @@ export function Card({ glass = false, blur = false, style, children, ...rest }: 
       style={[
         {
           // Stark: canto mais reto, senão o arredondado engole as cantoneiras HUD.
-          borderRadius: renascenca ? 5 : palette.familia === 'stark' ? 8 : tokens.radii.lg,
+          borderRadius: renascenca ? 5 : palette.familia === 'stark' ? 14 : tokens.radii.lg,
           borderWidth: glass ? 1 : StyleSheet.hairlineWidth,
           borderColor: glass ? palette.glassBorder : palette.border,
           padding: tokens.spacing.lg,
