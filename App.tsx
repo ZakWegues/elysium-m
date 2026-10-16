@@ -28,6 +28,7 @@ import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
 import { useCompartilharDoAndroid, useShareIntent } from './src/lib/shareIntent';
+import { pedirSobreImagem } from './src/lib/imagemParaEly';
 import { MOV, tempo } from './src/lib/motion';
 import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedirPermissao } from './src/lib/notificacoes';
 import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/estadoPc';
@@ -274,7 +275,10 @@ function AppInner() {
   const compartilhadoParaEly = useCallback((texto: string) => {
     setPerguntaPendente(texto); setModoChat('ia'); setScreen('chat');
   }, []);
-  useCompartilharDoAndroid(pairing, compartilhadoParaEly, handleShared);
+  const imagemParaEly = useCallback((base64: string, pergunta: string) => {
+    pedirSobreImagem(base64, pergunta); setModoChat('ia'); setScreen('chat');
+  }, []);
+  useCompartilharDoAndroid(pairing, compartilhadoParaEly, handleShared, imagemParaEly);
 
   // Atalhos do ícone (toque longo, bloco 123). Não uso o useQuickActionCallback da lib: ele
   // refaz o efeito a cada callback novo e dispararia o atalho inicial de novo a cada troca de

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
+import { aoChegarImagem, pegarImagemPendente } from '../lib/imagemParaEly';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CHAVE_NOME, saudacao } from './inicio/tipos';
 import AnimatedReanimated, {
@@ -340,6 +341,27 @@ export default function ChatScreen({
     setMessages((prev) => [...prev, { id: `ely-${Date.now()}`, from: 'reply', text: texto, ts: Date.now() }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [falaDaEly]);
+
+  // Fase 23.2: imagem compartilhada de outro app → a Ely olha (mesmo caminho da câmera).
+  useEffect(() => {
+    const tratar = async () => {
+      const img = pegarImagemPendente();
+      if (!img) return;
+      const ts = Date.now();
+      setMessages((prev) => [...prev, { id: `me-${ts}`, from: 'me', text: `🖼️ ${img.pergunta}`, ts }]);
+      setSending(true);
+      try {
+        const res = await callRpc(pairing, 'vision.ask', { imageBase64: img.base64, question: img.pergunta }, { timeoutMs: 90000 });
+        setMessages((prev) => [...prev, { id: `reply-${ts + 1}`, from: 'reply', text: res.answer, ts: Date.now() }]);
+        lerRespostasEscritas().then((ler) => { if (ler) falar(res.answer, pairing); });
+      } catch (err) {
+        setMessages((prev) => [...prev, { id: `err-${ts + 1}`, from: 'error', text: `Não consegui olhar a imagem: ${errMessage(err)}`, ts: Date.now() }]);
+      } finally { setSending(false); }
+    };
+    void tratar();
+    return aoChegarImagem(() => { void tratar(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Pergunta vinda da busca da Início. Limpa ANTES de enviar: se o envio falhar e o
   // componente remontar, a pergunta não pode ser disparada de novo sozinha.

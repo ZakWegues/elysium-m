@@ -98,7 +98,7 @@ export function useShareIntent(
 // Antes só chegava o que alguém mandava pelo esquema `elysium://share`. Com o
 // `expo-share-intent`, o Elysium aparece na folha de compartilhar de qualquer app (texto,
 // link, imagem). Ao chegar, a pergunta é para onde: a Ely (vira pergunta no chat) ou o PC
-// (cai na Caixa, como antes). Imagem só vai para o PC — o chat da Ely recebe texto.
+// (cai na Caixa, como antes). Imagem pode ir para a Ely também (fase 23.2: ela olha pelo vision.ask).
 
 export type Destino = 'ely' | 'pc';
 export interface Compartilhado { texto: string | null; arquivo: { uri: string; nome: string; mimeType: string; bytes: number } | null }
@@ -116,6 +116,7 @@ export function useCompartilharDoAndroid(
   pairing: Pairing | null,
   aoMandarParaEly: (texto: string) => void,
   aoMandarParaPc: (resumo: string, ok: boolean) => void,
+  aoMandarImagemParaEly?: (base64: string, pergunta: string) => void,
 ) {
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentNativo();
   useEffect(() => {
@@ -142,7 +143,18 @@ export function useCompartilharDoAndroid(
     };
     const botoes: { text: string; style?: 'cancel'; onPress?: () => void }[] = [{ text: 'Cancelar', style: 'cancel' }];
     if (c.texto && !c.arquivo) botoes.push({ text: 'Ely', onPress: () => aoMandarParaEly(c.texto!) });
+    // Fase 23.2: imagem → a Ely olha e responde (até 5 MB).
+    else if (c.arquivo && /^image\//i.test(c.arquivo.mimeType) && aoMandarImagemParaEly) {
+      botoes.push({ text: 'Ely', onPress: () => { void (async () => {
+        try {
+          const arq = new File(c.arquivo!.uri);
+          const tamanho = c.arquivo!.bytes || arq.size || 0;
+          if (!tamanho || tamanho > MAILBOX_MAX_ATTACHMENT_BYTES) { Alert.alert('Imagem grande demais', 'A Ely olha imagens de até 5 MB.'); return; }
+          aoMandarImagemParaEly(fromByteArray(new Uint8Array(await arq.arrayBuffer())), c.texto ?? '');
+        } catch { Alert.alert('Não consegui abrir a imagem', 'Tente de novo pelo app de origem.'); }
+      })(); } });
+    }
     botoes.push({ text: 'PC', onPress: () => { void paraPc(); } });
     Alert.alert('Mandar para…', resumo, botoes, { cancelable: true });
-  }, [hasShareIntent, shareIntent, pairing, resetShareIntent, aoMandarParaEly, aoMandarParaPc]);
+  }, [hasShareIntent, shareIntent, pairing, resetShareIntent, aoMandarParaEly, aoMandarParaPc, aoMandarImagemParaEly]);
 }
