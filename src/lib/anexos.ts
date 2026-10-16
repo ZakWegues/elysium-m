@@ -81,8 +81,20 @@ export async function salvarNoCelular(nome: string, mimeType: string, base64: st
   return decodeURIComponent(pasta.name || pasta.uri.split('%3A').pop() || 'pasta escolhida');
 }
 
+/**
+ * Fase 23.2 (blindagem): o que pode ser ABERTO direto vindo do PC. Instalador (.apk) e tipos
+ * desconhecidos não abrem por aqui — dá para salvar e abrir de propósito pelo gerenciador de
+ * arquivos. Pura.
+ */
+export function podeAbrirDireto(nome: string, mimeType: string): boolean {
+  if (/\.(apk|apks|xapk|aab|dex|jar|exe|bat|cmd|sh|js|html?)$/i.test(nome)) return false;
+  if (/android\.package-archive|javascript|html|x-msdownload|x-sh/i.test(mimeType)) return false;
+  return /^(image|video|audio|text)\//i.test(mimeType) || /^application\/(pdf|zip|json|msword|vnd\.(openxmlformats|ms-|oasis))/i.test(mimeType);
+}
+
 /** Abre o anexo no app que o Android escolher para o tipo. */
 export async function abrirNoCelular(nome: string, mimeType: string, base64: string): Promise<void> {
+  if (!podeAbrirDireto(nome, mimeType)) throw new Error('Esse tipo de arquivo não abre direto daqui. Use "Salvar no celular" e abra pelo gerenciador de arquivos.');
   const pasta = new Directory(Paths.cache, 'caixa');
   if (!pasta.exists) pasta.create();
   const arquivo = new File(pasta, nomeSeguro(nome));

@@ -1,9 +1,10 @@
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { haptica } from '../lib/haptica';
 import { Text } from './ui';
 import { useTheme } from '../theme';
+import { abrirLinkSeguro } from '../lib/abrirLink';
 import { Bloco, parseMarkdown, Trecho } from '../lib/markdown';
 
 /**
@@ -23,7 +24,7 @@ export function Markdown({ texto, cor }: { texto: string; cor: string }) {
       case 'italico': return <Text key={i} variant="body" color={cor} style={styles.italico}>{t.texto}</Text>;
       case 'codigo': return <Text key={i} variant="body" color={cor} style={[styles.mono, { backgroundColor: palette.border }]}>{` ${t.texto} `}</Text>;
       case 'link': return (
-        <Text key={i} variant="body" color={palette.primary} style={styles.link} onPress={() => { Linking.openURL(t.url).catch(() => {}); }}>
+        <Text key={i} variant="body" color={palette.primary} style={styles.link} onPress={() => abrirLinkSeguro(t.url)}>
           {t.texto}
         </Text>
       );

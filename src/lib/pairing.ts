@@ -187,19 +187,42 @@ export function baseUrlFor(ip: string, port: number): string {
   return `http://${ip}:${port}`;
 }
 
+/**
+ * Fase 23.2 (blindagem): só endereço de rede privada — casa, Tailscale/ZeroTier, cabo. Um QR
+ * falso (cartaz, print, página) apontando para um servidor na internet levaria o token, a voz
+ * e as conversas para fora. Pura.
+ */
+export function enderecoPrivado(e: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(e);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if ([m[1], m[2], m[3], m[4]].some(x => Number(x) > 255)) return false;
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+      || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254);
+  }
+  const v6 = e.toLowerCase();
+  if (/^f[cd][0-9a-f]{2}:/.test(v6) || /^fe[89ab][0-9a-f]:/.test(v6)) return true;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/.test(v6);
+}
+
 export function parsePairingQr(data: string): Pairing | null {
   try {
+    if (data.length > 4096) return null;
     const obj = JSON.parse(data);
     if (typeof obj.port !== 'number' || typeof obj.token !== 'string') return null;
+    // Fase 23.2: formato esperado e nada mais — porta de app, token só com letras/números.
+    if (!Number.isInteger(obj.port) || obj.port < 1024 || obj.port > 65535) return null;
+    if (!/^[A-Za-z0-9_-]{32,256}$/.test(obj.token)) return null;
+    if (obj.hostname !== undefined && (typeof obj.hostname !== 'string' || !/^[\w.-]{1,63}$/.test(obj.hostname))) return null;
 
     const fromList: string[] = Array.isArray(obj.endpoints)
-      ? obj.endpoints.filter((e: unknown): e is string => typeof e === 'string')
+      ? obj.endpoints.filter((e: unknown): e is string => typeof e === 'string' && enderecoPrivado(e)).slice(0, 8)
       : [];
     // `ip` continua no payload v2 por compatibilidade; serve de fallback se um
     // desktop antigo (v1) gerou o QR.
     const endpoints = fromList.length > 0
       ? fromList
-      : (typeof obj.ip === 'string' ? [obj.ip] : []);
+      : (typeof obj.ip === 'string' && enderecoPrivado(obj.ip) ? [obj.ip] : []);
 
     if (endpoints.length === 0) return null;
 
@@ -216,6 +239,16 @@ export function parsePairingQr(data: string): Pairing | null {
 }
 
 // ── descoberta ────────────────────────────────────────────────────────────────
+
+/** Sem token: o servidor do ELYSIUM responde 401 com `{"error":"Unauthorized"}` no /api/health. */
+async function pareceElysium(ip: string, port: number): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(`${baseUrlFor(ip, port)}/api/health`, {}, PROBE_TIMEOUT_MS);
+    if (res.status !== 401) return false;
+    const corpo = await res.text();
+    return corpo.length < 200 && corpo.includes('Unauthorized');
+  } catch { return false; }
+}
 
 async function probe(ip: string, port: number, token: string): Promise<string> {
   const res = await fetchWithTimeout(
@@ -323,8 +356,10 @@ export async function scanSubnet(
 
   for (let i = 0; i < hosts.length; i += BATCH) {
     const batch = hosts.slice(i, i + BATCH);
+    // Fase 23.2: a varredura NÃO manda o token para os 254 vizinhos — primeiro pergunta sem
+    // token (o ELYSIUM responde 401), e só quem parece ser o ELYSIUM recebe o token.
     const results = await Promise.allSettled(
-      batch.map(ip => probe(ip, pairing.port, pairing.token))
+      batch.map(async ip => { if (!(await pareceElysium(ip, pairing.port))) throw new Error('não é'); return probe(ip, pairing.port, pairing.token); })
     );
     done += batch.length;
     onProgress?.(Math.min(done, hosts.length), hosts.length);

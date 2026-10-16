@@ -9,6 +9,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Segurança: o job só lê o repositório (o GITHUB_TOKEN padrão podia escrever).
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

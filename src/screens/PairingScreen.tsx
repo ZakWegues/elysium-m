@@ -25,6 +25,16 @@ export default function PairingScreen({ onPaired, onCancel }: { onPaired: () => 
       return;
     }
 
+    // Fase 23.2 (blindagem): nada é gravado sem a pessoa ver PARA QUEM está pareando. Um QR
+    // falso com o nome do seu PC levaria conversas e voz para outro servidor.
+    const confirmou = await new Promise<boolean>((r) => Alert.alert(
+      'Parear com este PC?',
+      `${pairing.hostname ?? 'PC sem nome'} · ${pairing.endpoints.slice(0, 2).join(', ')}\n\nSó continue se esse for o seu PC, com o ELYSIUM aberto e mostrando este QR.`,
+      [{ text: 'Cancelar', style: 'cancel', onPress: () => r(false) }, { text: 'Parear', onPress: () => r(true) }],
+      { cancelable: true, onDismiss: () => r(false) },
+    ));
+    if (!confirmou) { setBusy(false); setScanned(false); return; }
+
     // Corre TODOS os endereços do QR, igual à reconexão faz. Testar só o primeiro
     // era o bug: o QR traz o IP da rede local e o do túnel, e a lista começa pelo
     // local — com o celular fora de casa, ou com o caminho local indisponível por

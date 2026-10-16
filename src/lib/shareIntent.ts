@@ -127,8 +127,12 @@ export function useCompartilharDoAndroid(
     const paraPc = async () => {
       try {
         if (c.arquivo) {
-          if (c.arquivo.bytes > MAILBOX_MAX_ATTACHMENT_BYTES) { aoMandarParaPc('O arquivo passa de 5 MB.', false); return; }
-          const bytes = new Uint8Array(await new File(c.arquivo.uri).arrayBuffer());
+          // Fase 23.2: o tamanho que o Android informa pode vir vazio — confere o arquivo de
+          // verdade ANTES de carregar tudo na memória.
+          const arq = new File(c.arquivo.uri);
+          const tamanho = c.arquivo.bytes || arq.size || 0;
+          if (!tamanho || tamanho > MAILBOX_MAX_ATTACHMENT_BYTES) { aoMandarParaPc('O arquivo passa de 5 MB (ou não deu para ler o tamanho).', false); return; }
+          const bytes = new Uint8Array(await arq.arrayBuffer());
           await sendMessage(pairing, { kind: 'file', text: c.texto ?? undefined, attachment: { name: c.arquivo.nome, mimeType: c.arquivo.mimeType, base64: fromByteArray(bytes) } });
         } else {
           await sendMessage(pairing, { kind: /^https?:\/\//i.test(c.texto!) ? 'link' : 'note', text: c.texto! });

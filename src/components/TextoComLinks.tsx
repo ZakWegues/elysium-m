@@ -1,6 +1,7 @@
-import { Linking, StyleSheet, TextStyle, StyleProp } from 'react-native';
+import { StyleSheet, TextStyle, StyleProp } from 'react-native';
 import { Text } from './ui';
 import { useTheme } from '../theme';
+import { abrirLinkSeguro } from '../lib/abrirLink';
 import { partesComLinks } from '../lib/links';
 
 /**
@@ -17,7 +18,7 @@ export function TextoComLinks({ texto, cor, variant = 'body', style }: {
     <Text variant={variant} color={cor} style={style}>
       {partes.map((p, i) => p.tipo === 'texto' ? p.texto : (
         <Text key={i} variant={variant} color={cor === palette.text ? palette.primary : cor} style={styles.link}
-          onPress={() => { Linking.openURL(p.url).catch(() => {}); }}>
+          onPress={() => abrirLinkSeguro(p.url)}>
           {p.texto}
         </Text>
       ))}
