@@ -57,7 +57,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
 
   const cor = getPalette(name, familiaResolvida);
   const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
-    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
+    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
     { id: 'modos', titulo: 'Modos', icone: 'layers', resumo: modo ? `Ligado: ${modo.nome}` : 'Matemática, inglês… e os seus' },
