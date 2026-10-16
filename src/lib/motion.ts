@@ -22,7 +22,7 @@
  * momento tudo precisava viajar por OTA. Um APK novo passou a ser obrigatório de qualquer
  * forma, então a restrição perdeu o motivo. As duas entraram.
  *
- * O QUE MUDOU NA PRÁTICA: a escala é a MESMA — 120 / 220 / 140 ms, mola só no popover. O
+ * O QUE MUDOU NA PRÁTICA: a escala é a MESMA — 140 / 260 / 160 ms (fase 23.2), mola só no popover. O
  * que muda é onde ela roda. `Animated` com `useNativeDriver` só sai da thread de JS depois
  * que o JS monta a animação; um gesto continuava indo e voltando por quadro. Com worklets,
  * gesto e animação vivem na thread de UI e não sentem o RPC que a tela dispara ao montar.
@@ -146,7 +146,7 @@ export function tempo(
   aoFim?: (terminou?: boolean) => void,
 ) {
   'worklet';
-  const duracao = reduzirUI.value ? 0 : (ms ?? 220);
+  const duracao = reduzirUI.value ? 0 : (ms ?? 260);
   const curva = easing ?? EasingUI.bezier(0.22, 1, 0.36, 1);
   return withTiming(para, { duration: duracao, easing: curva }, aoFim);
 }
@@ -160,9 +160,9 @@ export function mola(para: number) {
 
 /**
  * A amarra entre os literais dos worklets e a escala declarada em cima. Não roda nada: se
- * `MOV.base` deixar de ser 220 ou a mola deixar de ser 380/22, isto para de compilar.
+ * `MOV.base` deixar de ser 260 ou a mola deixar de ser 380/22, isto para de compilar.
  */
-const conferenciaDaEscala: [220, 380, 22] = [MOV.base, MOLA_UI.stiffness, MOLA_UI.damping];
+const conferenciaDaEscala: [260, 380, 22] = [MOV.base, MOLA_UI.stiffness, MOLA_UI.damping];
 void conferenciaDaEscala;
 
 type EasingFactoryFn = typeof SUAVE_UI;
