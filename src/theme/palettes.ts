@@ -39,7 +39,7 @@ export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
 export type Familia = 'lg' | 'ely' | 'stark' | 'renascenca';
 
 /** O que o usuário escolheu. `auto` acompanha o modo do aparelho. */
-export type FamiliaEscolha = 'auto' | 'lg' | 'ely' | 'stark' | 'renascenca';
+export type FamiliaEscolha = 'auto' | 'lg' | 'ely' | 'stark' | 'renascenca' | 'minimal';
 
 /** Nome de cada família na tela. */
 export const ROTULO_FAMILIA: Record<Familia, string> = {
@@ -109,6 +109,8 @@ export type Palette = {
   blurTint: 'light' | 'dark';
   /** Fase 23.1: cores das manchas do fundo (iguais às do desktop). */
   blobs: readonly [string, string, string];
+  /** 20/10: tema Minimal — sem vidro, fundo, esfera nem brilho (ver `paletaMinimal`). */
+  minimal?: boolean;
 };
 
 /** Neutros da família Vidro Líquido, comuns às três cores. */
@@ -392,8 +394,66 @@ export function resolverFamiliaEscolhida(bruto: string | null | undefined): Fami
     case 'dark':   return 'ely';
     case 'stark':  return 'stark';
     case 'renascenca': return 'renascenca';
+    case 'minimal': return 'minimal';
     case 'auto':
     case 'system': return 'auto';
     default:       return null;
   }
+}
+
+// ── Tema Minimal (20/10) ──────────────────────────────────────────────────────
+// Pedido do Zak: "um tema 100% minimalista, seguindo a cor padrão do dispositivo". Claro ou
+// escuro como o aparelho, superfícies neutras e um acento só — a cor de destaque do sistema
+// quando o app consegue ler (Android 12+, módulo nativo do APK 2.4); sem ela, um cinza neutro.
+// A mesma conta do PC (`elysium/src/services/paletaMinimal.ts`).
+
+function luminancia(hex: string): number {
+  const [r, g, b] = canais(hex).map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Contraste WCAG entre dois hex. */
+export function contraste(a: string, b: string): number {
+  const [l1, l2] = [luminancia(a), luminancia(b)].sort((x, y) => y - x);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+/** A paleta do Minimal. `destaque` = `#rrggbb` do sistema, ou null para o acento neutro. */
+export function paletaMinimal(escuro: boolean, destaque: string | null, name: ThemeName = 'mare'): Palette {
+  const background = escuro ? '#101012' : '#FFFFFF';
+  const surface = escuro ? '#18181B' : '#F6F6F7';
+  const valido = destaque && /^#[0-9a-f]{6}$/i.test(destaque) ? destaque : null;
+  let primary = valido ?? (escuro ? '#E4E4E7' : '#18181B');
+  // Um destaque que some no fundo (amarelo no branco, marinho no preto) é empurrado até ler.
+  for (let i = 0; i < 10 && contraste(primary, background) < 3; i++) primary = misturar(primary, escuro ? '#FFFFFF' : '#000000', 0.15);
+  const border = escuro ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
+  return {
+    name, label: 'Minimal', rotulo: 'Minimal — do sistema',
+    familia: escuro ? 'ely' : 'lg',
+    minimal: true,
+    primary,
+    primarySoft: comAlfa(primary, escuro ? 0.16 : 0.10),
+    accent: escuro ? '#A1A1AA' : '#52525B',
+    background, surface, surfaceRaised: escuro ? '#141416' : '#EFEFF1',
+    border,
+    text: escuro ? '#F4F4F5' : '#18181B',
+    textMuted: escuro ? '#A1A1AA' : '#6B6B73',
+    onPrimary: contraste('#FFFFFF', primary) >= 3 ? '#FFFFFF' : '#18181B',
+    error: escuro ? '#FF6B6B' : '#C0392B',
+    errorSoft: escuro ? 'rgba(255,107,107,0.16)' : '#F8D7DA',
+    success: escuro ? '#4ADE80' : '#2E8B47',
+    // Sem vidro: tudo sólido, sem brilho.
+    glassSurface: surface,
+    glassSurfaceStrong: surface,
+    glassBorder: border,
+    glassBackdrop: escuro ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.3)',
+    glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
+    glassPanel: background,
+    glassSheet: background,
+    blurTint: escuro ? 'dark' : 'light',
+    blobs: [background, background, background],
+  };
 }

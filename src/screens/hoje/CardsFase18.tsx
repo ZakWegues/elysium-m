@@ -50,12 +50,12 @@ export function OuvirResumo({ pairing }: { pairing: Pairing }) {
     <Pressable
       onPress={ouvir}
       accessibilityRole="button"
-      accessibilityLabel={falando ? 'Parar o resumo' : 'Ouvir o resumo do dia'}
+      accessibilityLabel={falando ? 'Parar o briefing' : 'Ler o briefing'}
       style={({ pressed }) => [styles.ouvir, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg, opacity: pressed ? 0.8 : 1 }]}
     >
       {buscando ? <ActivityIndicator color={palette.primary} size="small" /> : <Feather name={falando ? 'square' : 'volume-2'} size={18} color={palette.primary} />}
       <View style={{ flex: 1 }}>
-        <Text variant="label" color={palette.primary}>{falando ? 'Parar o resumo' : buscando ? 'Preparando o resumo…' : 'Ouvir o resumo do dia'}</Text>
+        <Text variant="label" color={palette.primary}>{falando ? 'Parar o briefing' : buscando ? 'Preparando o briefing…' : 'Ler o briefing'}</Text>
         <Text variant="caption" color={palette.textMuted}>{falando ? 'Pode trocar de aba ou minimizar — ela continua.' : 'Clima, tarefas, rotinas, novidades e uma ideia.'}</Text>
       </View>
     </Pressable>

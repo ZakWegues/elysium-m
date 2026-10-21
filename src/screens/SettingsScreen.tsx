@@ -36,6 +36,7 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
   { value: 'lg', label: ROTULO_FAMILIA.lg, icon: 'droplet', nota: 'Vidro translúcido, fundo claro' },
   { value: 'ely', label: ROTULO_FAMILIA.ely, icon: 'moon', nota: 'Noite azul com luz dourada e feixes de luz' },
   { value: 'renascenca', label: ROTULO_FAMILIA.renascenca, icon: 'feather', nota: 'Ouro, molduras ornamentadas e arte de estudo ao fundo' },
+  { value: 'minimal', label: 'Minimal', icon: 'square', nota: 'Sem efeitos: claro ou escuro como o aparelho, um acento só' },
   { value: 'auto', label: 'Seguir o aparelho', icon: 'smartphone', nota: 'Vidro no modo claro, ELYSIUM no escuro' },
 ];
 
@@ -55,9 +56,10 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
   const modo = useModo();
   useEffect(() => { vozDoPcLigada().then(setVozPc); notificacoesAtivas().then(setAvisos); }, [secao]);
 
-  const cor = getPalette(name, familiaResolvida);
+  // O Minimal monta a paleta na hora (modo do aparelho), então o resumo usa a que está valendo.
+  const cor = palette.minimal ? palette : getPalette(name, familiaResolvida);
   const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
-    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
+    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.minimal || cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
     { id: 'modos', titulo: 'Modos', icone: 'layers', resumo: modo ? `Ligado: ${modo.nome}` : 'Matemática, inglês… e os seus' },

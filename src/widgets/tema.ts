@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appearance } from 'react-native';
-import { Familia, getPalette, Palette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS, ThemeName } from '../theme/palettes';
+import { Familia, getPalette, paletaMinimal, Palette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS, ThemeName } from '../theme/palettes';
+import { destaqueDoSistema } from '../lib/corDoSistema';
 
 /**
  * A paleta para os widgets, lida do disco (bloco 73).
@@ -17,6 +18,8 @@ export async function paletaDosWidgets(): Promise<Palette> {
     const t = tema ? (TEMAS_APOSENTADOS[tema] ?? tema) : 'mare';
     if (t === 'crepusculo' || t === 'mare' || t === 'elisio') nome = t;
     const escolha = resolverFamiliaEscolhida(fam) ?? 'stark';
+    // Minimal (20/10): claro/escuro do aparelho, sem decoração.
+    if (escolha === 'minimal') return paletaMinimal(Appearance.getColorScheme() === 'dark', destaqueDoSistema(), nome);
     familia = escolha === 'auto' ? (Appearance.getColorScheme() === 'dark' ? 'ely' : 'lg') : escolha;
   } catch { /* padrão */ }
   return getPalette(nome, familia);

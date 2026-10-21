@@ -235,6 +235,11 @@ export function AppBackground() {
   const k = Math.max(0.42, Math.min(1, width / 1024)) * 1.25;
   const lado = Math.max(width, height) * 1.4;
 
+  // Minimal (20/10): só a cor de fundo — sem manchas, aurora, feixes, traços nem poeira.
+  if (palette.minimal) {
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} pointerEvents="none" />;
+  }
+
   if (familiaResolvida === 'renascenca') {
     return (
       <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">

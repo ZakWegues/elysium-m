@@ -464,6 +464,8 @@ export type PainelHoje = {
   /** Fase 18: "Meu amanhã" (depois das 18h) e as seções escondidas pelo dono. */
   amanha?: { tarefas: Tarefa[]; clima: { max: number; min: number; icone: string } | null } | null;
   ocultos?: string[];
+  /** Fase 23 (lido no celular desde 20/10): novidades do dia (IA, cinema, em alta). `null` = buscando/sem rede. */
+  novidades?: { tema: string; topicos: string[] }[] | null;
 };
 
 export type Revisao = {

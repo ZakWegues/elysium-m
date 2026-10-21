@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 import {
-  getPalette, resolverNomeDeTema, resolverFamiliaEscolhida,
+  getPalette, paletaMinimal, resolverNomeDeTema, resolverFamiliaEscolhida,
   Familia, FamiliaEscolha, Palette, ThemeName,
 } from './palettes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { spacing, radii, fontSize, fontWeight, shadow } from './tokens';
+import { destaqueDoSistema } from '../lib/corDoSistema';
 
 const STORAGE_KEY = 'elysium_theme';
 /**
@@ -80,12 +81,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // `useColorScheme` devolve null enquanto o sistema não responde; o vidro é o padrão
   // seguro, e o valor real chega logo em seguida sem piscar de forma perceptível.
+  // O Minimal (20/10) também acompanha o modo do aparelho: claro = base do vidro, escuro = da noite.
   const familiaResolvida: Familia =
-    familia === 'auto' ? (systemScheme === 'dark' ? 'ely' : 'lg') : familia;
+    familia === 'auto' || familia === 'minimal' ? (systemScheme === 'dark' ? 'ely' : 'lg') : familia;
 
   const value: ThemeContextValue = {
     name,
-    palette: getPalette(name, familiaResolvida),
+    palette: familia === 'minimal' ? paletaMinimal(systemScheme === 'dark', destaqueDoSistema(), name) : getPalette(name, familiaResolvida),
     familia,
     familiaResolvida,
     tokens: { spacing, radii, fontSize, fontWeight, shadow },

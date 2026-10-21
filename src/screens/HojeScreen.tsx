@@ -16,13 +16,19 @@ import { estourarNoToque, fogos } from '../components/Estouros';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
 import { CardEstudo, PlanoDeEstudo, Revisao as RevisaoCartoes } from './hoje/CardEstudo';
-import TarefasScreen from './TarefasScreen';
+import TarefasScreen, { Despejo } from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
 
 /**
  * Hoje (fase 16, 07/10) — o briefing do dia, a mesma aba do desktop. Uma chamada só
  * (`hoje.painel`) traz saudação, status, clima, agenda, listas, hábitos, metas e alertas.
  * Hábito marca com um toque (com vibração e a sequência 🔥); toque longo edita.
+ *
+ * 20/10, pedido do Zak: "se tem no PC tem que ter no celular, e vice-versa". As seções e a ordem
+ * são as do dashboard (`hoje.js`/`dashboard.html`): Despejar, Revisão e Ler o briefing no topo;
+ * alertas; A Ely quer saber; Meu amanhã; Estudo; Hábitos; Lembretes e tarefas (com a agenda);
+ * Rotinas; Ideia para hoje; ELYSIUM; Metas; Clima; Listas; Manchetes; Novidades do dia. Os títulos
+ * são os mesmos do PC porque a chave do "ocultar" sai deles.
  */
 
 const DIAS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -235,6 +241,32 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
   async function mostrarOcultos() {
     for (const c of ocultos) await mudarOcultos(c, false);
   }
+  // 20/10: o que só o PC tinha — ideia, card ELYSIUM, manchetes e o despejo.
+  const [despejando, setDespejando] = useState(false);
+  const [manchetes, setManchetes] = useState<string | null>(null);
+  const [buscandoManchetes, setBuscandoManchetes] = useState(false);
+  async function outraIdeia() {
+    haptica.leve();
+    try {
+      const r = await callRpc(pairing, 'hoje.ideia', {}, { timeoutMs: 30000 });
+      setPainel(p => p && { ...p, ideia: r.ideia });
+    } catch (e) { Alert.alert('Ideia para hoje', errMessage(e)); }
+  }
+  async function marcarTestar(item: string, feito: boolean) {
+    haptica.leve();
+    setPainel(p => p && p.elysium ? { ...p, elysium: { ...p.elysium, paraTestar: p.elysium.paraTestar.map(t => t.item === item ? { ...t, feito } : t) } } : p);
+    try { await callRpc(pairing, 'hoje.testar', { item, feito }); }
+    catch (e) { Alert.alert('ELYSIUM', errMessage(e)); void carregar(); }
+  }
+  async function buscarManchetes() {
+    haptica.leve();
+    setBuscandoManchetes(true);
+    try {
+      const r = await callRpc(pairing, 'web.search', { query: 'principais notícias do Brasil e do mundo hoje, em tópicos curtos' }, { timeoutMs: 75000 });
+      setManchetes(r.answer?.trim() || 'Não consegui buscar agora.');
+    } catch (e) { setManchetes(`Não consegui buscar agora: ${errMessage(e)}`); }
+    finally { setBuscandoManchetes(false); }
+  }
   const [revisao, setRevisao] = useState<Revisao | null>(null);
   async function abrirRevisao() {
     haptica.leve();
@@ -259,7 +291,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     'habitos-de-hoje': habitos.length ? `${feitos}/${habitos.length}` : 0,
     'metas': painel.metas.length,
     'lembretes-e-tarefas': painel.tarefas?.length ?? 0,
-    'agenda': agenda.length + painel.timers.length,
     'listas': painel.listas.length,
   } : {};
   const secao = (t: string, acao?: { rotulo: string; onPress: () => void; icone?: keyof typeof Feather.glyphMap }, chave = chaveDe(t)) => (
@@ -302,15 +333,43 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
               </View>
             </View>
 
-            {/* Fase 18: ouvir o resumo inteiro — a fala segue ao trocar de aba ou minimizar. */}
-            <OuvirResumo pairing={pairing} />
-            {/* 22.1: a revisão da semana só aparece no domingo (todo dia era ruído). */}
-            {new Date().getDay() === 0 && (
-              <Pressable onPress={abrirRevisao} accessibilityRole="button" hitSlop={6} style={[styles.linha, { alignSelf: 'flex-start', minHeight: 40 }]}>
+            {/* As ações do topo do PC: Despejar, Revisão da semana e Ler o briefing (a fala segue
+                ao trocar de aba ou minimizar). */}
+            <View style={[styles.linha, { flexWrap: 'wrap', gap: 8 }]}>
+              <Pressable onPress={() => { haptica.leve(); setDespejando(true); }} accessibilityRole="button" hitSlop={6}
+                style={[styles.acaoTopo, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>
+                <Feather name="layers" size={15} color={palette.primary} />
+                <Text variant="label" color={palette.primary}>Despejar</Text>
+              </Pressable>
+              <Pressable onPress={abrirRevisao} accessibilityRole="button" hitSlop={6}
+                style={[styles.acaoTopo, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>
                 <Feather name="calendar" size={15} color={palette.primary} />
                 <Text variant="label" color={palette.primary}>Revisão da semana</Text>
               </Pressable>
-            )}
+            </View>
+            <OuvirResumo pairing={pairing} />
+
+            {/* Todos os alertas, como no PC (a 22.1 tinha deixado só os de erro). */}
+            {painel.alertas.map((a, i) => (
+              <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : palette.accent }]}>
+                <Feather name="alert-triangle" size={16} color={a.nivel === 'erro' ? palette.error : palette.accent} />
+                <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>{a.titulo}</Text> — {a.detalhe}</Text>
+              </Card>
+            ))}
+
+            {/* Fase 19 (bloco 191): "A Ely quer saber" — como foi o compromisso que passou. */}
+            {(painel.acompanhamentos ?? []).map(a => (
+              <Card key={a.id} glass style={[styles.alerta, { borderColor: palette.primary }]}>
+                <Feather name="message-circle" size={16} color={palette.primary} />
+                <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>A Ely quer saber</Text> — {a.pergunta}</Text>
+                <Pressable onPress={() => comoFoi(a.id, true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Responder: ${a.pergunta}`} style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 }}>
+                  <Text variant="caption" color={palette.primary} style={{ fontWeight: '700' }}>Responder</Text>
+                </Pressable>
+                <Pressable onPress={() => comoFoi(a.id, false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dispensar a pergunta" style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="x" size={16} color={palette.textMuted} />
+                </Pressable>
+              </Card>
+            ))}
 
             {painel.amanha && vis('amanha') && (
               <>
@@ -332,28 +391,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                 </>)}
               </>
             )}
-
-            {/* Fase 19 (bloco 191): "A Ely quer saber" — como foi o compromisso que passou. */}
-            {(painel.acompanhamentos ?? []).map(a => (
-              <Card key={a.id} glass style={[styles.alerta, { borderColor: palette.primary }]}>
-                <Feather name="message-circle" size={16} color={palette.primary} />
-                <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>A Ely quer saber</Text> — {a.pergunta}</Text>
-                <Pressable onPress={() => comoFoi(a.id, true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Responder: ${a.pergunta}`} style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 }}>
-                  <Text variant="caption" color={palette.primary} style={{ fontWeight: '700' }}>Responder</Text>
-                </Pressable>
-                <Pressable onPress={() => comoFoi(a.id, false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dispensar a pergunta" style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}>
-                  <Feather name="x" size={16} color={palette.textMuted} />
-                </Pressable>
-              </Card>
-            ))}
-
-            {/* 22.1: só o que é erro de verdade; os avisos (disco, som, backup) já estão no PC e cansavam. */}
-            {painel.alertas.filter(a => a.nivel === 'erro').map((a, i) => (
-              <Card key={i} glass style={[styles.alerta, { borderColor: a.nivel === 'erro' ? palette.error : palette.accent }]}>
-                <Feather name="alert-triangle" size={16} color={a.nivel === 'erro' ? palette.error : palette.accent} />
-                <Text variant="caption" style={{ flex: 1 }}><Text variant="caption" style={{ fontWeight: '700' }}>{a.titulo}</Text> — {a.detalhe}</Text>
-              </Card>
-            ))}
 
             {/* Fase 20: pomodoro, cartões de revisão e plano de estudo. */}
             {vis('estudo') && (<>
@@ -399,33 +436,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                   </View>
                 </Pressable>
               ))}
-            </Card>
-            </>)}
-            </>)}
-
-            {vis('metas') && (<>
-            {secao('METAS', { rotulo: 'Meta', onPress: () => setMetaEdit({ alvo: 10 }) })}
-            {aberta('metas') && (<>
-            <Card glass style={{ gap: tokens.spacing.sm }}>
-              {painel.metas.length === 0 && <Text variant="caption" color={palette.textMuted}>Sem metas em andamento.</Text>}
-              {painel.metas.map(m => {
-                const f = m.alvo ? Math.min(1, m.progresso / m.alvo) : 0;
-                return (
-                  <Pressable key={m.id} onLongPress={() => setMetaEdit(m)} style={{ gap: 6 }}>
-                    <View style={styles.linha}>
-                      <Text variant="body" style={{ flex: 1 }}>{m.titulo}</Text>
-                      <Text variant="label" color={palette.primary}>{m.progresso}/{m.alvo}{m.unidade ? ` ${m.unidade}` : ''}</Text>
-                    </View>
-                    <View style={[styles.barra, { backgroundColor: palette.primarySoft }]}>
-                      <View style={{ width: `${Math.round(f * 100)}%`, height: '100%', backgroundColor: palette.primary, borderRadius: 3 }} />
-                    </View>
-                    <View style={styles.linha}>
-                      <Pressable onPress={() => somar(m, -1)} hitSlop={10} style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Tirar 1 de ${m.titulo}`}><Text variant="label">−1</Text></Pressable>
-                      <Pressable onPress={() => somar(m, 1)} hitSlop={10} style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Somar 1 em ${m.titulo}`}><Text variant="label">+1</Text></Pressable>
-                    </View>
-                  </Pressable>
-                );
-              })}
             </Card>
             </>)}
             </>)}
@@ -506,10 +516,10 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
               </>
             )}
 
-            {vis('agenda') && (<>
-            {secao('AGENDA')}
-            {aberta('agenda') && (<>
+            {/* Agenda: no PC ela mora dentro de "Lembretes e tarefas"; aqui também, logo abaixo. */}
+            {painel.tarefas && vis('lembretes-e-tarefas') && aberta('lembretes-e-tarefas') && (agenda.length > 0 || painel.timers.length > 0) && (<>
             <Card glass style={{ gap: 8 }}>
+              <Text variant="label" color={palette.textMuted} style={styles.secao}>AGENDA</Text>
               {painel.timers.map(t => (
                 <View key={t.id} style={styles.linha}>
                   <Feather name="clock" size={15} color={palette.textMuted} />
@@ -524,9 +534,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                   <Text variant="body" style={{ flex: 1 }}>{a.texto}</Text>
                 </View>
               ))}
-              {!agenda.length && !painel.timers.length && <Text variant="caption" color={palette.textMuted}>Agenda livre hoje.</Text>}
             </Card>
-            </>)}
             </>)}
 
             {/* Fase 22: Rotinas saiu das abas — daqui abre a gaveta. */}
@@ -543,8 +551,6 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
               </Toque>
             )}
 
-            {/* 22.1: clima, ideia do dia, card ELYSIUM e manchetes saíram do Hoje do celular — ruído.
-                O clima continua na Início; o resto continua no PC. */}
             {painel.rotinasHoje && vis('rotinas-de-hoje') && (
               <>
                 {secao('ROTINAS DE HOJE')}
@@ -553,6 +559,85 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                 </>)}
               </>
             )}
+
+            {vis('ideia-para-hoje') && (<>
+            {secao('IDEIA PARA HOJE', { rotulo: 'Outra', icone: 'refresh-cw', onPress: () => void outraIdeia() })}
+            {aberta('ideia-para-hoje') && (
+              <Card glass>
+                <Text variant="body" color={painel.ideia ? palette.text : palette.textMuted}>{painel.ideia || 'Sem ideia agora — toque em Outra.'}</Text>
+              </Card>
+            )}
+            </>)}
+
+            {painel.elysium && vis('elysium') && (<>
+            {secao('ELYSIUM')}
+            {aberta('elysium') && (
+              <Card glass style={{ gap: 8 }}>
+                <Text variant="caption" color={palette.textMuted}>No PC: versão {painel.elysium.versao}</Text>
+                {painel.elysium.atualizacaoPronta && (
+                  <Text variant="caption" color={palette.accent}>A versão {painel.elysium.atualizacaoPronta} está pronta para instalar.</Text>
+                )}
+                {painel.elysium.novidades.length > 0 ? (<>
+                  <Text variant="label">O que veio nesta versão</Text>
+                  {painel.elysium.novidades.slice(0, 6).map((n, i) => (
+                    <Text key={i} variant="caption" color={palette.textMuted}>• {n.replace(/\*\*(.+?)\*\*/g, '$1')}</Text>
+                  ))}
+                </>) : <Text variant="caption" color={palette.textMuted}>Sem notas desta versão.</Text>}
+                {painel.elysium.paraTestar.length > 0 && (<>
+                  <Text variant="label" style={{ marginTop: 4 }}>Para testar {painel.elysium.paraTestar.filter(t => t.feito).length}/{painel.elysium.paraTestar.length}</Text>
+                  {painel.elysium.paraTestar.map(t => (
+                    <Pressable key={t.item} onPress={() => void marcarTestar(t.item, !t.feito)} accessibilityRole="checkbox" accessibilityState={{ checked: t.feito }}
+                      style={[styles.linha, { minHeight: 40 }]}>
+                      <Feather name={t.feito ? 'check-square' : 'square'} size={16} color={palette.primary} />
+                      <Text variant="caption" color={t.feito ? palette.textMuted : palette.text} style={[{ flex: 1 }, t.feito && { textDecorationLine: 'line-through' }]}>{t.item}</Text>
+                    </Pressable>
+                  ))}
+                </>)}
+              </Card>
+            )}
+            </>)}
+
+            {vis('metas') && (<>
+            {secao('METAS', { rotulo: 'Meta', onPress: () => setMetaEdit({ alvo: 10 }) })}
+            {aberta('metas') && (<>
+            <Card glass style={{ gap: tokens.spacing.sm }}>
+              {painel.metas.length === 0 && <Text variant="caption" color={palette.textMuted}>Sem metas em andamento.</Text>}
+              {painel.metas.map(m => {
+                const f = m.alvo ? Math.min(1, m.progresso / m.alvo) : 0;
+                return (
+                  <Pressable key={m.id} onLongPress={() => setMetaEdit(m)} style={{ gap: 6 }}>
+                    <View style={styles.linha}>
+                      <Text variant="body" style={{ flex: 1 }}>{m.titulo}</Text>
+                      <Text variant="label" color={palette.primary}>{m.progresso}/{m.alvo}{m.unidade ? ` ${m.unidade}` : ''}</Text>
+                    </View>
+                    <View style={[styles.barra, { backgroundColor: palette.primarySoft }]}>
+                      <View style={{ width: `${Math.round(f * 100)}%`, height: '100%', backgroundColor: palette.primary, borderRadius: 3 }} />
+                    </View>
+                    <View style={styles.linha}>
+                      <Pressable onPress={() => somar(m, -1)} hitSlop={10} style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Tirar 1 de ${m.titulo}`}><Text variant="label">−1</Text></Pressable>
+                      <Pressable onPress={() => somar(m, 1)} hitSlop={10} style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Somar 1 em ${m.titulo}`}><Text variant="label">+1</Text></Pressable>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </Card>
+            </>)}
+            </>)}
+
+            {vis('clima') && (<>
+            {secao('CLIMA')}
+            {aberta('clima') && (
+              <Card glass style={styles.linha}>
+                {painel.clima ? (<>
+                  <Text variant="heading">{Math.round(painel.clima.temperatura)}°</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="body">{painel.clima.descricao}</Text>
+                    <Text variant="caption" color={palette.textMuted}>{painel.clima.cidade} · {Math.round(painel.clima.min)}°–{Math.round(painel.clima.max)}°{painel.clima.chuvaHoje ? ' · chuva hoje' : ''}</Text>
+                  </View>
+                </>) : <Text variant="caption" color={palette.textMuted}>Clima indisponível.</Text>}
+              </Card>
+            )}
+            </>)}
 
             {painel.listas.length > 0 && vis('listas') && (
               <>
@@ -569,6 +654,30 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                 </>)}
               </>
             )}
+
+            {vis('manchetes') && (<>
+            {secao('MANCHETES', { rotulo: buscandoManchetes ? 'Buscando…' : 'Buscar agora', icone: 'globe', onPress: () => { if (!buscandoManchetes) void buscarManchetes(); } })}
+            {aberta('manchetes') && (
+              <Card glass>
+                {buscandoManchetes ? <ActivityIndicator color={palette.primary} />
+                  : <Text variant="caption" color={manchetes ? palette.text : palette.textMuted}>{manchetes ? manchetes.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, '') : 'Sob demanda — a busca vai à internet.'}</Text>}
+              </Card>
+            )}
+            </>)}
+
+            {!!painel.novidades?.length && vis('novidades') && (<>
+            {secao('NOVIDADES DO DIA', undefined, 'novidades')}
+            {aberta('novidades') && (
+              <Card glass style={{ gap: 10 }}>
+                {painel.novidades.map(n => (
+                  <View key={n.tema} style={{ gap: 2 }}>
+                    <Text variant="label" color={palette.primary}>{n.tema.toUpperCase()}</Text>
+                    {n.topicos.map((t, i) => <Text key={i} variant="caption" color={palette.textMuted}>• {t}</Text>)}
+                  </View>
+                ))}
+              </Card>
+            )}
+            </>)}
 
             {ocultos.length > 0 && (
               <Pressable onPress={() => void mostrarOcultos()} accessibilityRole="button" style={[styles.linha, { alignSelf: 'center', minHeight: 44 }]}>
@@ -633,6 +742,9 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
       </GlassModal>
       <GlassModal title={metaEdit?.id ? 'Editar meta' : 'Nova meta'} visible={metaEdit !== null} onClose={() => setMetaEdit(null)}>
         {metaEdit && <FormMeta pairing={pairing} base={metaEdit} aoTerminar={() => { setMetaEdit(null); void carregar(); }} />}
+      </GlassModal>
+      <GlassModal title="Despejar" visible={despejando} onClose={() => setDespejando(false)}>
+        {despejando && <Despejo pairing={pairing} aoTerminar={async () => { setDespejando(false); await carregar(); }} />}
       </GlassModal>
       <GlassModal title="Revisão da semana" visible={revisao !== null} onClose={() => setRevisao(null)}>
         {revisao && (
@@ -763,6 +875,7 @@ const styles = StyleSheet.create({
   secaoTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   secao: { letterSpacing: 1.4 },
   secaoAcao: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32 },
+  acaoTopo: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14, borderWidth: 1 },
   alerta: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1 },
   habito: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 56 },
   check: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },

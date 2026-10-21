@@ -76,13 +76,15 @@ export function GlassFill({
   const { palette, familiaResolvida } = useTheme();
   const blurTarget = useBlurTarget();
   const noite = familiaResolvida !== 'lg';
+  // Minimal (20/10): superfície sólida, sem desfoque nem brilho.
+  const liso = !!palette.minimal;
   // Noite: blur "extremamente levinho". Dia: um pouco mais que antes, para o vidro
   // parecer espesso (o desfoque é o que dá a sensação de material).
   const forca = noite ? BLUR_NOITE : Math.min(100, Math.round(intensity * 1.25));
 
   return (
     <>
-      {blur && forca > 0 && (
+      {blur && forca > 0 && !liso && (
       <BlurView
         intensity={forca}
         // Tinta clara sobre fundo escuro deixaria o vidro leitoso e clarearia a tela
@@ -101,7 +103,7 @@ export function GlassFill({
           { backgroundColor: tintColor ?? (strong ? palette.glassSurfaceStrong : palette.glassSurface) },
         ]}
       />
-      {edge && !noite && (
+      {edge && !noite && !liso && (
         <>
           {/* Brilho difuso na aresta de cima — o que sempre existiu, agora só no dia. */}
           <LinearGradient colors={palette.glassSheen} locations={[0, 1]} pointerEvents="none" style={styles.sheen} />
@@ -116,7 +118,7 @@ export function GlassFill({
           />
         </>
       )}
-      {edge && !noite && (
+      {edge && !noite && !liso && (
         // Aresta especular: um fio de luz no topo e à esquerda — só no dia (bloco 128).
         <>
           <LinearGradient

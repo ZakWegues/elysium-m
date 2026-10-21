@@ -494,7 +494,7 @@ function EditorTarefa({ pairing, base, aoTerminar, aoApagar }: {
  * Despejo (bloco 194): escreve ou dita (o microfone do teclado) várias coisas de uma vez; a Ely
  * separa em tarefas, listas e notas; nada é gravado antes de ele marcar e tocar em Salvar.
  */
-function Despejo({ pairing, aoTerminar }: { pairing: Pairing; aoTerminar: () => Promise<void> }) {
+export function Despejo({ pairing, aoTerminar }: { pairing: Pairing; aoTerminar: () => Promise<void> }) {
   const { palette, tokens } = useTheme();
   const [texto, setTexto] = useState('');
   const [itens, setItens] = useState<ItemDespejo[] | null>(null);
