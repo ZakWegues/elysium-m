@@ -7,6 +7,8 @@ import type { Entrega } from './rpc';
 import { receberFrameEstado } from './estadoPc';
 import { receberFrameModo } from './modo';
 import { receberFramePomodoro } from './pomodoro';
+import { receberMailboxNovo } from './mailboxAviso';
+import { AuthError } from './http';
 
 import type { Fonte } from './chatHistoryStore';
 
@@ -18,7 +20,23 @@ type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; loca
  */
 export type OnChunk = (parcial: string) => void;
 
+/** O estado da conexão, para a tela mostrar "Reconectando…" em vez de erro (21/10). */
+export type EstadoConexao = 'conectado' | 'reconectando' | 'caiu';
+
+/** O WebSocket nem abriu: aí, e só aí, vale cair no HTTP (o comando não chegou ao PC). */
+export class ConexaoNaoAbriu extends Error {}
+
 type Pending = {
+  /** Pedido de texto com id (PC 2.14+ guarda a resposta e deixa retomar). Áudio não tem. */
+  id?: string;
+  texto?: string;
+  canal?: 'voz' | 'texto';
+  refazer?: boolean;
+  /** O comando já saiu para o PC? Se não, sai quando a conexão (re)abrir. */
+  enviado: boolean;
+  /** A conexão caiu no meio e o pedido espera a retomada. */
+  aguardandoRetomada: boolean;
+  caiuEm: number;
   resolve: (result: StreamResult) => void;
   reject: (err: Error) => void;
   transcript?: string;
@@ -34,6 +52,21 @@ type Pending = {
  * Cada pedaço que chega rearma o relógio — só um PC que parou de responder estoura.
  */
 const INATIVIDADE_MS = 45000;
+/** 21/10: batimento. Sem nenhum sinal do PC por 35 s (com o PC que responde `pong`), a conexão é refeita. */
+const BATIDA_MS = 15000;
+const SILENCIO_MAXIMO_MS = 35000;
+/** Quanto tempo um pedido espera a conexão voltar antes de desistir. */
+const ESPERA_RETOMADA_MS = 90000;
+
+/** Id do pedido: o PC aceita `[A-Za-z0-9-]{8,64}`. */
+export function novoIdDePedido(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Recuo da reconexão: 1, 2, 4, 8 e no máximo 15 s. Pura. */
+export function recuo(tentativa: number): number {
+  return Math.min(15000, 1000 * 2 ** Math.max(0, tentativa));
+}
 
 export type VoiceConnection = {
   ready: Promise<void>;
@@ -42,83 +75,181 @@ export type VoiceConnection = {
   /** Manda texto pelo mesmo WebSocket — é o caminho que recebe a resposta em pedaços. */
   /** `canal: 'texto'` = digitado (resposta de chat); sem ele, o curto da voz (bloco 130). */
   sendText(text: string, onChunk?: OnChunk, opcoes?: { canal?: 'voz' | 'texto'; refazer?: boolean }): Promise<StreamResult>;
+  /** O "Parar" e a saída da tela: avisa o PC (que descarta a resposta) e encerra de vez. */
   close(): void;
+  /** A conexão está aberta e o PC deu sinal de vida há pouco? */
+  viva(): boolean;
+  /** Refaz a conexão agora (app voltou para a frente, o endereço do PC mudou). */
+  reconectar(): void;
 };
 
+/**
+ * A conexão do chat com o PC (21/10, reescrita). Antes um socket morto ficava guardado e o
+ * erro só aparecia 45 s depois ("a conexão parou no meio"). Agora:
+ *  - batimento a cada 15 s (`ping`/`pong`); sem sinal, refaz a conexão;
+ *  - caiu: reconecta sozinha (1 s, 2 s, 4 s… até 15 s), sempre no endereço ATUAL do PC;
+ *  - pedido de texto com id: ao voltar, pede `retomar` e a resposta continua de onde parou;
+ *  - nunca reenvia um comando que já saiu (o PC rodaria duas vezes).
+ * PC antigo (sem `pong`/retomada): o batimento não derruba nada, e uma queda vira erro como antes.
+ */
 export function openVoiceConnection(
-  pairing: Pairing,
+  origem: Pairing | (() => Pairing),
   onClosed?: () => void,
   /** Sugestões de próxima pergunta (bloco 132): chegam DEPOIS do reply, fora de pedido. */
   onSugestoes?: (sugestoes: string[]) => void,
+  onEstado?: (e: EstadoConexao) => void,
 ): VoiceConnection {
-  const url = streamUrl(pairing);
-  const ws = openAuthedWebSocket(pairing);
+  const pegarPairing = typeof origem === 'function' ? origem : () => origem;
 
+  let ws: WebSocket | null = null;
   let pending: Pending | null = null;
+  let encerrada = false;
+  let abriuUmaVez = false;
+  let suportaPong = false;
+  let ultimoSinal = Date.now();
+  let tentativas = 0;
+  let timerReconexao: ReturnType<typeof setTimeout> | null = null;
+  let timerRetomada: ReturnType<typeof setTimeout> | null = null;
+
+  let resolverReady: () => void = () => {};
+  let rejeitarReady: ((e: Error) => void) | null = null;
+  const ready = new Promise<void>((resolve, reject) => { resolverReady = resolve; rejeitarReady = reject; });
+  ready.catch(() => { /* quem espera trata */ });
 
   function settlePending(fn: (p: Pending) => void) {
     if (!pending) return;
     const p = pending;
     pending = null;
     clearTimeout(p.timeout);
+    if (timerRetomada) { clearTimeout(timerRetomada); timerRetomada = null; }
     fn(p);
   }
 
   function rearmar(p: Pending) {
     clearTimeout(p.timeout);
     p.timeout = setTimeout(() => {
+      // Com a conexão caída, quem decide é a espera da retomada, não a inatividade.
+      if (p.aguardandoRetomada) return;
       console.error('[voice-ws] PC parou de responder');
-      settlePending((x) => x.reject(new Error('Falha: o PC parou de responder no meio')));
+      settlePending((x) => x.reject(new Error('O PC parou de responder no meio. Toque em Refazer.')));
     }, INATIVIDADE_MS);
   }
 
-  /** Fechar antes de abrir (o "Parar" do chat) rejeita o `ready` na hora, em vez de esperar o prazo. */
-  let rejeitarReady: ((e: Error) => void) | null = null;
-  const ready = new Promise<void>((resolve, reject) => {
-    rejeitarReady = reject;
-    ws.onopen = () => {
-      console.log('[voice-ws] conectado', url);
-      resolve();
-    };
-    ws.addEventListener('error', () => {
-      console.error('[voice-ws] falha ao conectar', url);
-      reject(new Error('Falha na conexão WebSocket'));
-    });
-  });
+  function enviarComando(p: Pending) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !p.texto) return;
+    try {
+      // PC antigo ignora os campos novos: o comando roda igual, só que no curto de sempre.
+      ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer }));
+      p.enviado = true;
+    } catch (err) {
+      console.warn('[voice-ws] envio falhou, tenta ao reconectar', errMessage(err));
+    }
+  }
 
-  ws.onmessage = (event) => {
-    let data: { type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean } & Partial<Entrega>;
+  function pedirRetomada(p: Pending) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !p.id) return;
+    try { ws.send(JSON.stringify({ type: 'retomar', id: p.id })); } catch { return; }
+    // PC antigo não conhece "retomar": sem resposta em 10 s, a resposta se perdeu.
+    if (timerRetomada) clearTimeout(timerRetomada);
+    timerRetomada = setTimeout(() => {
+      if (pending === p && p.aguardandoRetomada) {
+        settlePending((x) => x.reject(new Error('A conexão caiu e a resposta se perdeu. Toque em Refazer.')));
+      }
+    }, 10000);
+  }
+
+  function aoAbrir() {
+    tentativas = 0;
+    ultimoSinal = Date.now();
+    if (!abriuUmaVez) { abriuUmaVez = true; resolverReady(); }
+    console.log('[voice-ws] conectado', ws ? streamUrl(pegarPairing()) : '');
+    onEstado?.('conectado');
+    try { ws?.send(JSON.stringify({ type: 'ping' })); } catch { /* */ }
+    const p = pending;
+    if (!p) return;
+    if (!p.enviado) enviarComando(p);
+    else if (p.aguardandoRetomada) pedirRetomada(p);
+  }
+
+  function aoCair() {
+    if (encerrada) return;
+    if (!abriuUmaVez) {
+      // Nem abriu: quem chamou cai no HTTP (o comando não chegou ao PC).
+      rejeitarReady?.(new ConexaoNaoAbriu('Não consegui abrir a conexão com o PC'));
+    }
+    const p = pending;
+    if (p && p.id && (p.enviado ? true : !!p.texto)) {
+      // Pedido de texto: espera a conexão voltar e retoma (ou envia, se nem tinha saído).
+      if (p.enviado) { p.aguardandoRetomada = true; if (!p.caiuEm) p.caiuEm = Date.now(); }
+      onEstado?.('reconectando');
+    } else if (p) {
+      settlePending((x) => x.reject(new Error('A conexão com o PC caiu antes da resposta.')));
+      onEstado?.('caiu');
+    } else {
+      onEstado?.(abriuUmaVez ? 'reconectando' : 'caiu');
+    }
+    if (p && p.caiuEm && Date.now() - p.caiuEm > ESPERA_RETOMADA_MS) {
+      settlePending((x) => x.reject(new Error('Sem conexão com o PC agora. A resposta fica no PC por 10 minutos — toque em Refazer quando voltar.')));
+    }
+    agendarReconexao();
+  }
+
+  function agendarReconexao() {
+    if (encerrada || timerReconexao) return;
+    timerReconexao = setTimeout(() => { timerReconexao = null; conectar(); }, recuo(tentativas++));
+  }
+
+  function tratarMensagem(event: MessageEvent) {
+    let data: { type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
       console.error('[voice-ws] resposta ilegível do servidor', event.data, err);
-      settlePending((p) => p.reject(new Error(`Falha ao interpretar resposta do servidor: ${errMessage(err)}`)));
       return;
     }
+    // Frame de outro pedido (um antigo que terminou depois): não é desta bolha.
+    const doPedido = (id?: string) => !id || !pending?.id || id === pending.id;
 
-    // Telemetria também chega por aqui, a cada 5 s; só os tipos abaixo interessam.
-    if (data.type === 'transcript') {
+    if (data.type === 'pong') {
+      suportaPong = true;
+    } else if (data.type === 'transcript') {
       if (pending) {
         pending.transcript = data.text;
         rearmar(pending);
         if (data.text) pending.onTranscript?.(data.text);
       }
+    } else if (data.type === 'retomada') {
+      if (pending && pending.id === data.id) {
+        if (timerRetomada) { clearTimeout(timerRetomada); timerRetomada = null; }
+        pending.aguardandoRetomada = false;
+        pending.caiuEm = 0;
+        pending.parcial = data.text ?? pending.parcial;
+        rearmar(pending);
+        if (pending.parcial) pending.onChunk?.(pending.parcial);
+      }
+    } else if (data.type === 'retomada_falhou') {
+      if (pending && (!data.id || pending.id === data.id)) {
+        settlePending((p) => p.reject(new Error('A conexão caiu e a resposta se perdeu. Toque em Refazer.')));
+      }
     } else if (data.type === 'chunk') {
-      if (pending) {
+      if (pending && doPedido(data.id)) {
         pending.parcial += data.text ?? '';
         rearmar(pending);
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true }));
+      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true }));
     } else if (data.type === 'sugestoes') {
       if (Array.isArray(data.sugestoes)) onSugestoes?.(data.sugestoes.filter((s): s is string => typeof s === 'string').slice(0, 3));
     } else if (data.type === 'notify') {
       // Uma entrega na hora (rotina executada, lembrete): vira notificação local e é
       // confirmada ao PC. Bloco 72.
       if (data.id && data.titulo) {
-        receberEntrega({ id: data.id, tipo: data.tipo ?? 'aviso', titulo: data.titulo, corpo: data.corpo ?? '', em: data.em ?? Date.now(), ref: data.ref }, pairing).catch(() => {});
+        receberEntrega({ id: data.id, tipo: data.tipo ?? 'aviso', titulo: data.titulo, corpo: data.corpo ?? '', em: data.em ?? Date.now(), ref: data.ref }, pegarPairing()).catch(() => {});
       }
+    } else if (data.type === 'mailbox_new') {
+      // 21/10: recado/arquivo novo do PC — a Caixa recarrega na hora, sem esperar o polling.
+      if (data.direction === 'toMobile' && data.id) receberMailboxNovo(data.id);
     } else if (data.type === 'pc.estado') {
       receberFrameEstado(data as Record<string, unknown>);
     } else if (data.type === 'modo') {
@@ -126,31 +257,58 @@ export function openVoiceConnection(
     } else if (data.type === 'pomodoro') {
       receberFramePomodoro(data as Record<string, unknown>);
     } else if (data.type === 'error') {
-      console.error('[voice-ws] servidor retornou erro', data.error);
-      settlePending((p) => p.reject(new Error(`Falha do servidor: ${data.error ?? 'erro sem mensagem'}`)));
+      if (doPedido(data.id)) {
+        console.error('[voice-ws] servidor retornou erro', data.error);
+        settlePending((p) => p.reject(new Error(`O PC respondeu com erro: ${data.error ?? 'sem mensagem'}`)));
+      }
     }
-  };
+  }
 
-  ws.onerror = () => {
-    console.error('[voice-ws] erro na conexão WebSocket');
-    settlePending((p) => p.reject(new Error('Falha na conexão WebSocket')));
-  };
+  function conectar() {
+    if (encerrada) return;
+    let sock: WebSocket;
+    try { sock = openAuthedWebSocket(pegarPairing()); }
+    catch { aoCair(); return; }
+    ws = sock;
+    sock.onopen = () => { if (ws === sock) aoAbrir(); };
+    sock.onmessage = (e) => { if (ws !== sock) return; ultimoSinal = Date.now(); tratarMensagem(e); };
+    sock.onerror = (e) => {
+      // Token recusado (401): tentar de novo não resolve e o PC bloquearia o IP. Encerra.
+      if (/\b401\b/.test(String((e as { message?: string })?.message ?? ''))) {
+        settlePending((x) => x.reject(new AuthError('token inválido ou expirado')));
+        rejeitarReady?.(new AuthError('token inválido ou expirado'));
+        encerrada = true;
+        clearInterval(batida);
+      }
+    };
+    sock.onclose = () => { if (ws !== sock) return; ws = null; aoCair(); };
+  }
 
-  ws.onclose = () => {
-    console.error('[voice-ws] conexão fechada', url);
-    settlePending((p) => p.reject(new Error('Falha: conexão fechada antes da resposta')));
-    onClosed?.();
-  };
+  // Batimento: só derruba a conexão se o PC já mostrou que responde `pong` (PC 2.14+).
+  const batida = setInterval(() => {
+    if (encerrada || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (suportaPong && Date.now() - ultimoSinal > SILENCIO_MAXIMO_MS) {
+      console.warn('[voice-ws] sem sinal do PC; refazendo a conexão');
+      const velho = ws;
+      ws = null;
+      try { velho.close(); } catch { /* */ }
+      aoCair();
+      return;
+    }
+    try { ws.send(JSON.stringify({ type: 'ping' })); } catch { /* o onclose cuida */ }
+  }, BATIDA_MS);
+
+  conectar();
 
   function abrirPedido(
     resolve: Pending['resolve'], reject: Pending['reject'],
     onChunk?: OnChunk, onTranscript?: (texto: string) => void,
   ): Pending | null {
     if (pending) {
-      reject(new Error('Falha: já existe um envio em andamento nesta conexão'));
+      reject(new Error('Ainda estou esperando a resposta anterior.'));
       return null;
     }
-    const p: Pending = { resolve, reject, parcial: '', onChunk, onTranscript, timeout: setTimeout(() => {}, 0) };
+    const p: Pending = { resolve, reject, parcial: '', onChunk, onTranscript, enviado: false, aguardandoRetomada: false, caiuEm: 0, timeout: setTimeout(() => {}, 0) };
     pending = p;
     rearmar(p);
     return p;
@@ -158,7 +316,9 @@ export function openVoiceConnection(
 
   function sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult> {
     return new Promise((resolve, reject) => {
-      if (!abrirPedido(resolve, reject, onChunk, onTranscript)) return;
+      const p = abrirPedido(resolve, reject, onChunk, onTranscript);
+      if (!p) return;
+      p.enviado = true;
 
       (async () => {
         let bytes: Uint8Array;
@@ -169,16 +329,17 @@ export function openVoiceConnection(
           bytes = await new FSFile(audioUri).bytes();
         } catch (err) {
           console.error('[voice-ws] falha lendo o áudio gravado', err);
-          settlePending((p) => p.reject(new Error(`Falha ao ler o áudio gravado: ${errMessage(err)}`)));
+          settlePending((x) => x.reject(new Error(`Não consegui ler o áudio gravado: ${errMessage(err)}`)));
           return;
         }
 
         try {
+          if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('sem conexão');
           ws.send(bytes);
           console.log('[voice-ws] áudio enviado', bytes.byteLength, 'bytes');
         } catch (err) {
           console.error('[voice-ws] falha enviando áudio pro servidor', err);
-          settlePending((p) => p.reject(new Error(`Falha ao enviar pro servidor: ${errMessage(err)}`)));
+          settlePending((x) => x.reject(new Error('Sem conexão com o PC para mandar o áudio.')));
         }
       })();
     });
@@ -186,21 +347,48 @@ export function openVoiceConnection(
 
   function sendText(text: string, onChunk?: OnChunk, opcoes: { canal?: 'voz' | 'texto'; refazer?: boolean } = {}): Promise<StreamResult> {
     return new Promise((resolve, reject) => {
-      if (!abrirPedido(resolve, reject, onChunk)) return;
-      try {
-        // PC antigo ignora os campos novos: o comando roda igual, só que no curto de sempre.
-        ws.send(JSON.stringify({ type: 'command', text, ...opcoes }));
-      } catch (err) {
-        settlePending((p) => p.reject(new Error(`Falha ao enviar pro servidor: ${errMessage(err)}`)));
-      }
+      const p = abrirPedido(resolve, reject, onChunk);
+      if (!p) return;
+      p.id = novoIdDePedido();
+      p.texto = text;
+      p.canal = opcoes.canal;
+      p.refazer = opcoes.refazer;
+      // Aberta: sai agora. Reconectando: sai assim que abrir (aoAbrir).
+      enviarComando(p);
     });
   }
 
   function close() {
-    settlePending((p) => p.reject(new Error('Falha: conexão encerrada antes da resposta')));
-    rejeitarReady?.(new Error('Falha: conexão encerrada antes de abrir'));
-    ws.close();
+    if (encerrada) return;
+    encerrada = true;
+    clearInterval(batida);
+    if (timerReconexao) { clearTimeout(timerReconexao); timerReconexao = null; }
+    // O "Parar": o PC descarta a resposta e tira o turno do histórico.
+    if (pending?.id && pending.enviado && ws?.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: 'parar', id: pending.id })); } catch { /* */ }
+    }
+    settlePending((p) => p.reject(new Error('Conexão encerrada antes da resposta.')));
+    rejeitarReady?.(new ConexaoNaoAbriu('Conexão encerrada antes de abrir'));
+    const velho = ws;
+    ws = null;
+    try { velho?.close(); } catch { /* */ }
+    onClosed?.();
   }
 
-  return { ready, sendAudio, sendText, close };
+  function viva(): boolean {
+    return !encerrada && !!ws && ws.readyState === WebSocket.OPEN && (!suportaPong || Date.now() - ultimoSinal < SILENCIO_MAXIMO_MS);
+  }
+
+  function reconectar() {
+    if (encerrada) return;
+    if (timerReconexao) { clearTimeout(timerReconexao); timerReconexao = null; }
+    tentativas = 0;
+    const velho = ws;
+    ws = null;
+    try { velho?.close(); } catch { /* */ }
+    if (pending?.enviado && pending.id) { pending.aguardandoRetomada = true; if (!pending.caiuEm) pending.caiuEm = Date.now(); onEstado?.('reconectando'); }
+    conectar();
+  }
+
+  return { ready, sendAudio, sendText, close, viva, reconectar };
 }

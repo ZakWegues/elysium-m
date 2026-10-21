@@ -85,6 +85,31 @@ function AppInner() {
   /** Lendo o QR de um PC a mais (bloco 121) — o atual continua pareado até dar certo. */
   const [adicionandoPc, setAdicionandoPc] = useState(false);
   const [screen, setScreen] = useState<Screen>('home');
+  // 21/10: a aba sobrevive se o Android fechar o app no fundo — voltar não joga na Início.
+  const abaLida = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem('elysium_aba').then((v) => {
+      if (v === 'chat' || v === 'hoje' || v === 'control' || v === 'home') setScreen(v);
+    }).catch(() => {}).finally(() => { abaLida.current = true; });
+  }, []);
+  useEffect(() => {
+    if (abaLida.current && screen !== 'conversations') AsyncStorage.setItem('elysium_aba', screen).catch(() => {});
+  }, [screen]);
+  // 21/10: tocar no aviso "A Ely te mandou um arquivo" abre a Caixa (o lado PC do Chat).
+  useEffect(() => {
+    let tirar: (() => void) | undefined;
+    const abrirCaixa = (dados: unknown) => {
+      if ((dados as { tipo?: unknown } | null)?.tipo !== 'caixa') return;
+      setScreen('chat');
+      setPedidoModo(p => ({ modo: 'pc', n: p.n + 1 }));
+    };
+    import('expo-notifications').then((N) => {
+      N.getLastNotificationResponseAsync().then(r => { if (r) abrirCaixa(r.notification.request.content.data); }).catch(() => {});
+      const sub = N.addNotificationResponseReceivedListener(r => abrirCaixa(r.notification.request.content.data));
+      tirar = () => sub.remove();
+    }).catch(() => { /* sem notificações nesta build */ });
+    return () => tirar?.();
+  }, []);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [mailboxUnread, setMailboxUnread] = useState(0);

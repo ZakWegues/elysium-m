@@ -13,12 +13,22 @@ import * as Updates from 'expo-updates';
  * Agora:
  *  - procura ao abrir e ao voltar ao app (no máximo a cada 15 min) e baixa na hora;
  *  - com uma pronta, o App mostra "Reiniciar agora" (`useUpdates().isUpdatePending`);
- *  - voltou de mais de 30 s fora com uma pronta pendente: aplica sozinho, antes de a
- *    pessoa começar a mexer — reiniciar ali não interrompe nada.
+ *  - voltou de mais de 30 MIN fora com uma pronta pendente e nada em andamento: aplica sozinho.
+ *
+ * 21/10: eram 30 s, e o Zak reclamou que "minimizar cancela ou reinicia tudo" — era isto,
+ * reiniciando o app no meio de uma conversa. Agora só depois de meia hora fora, e nunca com
+ * resposta chegando, gravação ou modo live (`marcarOcupado`). O resto fica para o
+ * "Reiniciar agora" ou a próxima abertura.
  */
 
 const INTERVALO_MS = 15 * 60_000;
-const FORA_PARA_APLICAR_MS = 30_000;
+const FORA_PARA_APLICAR_MS = 30 * 60_000;
+
+/** O que está em andamento e não pode ser interrompido por um reinício (chat, live, gravação). */
+const ocupados = new Set<string>();
+export function marcarOcupado(chave: string, ocupado: boolean): void {
+  if (ocupado) ocupados.add(chave); else ocupados.delete(chave);
+}
 
 let ultimaProcura = 0;
 
@@ -33,8 +43,8 @@ export async function emFluxoExterno<T>(acao: () => Promise<T>): Promise<T> {
   fluxosAbertos++;
   try { return await acao(); } finally { fluxosAbertos--; fluxoTerminouEm = Date.now(); }
 }
-function podeAplicarSozinho(): boolean {
-  return fluxosAbertos === 0 && Date.now() - fluxoTerminouEm > 60_000;
+export function podeAplicarSozinho(): boolean {
+  return fluxosAbertos === 0 && ocupados.size === 0 && Date.now() - fluxoTerminouEm > 60_000;
 }
 let procurando: Promise<ResultadoOta> | null = null;
 

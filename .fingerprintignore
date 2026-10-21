@@ -1,0 +1,6 @@
+# Saídas de build do módulo nativo local (20/10): o Gradle cria estas pastas no meio da build,
+# e o fingerprint calculado pelo expo-updates durante a build pegava a pasta pela metade — o APK
+# saía com um runtime que ninguém mais reproduzia, e OTA nenhum chegaria nele.
+modules/*/android/build/**/*
+modules/*/android/.gradle/**/*
+modules/*/android/.cxx/**/*

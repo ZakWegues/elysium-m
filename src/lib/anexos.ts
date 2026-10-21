@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { toByteArray } from 'base64-js';
 
@@ -107,4 +107,105 @@ export async function abrirNoCelular(nome: string, mimeType: string, base64: str
     type: mimeType || 'application/octet-stream',
     flags: 1,
   });
+}
+
+// ── 21/10: arquivos grandes do PC (até 500 MB) ────────────────────────────────────────────
+// O PC 2.14+ serve o anexo cru em `/api/mailbox/messages/:id/raw`. O celular baixa direto para
+// o cache, com progresso, sem passar por base64 na memória. PC antigo: cai no `/content`.
+
+export const LIMITE_ARQUIVO_DO_PC = 500 * 1024 * 1024;
+
+const MIME_POR_EXTENSAO: Record<string, string> = {
+  pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+  mp4: 'video/mp4', mkv: 'video/x-matroska', mov: 'video/quicktime', webm: 'video/webm', avi: 'video/x-msvideo', '3gp': 'video/3gpp',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav', ogg: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac',
+  zip: 'application/zip', epub: 'application/epub+zip',
+};
+
+/** O tipo do arquivo: o que veio, ou pela extensão quando veio vazio/genérico. Pura. */
+export function tipoDoArquivo(nome: string, mimeType?: string | null): string {
+  if (mimeType && mimeType !== 'application/octet-stream') return mimeType;
+  const ext = (nome.split('.').pop() ?? '').toLowerCase();
+  return MIME_POR_EXTENSAO[ext] ?? 'application/octet-stream';
+}
+
+/** "12,4 MB". Pura. */
+export function tamanhoLegivel(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 ** 3).toFixed(1).replace('.', ',')} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 ** 2).toFixed(1).replace('.', ',')} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function arquivoNoCache(id: string, nome: string): File {
+  const pasta = new Directory(Paths.cache, 'caixa');
+  if (!pasta.exists) pasta.create();
+  return new File(pasta, `${id.slice(0, 8)}-${nomeSeguro(nome)}`);
+}
+
+/**
+ * Baixa o anexo do recado para o cache (uma vez; da segunda já está lá). `aoProgresso` recebe
+ * de 0 a 1. Sem a rota nova (PC antigo, 404), baixa pelo `/content` em base64.
+ */
+export async function baixarAnexo(
+  pc: { baseUrl: string; token: string },
+  id: string, nome: string, tamanho: number,
+  aoProgresso?: (fracao: number) => void,
+  buscarBase64?: () => Promise<string>,
+): Promise<File> {
+  const destino = arquivoNoCache(id, nome);
+  if (destino.exists && (!tamanho || destino.size === tamanho)) return destino;
+  if (destino.exists) destino.delete();
+  try {
+    const tarefa = File.createDownloadTask(`${pc.baseUrl}/api/mailbox/messages/${encodeURIComponent(id)}/raw`, destino, {
+      headers: { Authorization: `Bearer ${pc.token}` },
+      onProgress: ({ bytesWritten, totalBytes }) => { if (totalBytes > 0) aoProgresso?.(bytesWritten / totalBytes); },
+    });
+    const f = await tarefa.downloadAsync();
+    if (f && f.exists && (f.size ?? 0) > 0) return f;
+    throw new Error('download vazio');
+  } catch (e) {
+    if (!buscarBase64) throw e;
+    // PC antigo: a rota crua não existe — o anexo vem em base64 (até 5 MB).
+    const b64 = await buscarBase64();
+    if (!b64) throw new Error('O PC não conseguiu mandar esse arquivo (atualize o ELYSIUM do PC).');
+    if (destino.exists) destino.delete();
+    destino.create();
+    destino.write(toByteArray(b64));
+    return destino;
+  }
+}
+
+/** Abre o arquivo baixado no app que o Android escolher para o tipo. */
+export async function abrirArquivo(arquivo: File, nome: string, mimeType: string): Promise<void> {
+  const tipo = tipoDoArquivo(nome, mimeType);
+  if (!podeAbrirDireto(nome, tipo)) throw new Error('Esse tipo de arquivo não abre direto daqui. Use Salvar e abra pelo gerenciador de arquivos.');
+  await IntentLauncher.startActivityAsync('android.intent.action.VIEW', { data: arquivo.contentUri, type: tipo, flags: 1 });
+}
+
+/**
+ * Salva na pasta escolhida copiando em partes de 1 MB — um vídeo de 500 MB não cabe inteiro
+ * na memória. Devolve o nome da pasta.
+ */
+export async function salvarArquivo(arquivo: File, nome: string, mimeType: string, trocarPasta = false): Promise<string> {
+  const pasta = await pastaDestino(trocarPasta);
+  const destino = pasta.createFile(nomeSeguro(nome), tipoDoArquivo(nome, mimeType));
+  const de = arquivo.open(FileMode.ReadOnly);
+  const para = destino.open(FileMode.WriteOnly);
+  try {
+    const PEDACO = 1024 * 1024;
+    for (;;) {
+      const bytes = de.readBytes(PEDACO);
+      if (!bytes.length) break;
+      para.writeBytes(bytes);
+      if (bytes.length < PEDACO) break;
+    }
+  } finally {
+    de.close();
+    para.close();
+  }
+  return decodeURIComponent(pasta.name || pasta.uri.split('%3A').pop() || 'pasta escolhida');
 }

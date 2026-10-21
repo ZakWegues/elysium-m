@@ -3,7 +3,7 @@
     "name": "ELYSIUM-M",
     "slug": "neuroaxis-portal",
     "scheme": "elysium",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "orientation": "portrait",
     "updates": {
       "url": "https://u.expo.dev/a9c62871-2d6d-4e05-b458-1e58655449b5",
@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.zak.elysium.m",
-      "versionCode": 23,
+      "versionCode": 24,
       "adaptiveIcon": {
         "backgroundColor": "#0a0c14",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -47,7 +47,7 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ],
       "intentFilters": [
         {
@@ -64,7 +64,11 @@
           ]
         }
       ],
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -77,7 +81,12 @@
           "cameraPermission": "Precisamos da câmera pra escanear o QR code de pareamento e pra fotografar e perguntar ao ELYSIUM."
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundRecording": true
+        }
+      ],
       "expo-notifications",
       "expo-local-authentication",
       "./plugins/withReleaseSigning",
@@ -319,7 +328,16 @@
           }
         }
       ],
-      ["expo-share-intent", { "androidIntentFilters": ["text/*", "image/*"], "disableIOS": true }]
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": [
+            "text/*",
+            "image/*"
+          ],
+          "disableIOS": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

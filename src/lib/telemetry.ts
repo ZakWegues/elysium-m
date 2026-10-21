@@ -53,10 +53,13 @@ export function openTelemetryStream(
       }
     };
 
-    socket.onerror = () => {
+    socket.onerror = (e) => {
       // Erro de conexão transitório (PC desligado/fora da rede) - reconexão automática
       // abaixo já trata isso, não é um erro acionável pelo usuário.
       console.warn('[telemetry-ws] erro na conexão', url);
+      // 21/10: token recusado (401) não melhora tentando de novo — e cada tentativa conta como
+      // recusa no PC, que bloqueia o IP depois de 20. Para o laço até o app reabrir a tela.
+      if (/\b401\b/.test(String((e as { message?: string })?.message ?? ''))) stopped = true;
     };
 
     socket.onclose = () => {

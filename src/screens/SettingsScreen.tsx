@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import * as Application from 'expo-application';
 import AvisoAtualizacao from '../components/AvisoAtualizacao';
 import { versaoInstalada } from '../lib/atualizacao';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import * as IntentLauncher from 'expo-intent-launcher';
 import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
@@ -339,6 +340,19 @@ function SecaoPareamento({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pai
           Cada PC tem as próprias conversas e recados neste celular. Até 5 PCs.
         </Text>
       </View>
+      {/* 21/10: o Android fecha app "economizando bateria" e a conversa caía no fundo. */}
+      {Platform.OS === 'android' && (
+        <View style={{ gap: tokens.spacing.xs }}>
+          <Text variant="subheading">Rodar no fundo</Text>
+          <Button title="Deixar a Ely rodar com o app minimizado" variant="secondary" onPress={() => {
+            IntentLauncher.startActivityAsync('android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', { data: 'package:com.zak.elysium.m' })
+              .catch(() => IntentLauncher.startActivityAsync('android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS').catch(() => {}));
+          }} />
+          <Text variant="caption" color={palette.textMuted}>
+            Tira o ELYSIUM da economia de bateria do Android: a conexão com o PC e o modo live não são cortados quando você minimiza. Gasta um pouco mais de bateria.
+          </Text>
+        </View>
+      )}
       <Card glass style={{ gap: tokens.spacing.md, flexDirection: 'row', alignItems: 'center' }}>
         <View
           style={[

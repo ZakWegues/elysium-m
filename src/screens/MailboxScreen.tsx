@@ -7,7 +7,7 @@ import * as Clipboard from 'expo-clipboard';
 import { File } from 'expo-file-system';
 import { fromByteArray } from 'base64-js';
 import Feather from '@expo/vector-icons/Feather';
-import { Pairing } from '../lib/pairing';
+import { baseUrl, Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
 import {
   ackMessage,
@@ -24,7 +24,8 @@ import { errMessage } from '../lib/errors';
 import { comAlfa, useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 import { avisarTokenRecusado } from '../lib/erroRpc';
-import { abrirNoCelular, planejarEnvio, resumoDosArquivos, salvarNoCelular } from '../lib/anexos';
+import { abrirArquivo, baixarAnexo, planejarEnvio, resumoDosArquivos, salvarArquivo, tamanhoLegivel, tipoDoArquivo } from '../lib/anexos';
+import { aoChegarRecado } from '../lib/mailboxAviso';
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -55,6 +56,8 @@ export default function MailboxScreen({
   const [progresso, setProgresso] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [imageCache, setImageCache] = useState<Record<string, string>>({});
+  /** 21/10: download de anexo em andamento (com progresso). */
+  const [baixando, setBaixando] = useState<{ id: string; nome: string; fracao: number } | null>(null);
   const fetchingImages = useRef<Set<string>>(new Set());
   const listRef = useRef<FlatList<MailboxMessage>>(null);
 
@@ -105,6 +108,9 @@ export default function MailboxScreen({
       refresh();
     })();
   }, [refresh, sessionId]);
+
+  // 21/10: recado/arquivo novo do PC chega pelo WebSocket — recarrega na hora.
+  useEffect(() => aoChegarRecado(() => { refresh(); }), [refresh]);
 
   // Com o Chat escondido (abas vivas), a Caixa não consulta o PC a cada 15 s à toa.
   const ativa = useAbaAtiva();
@@ -186,6 +192,8 @@ export default function MailboxScreen({
     const toFetch = messages.filter(
       (m) =>
         m.attachment?.mimeType.startsWith('image/') &&
+        // Prévia só de imagem que cabe em base64; foto enorme abre pelo toque (21/10).
+        (m.attachment?.sizeBytes ?? 0) <= MAILBOX_MAX_ATTACHMENT_BYTES &&
         !imageCache[m.id] &&
         !fetchingImages.current.has(m.id)
     );
@@ -329,7 +337,7 @@ export default function MailboxScreen({
   async function handleOpenAttachment(message: MailboxMessage) {
     const meta = message.attachment;
     if (!meta) return;
-    const escolha = await new Promise<'abrir' | 'salvar' | 'trocar' | null>((r) => Alert.alert(meta.name, `${meta.mimeType} · ${resumoDosArquivos([meta]).replace(/^1 arquivo /, '')}`, [
+    const escolha = await new Promise<'abrir' | 'salvar' | 'trocar' | null>((r) => Alert.alert(meta.name, `${tipoDoArquivo(meta.name, meta.mimeType)} · ${tamanhoLegivel(meta.sizeBytes)}`, [
       { text: 'Cancelar', style: 'cancel', onPress: () => r(null) },
       { text: 'Salvar em outra pasta', onPress: () => r('trocar') },
       { text: 'Salvar no celular', onPress: () => r('salvar') },
@@ -337,15 +345,21 @@ export default function MailboxScreen({
     ], { cancelable: true, onDismiss: () => r(null) }));
     if (!escolha) return;
     try {
-      const conteudo = await fetchMessageContent(pairing, message.id);
-      const b64 = conteudo.attachment?.base64;
-      if (!b64) throw new Error('o PC não mandou o arquivo');
-      if (escolha === 'abrir') await abrirNoCelular(meta.name, meta.mimeType, b64);
+      // 21/10: baixa direto para o cache (até 500 MB, com progresso); PC antigo cai no base64.
+      setBaixando({ id: message.id, nome: meta.name, fracao: 0 });
+      const arquivo = await baixarAnexo(
+        { baseUrl: baseUrl(pairing), token: pairing.token }, message.id, meta.name, meta.sizeBytes,
+        (fracao) => setBaixando(b => (b && b.id === message.id ? { ...b, fracao } : b)),
+        async () => (await fetchMessageContent(pairing, message.id)).attachment?.base64 ?? '',
+      );
+      setBaixando(null);
+      if (escolha === 'abrir') await abrirArquivo(arquivo, meta.name, meta.mimeType);
       else {
-        const pasta = await salvarNoCelular(meta.name, meta.mimeType, b64, escolha === 'trocar');
+        const pasta = await salvarArquivo(arquivo, meta.name, meta.mimeType, escolha === 'trocar');
         Alert.alert('Salvo', `${meta.name} está em ${pasta}.`);
       }
     } catch (err) {
+      setBaixando(null);
       // Fechar o seletor de pasta não é erro.
       if (/cancel/i.test(errMessage(err))) return;
       Alert.alert(escolha === 'abrir' ? 'Não deu para abrir' : 'Não deu para salvar', errMessage(err));
@@ -357,6 +371,11 @@ export default function MailboxScreen({
   return (
     <View style={{ flex: 1 }}>
       {!semCabecalho && <ScreenHeader title="Caixa de recados" />}
+      {baixando && (
+        <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingVertical: 6 }}>
+          Baixando {baixando.nome}… {Math.round(baixando.fracao * 100)}%
+        </Text>
+      )}
 
       {loading && (
         <View style={styles.center}>

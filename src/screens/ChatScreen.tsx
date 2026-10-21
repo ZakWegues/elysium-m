@@ -14,7 +14,7 @@ import { Esfera3D } from '../components/Esfera3D';
 import { ehEntradaDoLive, ehSaidaDoLive, SILENCIO_LIVE_MS } from '../lib/live';
 import { criarFatiador, restoParaFalar } from '../lib/fatiadorDeFrases';
 import { criarAdiador, gravacaoCurta } from '../lib/adiador';
-import { emFluxoExterno } from '../lib/atualizacaoOta';
+import { emFluxoExterno, marcarOcupado } from '../lib/atualizacaoOta';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,7 +27,7 @@ import { Pairing } from '../lib/pairing';
 import { AuthError, sendCommand } from '../lib/api';
 import { TimeoutError } from '../lib/http';
 import { enqueueCommand } from '../lib/commandQueue';
-import { openVoiceConnection, VoiceConnection } from '../lib/stream';
+import { ConexaoNaoAbriu, EstadoConexao, openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
@@ -91,6 +91,14 @@ export default function ChatScreen({
   const [nomeDono, setNomeDono] = useState('');
   useEffect(() => { AsyncStorage.getItem(CHAVE_NOME).then(n => { if (n) setNomeDono(n); }).catch(() => {}); }, []);
   const [draft, setDraft] = useState('');
+  // 21/10: o rascunho sobrevive se o Android fechar o app no fundo.
+  const rascunhoLido = useRef(false);
+  useEffect(() => { AsyncStorage.getItem('elysium_rascunho').then(r => { if (r) setDraft(d => d || r); }).catch(() => {}).finally(() => { rascunhoLido.current = true; }); }, []);
+  useEffect(() => {
+    if (!rascunhoLido.current) return;
+    const t = setTimeout(() => { AsyncStorage.setItem('elysium_rascunho', draft).catch(() => {}); }, 400);
+    return () => clearTimeout(t);
+  }, [draft]);
   /**
    * "/" no começo da mensagem lista os comandos de IA (bloco 137): "/Corrigir português
    * texto…" manda só o texto para o comando, sem passar pela conversa.
@@ -128,6 +136,11 @@ export default function ChatScreen({
     }
   }
   const [sending, setSendingEstado] = useState(false);
+  /** 21/10: a conexão caiu no meio de uma resposta — mostra "Reconectando…" em vez de erro. */
+  const [conexao, setConexao] = useState<EstadoConexao>('conectado');
+  /** O pareamento ATUAL: a conexão reabre sempre no endereço que está valendo agora. */
+  const pairingRef = useRef(pairing);
+  pairingRef.current = pairing;
   /**
    * O estado `sending` só muda no próximo render: dois toques rápidos passavam os dois pela
    * guarda e mandavam a pergunta duas vezes. O ref vale na hora. Começar um envio também
@@ -138,6 +151,7 @@ export default function ChatScreen({
   const paradoRef = useRef(false);
   function setSending(v: boolean) {
     enviandoRef.current = v;
+    marcarOcupado('chat', v);
     if (v) paradoRef.current = false;
     setSendingEstado(v);
   }
@@ -288,16 +302,34 @@ export default function ChatScreen({
     };
   }, []);
 
+  // 21/10: voltou para a frente ou o endereço do PC mudou (Wi-Fi ↔ túnel) — a conexão do chat
+  // é refeita na hora, no endereço novo. Antes ela ficava presa ao socket morto.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      const c = voiceConnRef.current;
+      if (s === 'active' && c && !c.viva()) c.reconectar();
+    });
+    return () => sub.remove();
+  }, []);
+  const ipAnterior = useRef(pairing.activeIp);
+  useEffect(() => {
+    if (ipAnterior.current === pairing.activeIp) return;
+    ipAnterior.current = pairing.activeIp;
+    voiceConnRef.current?.reconectar();
+  }, [pairing.activeIp]);
+
   async function ensureVoiceConnection(): Promise<VoiceConnection> {
     if (voiceConnRef.current) return voiceConnRef.current;
-    const conn = openVoiceConnection(pairing, () => {
+    const conn = openVoiceConnection(() => pairingRef.current, () => {
       if (voiceConnRef.current === conn) voiceConnRef.current = null;
-    });
+    }, undefined, setConexao);
     voiceConnRef.current = conn;
     try {
       await conn.ready;
     } catch (err) {
+      // Nem abriu: encerra (senão ela ficaria tentando de novo no fundo) e quem chamou cai no HTTP.
       if (voiceConnRef.current === conn) voiceConnRef.current = null;
+      conn.close();
       throw err;
     }
     return conn;
@@ -474,9 +506,10 @@ export default function ChatScreen({
         fontes = r.fontes;
         local = r.local === true;
       } catch (wsErr) {
-        // Só cai no HTTP se o PC não chegou a responder NADA: com pedaços já na tela o
-        // comando já rodou lá, e mandar de novo abriria o programa duas vezes.
-        if (bolha.comecou() || paradoRef.current) throw wsErr;
+        // 21/10: só cai no HTTP se a conexão NEM ABRIU (o comando não chegou ao PC). Com o
+        // comando já enviado, mandar de novo rodaria duas vezes — a retomada cuida da queda.
+        const naoAbriu = wsErr instanceof ConexaoNaoAbriu || (wsErr instanceof Error && wsErr.message === 'WebSocket demorou a abrir');
+        if (!naoAbriu || bolha.comecou() || paradoRef.current) throw wsErr;
         console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
         reply = await sendCommand(pairing, text, 'texto');
       }
@@ -506,9 +539,10 @@ export default function ChatScreen({
         return;
       }
 
-      pushError(`Falha: ${errMessage(err)}`);
+      pushError(errMessage(err));
     } finally {
       setSending(false);
+      setConexao('conectado');
       bolhaAtualRef.current = null;
     }
   }
@@ -779,7 +813,14 @@ export default function ChatScreen({
   // Fase 21: modo live — conversa contínua. O ref é o que os laços leem; o estado, a faixa.
   const liveRef = useRef(false);
   const [live, setLiveEstado] = useState(false);
-  const setLive = (v: boolean) => { liveRef.current = v; setLiveEstado(v); };
+  const setLive = (v: boolean) => {
+    liveRef.current = v;
+    marcarOcupado('live', v);
+    setLiveEstado(v);
+    // 21/10 (APK 2.4): com o live ligado, o microfone continua com o app minimizado — o Android
+    // mostra o aviso fixo do serviço de gravação. Desligou o live, volta ao normal.
+    setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: v }).catch(() => {});
+  };
 
   /**
    * Grava até a pessoa falar e calar. `uri` null = ninguém falou (ou o turno foi cancelado).
@@ -879,7 +920,10 @@ export default function ChatScreen({
       else resposta?.fala?.abortar();
       completo = !!resposta && turnoRef.current;
     } catch (err) {
-      pushError(`Voz: ${errMessage(err)}`);
+      // Minimizado sem a gravação no fundo (APK antigo, ou o Android recusou): o live para limpo,
+      // com o porquê, em vez de um erro técnico.
+      if (liveRef.current && AppState.currentState !== 'active') pushError('O Android não deixou ouvir com o app minimizado. Abra o app e diga "modo live" para continuar.');
+      else pushError(`Voz: ${errMessage(err)}`);
     } finally {
       turnoRef.current = false;
       setFaseVoz(null);
@@ -1043,6 +1087,9 @@ export default function ChatScreen({
       />
 
       {sending && !escrevendoId && <BolhaPensando />}
+      {sending && conexao === 'reconectando' && (
+        <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingBottom: 6 }}>Reconectando ao PC… a resposta continua de onde parou.</Text>
+      )}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {/* "/" = comandos de IA (bloco 137): toque escolhe, depois escreva ou cole o texto. */}

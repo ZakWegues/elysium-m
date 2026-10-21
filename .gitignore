@@ -50,3 +50,27 @@ dist-apk/
 # Firebase (bloco 94): fica só nesta máquina. Não é segredo como a chave de conta de
 # serviço, mas o repositório não precisa dele; baixa de novo no console do Firebase.
 google-services.json
+
+# Segredos, chaves e artefatos (23.2; entram com o APK 2.4.0 — o .gitignore conta no fingerprint)
+.env
+.env.*
+!.env.example
+elysium-config.json
+auth.json
+credentials.json
+*.jks
+*.keystore
+*.pfx
+*.p12
+*.p8
+*.key
+*.apk
+*.aab
+coverage/
+
+# Arquivos locais de trabalho
+.claude/
+CLAUDE.md
+AGENTS.md
+ULTRA_HANDOFF.md
+HANDOFF.md

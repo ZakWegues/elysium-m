@@ -28,6 +28,7 @@ export class CanalInput {
   modo: ModoCanal = 'conectando';
   /** Ida e volta do último ping (ms), para mostrar na tela. */
   rtt: number | null = null;
+  private tentativas = 0;
 
   constructor(private readonly pairing: Pairing, private readonly aoMudarModo?: (m: ModoCanal) => void) {}
 
@@ -38,6 +39,7 @@ export class CanalInput {
     try { ws = openAuthedWebSocket(this.pairing); } catch { this.mudarModo('http'); return; }
     this.ws = ws;
     ws.onopen = () => {
+      this.tentativas = 0;
       this.ping();
       this.timerPong = setTimeout(() => { if (this.modo === 'conectando') this.mudarModo('http'); }, 1000);
       // O PC derruba socket parado há 90 s: um ping a cada 20 s mantém vivo e mede a latência.
@@ -56,7 +58,11 @@ export class CanalInput {
     ws.onclose = () => {
       this.ws = null;
       this.limparTimers();
-      if (!this.fechado) this.mudarModo('http');
+      if (this.fechado) return;
+      this.mudarModo('http');
+      // 21/10: caiu (Wi-Fi trocou, app no fundo) — tenta voltar ao WebSocket, até 15 s entre tentativas.
+      const espera = Math.min(15000, 1000 * 2 ** this.tentativas++);
+      setTimeout(() => { if (!this.fechado && !this.ws) this.abrir(); }, espera);
     };
   }
 
