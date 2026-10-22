@@ -209,3 +209,53 @@ export async function salvarArquivo(arquivo: File, nome: string, mimeType: strin
   }
   return decodeURIComponent(pasta.name || pasta.uri.split('%3A').pop() || 'pasta escolhida');
 }
+
+// ── 22/10: arquivo grande do celular para o PC (até 500 MB) ───────────────────────────────
+// O PC 2.15+ recebe o arquivo cru em `PUT /api/mailbox/upload`, em stream para o disco. Antes o
+// envio ia em base64 dentro de JSON e parava em 5 MB. PC antigo (404): cai no base64, só até 5 MB.
+
+export const LIMITE_ENVIO_PARA_O_PC = 500 * 1024 * 1024;
+
+/** O PC respondeu que não conhece a rota (anterior à 2.15). */
+export class PcSemUploadGrande extends Error {}
+
+/** O endereço do upload, com nome, tipo, texto e conversa na query. Pura. */
+export function urlDoUpload(baseUrl: string, nome: string, tipo: string, extras: { texto?: string | null; sessionId?: string | null } = {}): string {
+  const q = new URLSearchParams({ nome: nomeSeguro(nome), tipo });
+  if (extras.texto?.trim()) q.set('texto', extras.texto.trim().slice(0, 2000));
+  if (extras.sessionId) q.set('sessionId', extras.sessionId);
+  return `${baseUrl}/api/mailbox/upload?${q.toString()}`;
+}
+
+/**
+ * Manda o arquivo inteiro, sem carregar na memória, com progresso de 0 a 1. Cancelável pelo
+ * `signal`. 404 = PC antigo (`PcSemUploadGrande`): quem chama decide cair no base64.
+ */
+export async function enviarArquivoGrande(
+  pc: { baseUrl: string; token: string },
+  uri: string, nome: string, tipo: string,
+  opcoes: { texto?: string | null; sessionId?: string | null; aoProgresso?: (fracao: number) => void; signal?: AbortSignal } = {},
+): Promise<{ id: string }> {
+  const arquivo = new File(uri);
+  const tamanho = arquivo.size ?? 0;
+  if (!tamanho) throw new Error('Não deu para ler o tamanho do arquivo.');
+  if (tamanho > LIMITE_ENVIO_PARA_O_PC) throw new Error('O arquivo passa de 500 MB.');
+  const tarefa = arquivo.createUploadTask(urlDoUpload(pc.baseUrl, nome, tipoDoArquivo(nome, tipo), opcoes), {
+    httpMethod: 'PUT',
+    headers: { Authorization: `Bearer ${pc.token}`, 'Content-Type': 'application/octet-stream' },
+    signal: opcoes.signal,
+    onProgress: ({ bytesSent, totalBytes }) => { if (totalBytes > 0) opcoes.aoProgresso?.(bytesSent / totalBytes); },
+  });
+  try {
+    const r = await tarefa.uploadAsync();
+    if (r.status === 404) throw new PcSemUploadGrande('O PC não tem o envio de arquivo grande.');
+    if (r.status === 401) throw new Error('O PC recusou o token. Pareie de novo.');
+    if (r.status === 413) throw new Error('O arquivo passa de 500 MB.');
+    if (r.status < 200 || r.status >= 300) throw new Error(`O PC respondeu ${r.status}.`);
+    const j = JSON.parse(r.body || '{}') as { id?: string };
+    if (!j.id) throw new Error('Resposta estranha do PC.');
+    return { id: j.id };
+  } finally {
+    tarefa.release();
+  }
+}

@@ -20,7 +20,6 @@ import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { MotivoParada, resumoRodada } from '../lib/vozDiag';
-import { fromByteArray } from 'base64-js';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
@@ -31,7 +30,6 @@ import { ConexaoNaoAbriu, EstadoConexao, openVoiceConnection, VoiceConnection } 
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
-import { MAILBOX_MAX_ATTACHMENT_BYTES, sendMessage } from '../lib/mailbox';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV } from '../lib/motion';
@@ -40,6 +38,10 @@ import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text } from '../compo
 import { CantosOrnamentados } from '../components/ui/Ornamentos';
 import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
+import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
+import { RespostasRapidas } from '../components/RespostasRapidas';
+import { mandarArquivoParaPc } from '../lib/shareIntent';
+import { LIMITE_ENVIO_PARA_O_PC } from '../lib/anexos';
 import { paraFala, textoPuro } from '../lib/markdown';
 import * as Clipboard from 'expo-clipboard';
 import { avisarTokenRecusado } from '../lib/erroRpc';
@@ -322,7 +324,14 @@ export default function ChatScreen({
     if (voiceConnRef.current) return voiceConnRef.current;
     const conn = openVoiceConnection(() => pairingRef.current, () => {
       if (voiceConnRef.current === conn) voiceConnRef.current = null;
-    }, undefined, setConexao);
+    }, (sugestoes) => {
+      // 22/10: as sugestões de continuação (bloco 132) entram na linha da última resposta.
+      setMessages((prev) => {
+        const ultima = prev[prev.length - 1];
+        if (!ultima || ultima.from !== 'reply' || ultima.rapidas?.pergunta) return prev;
+        return [...prev.slice(0, -1), { ...ultima, sugestoes }];
+      });
+    }, setConexao);
     voiceConnRef.current = conn;
     try {
       await conn.ready;
@@ -410,7 +419,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -424,9 +433,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[], local?: boolean) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas) => {
       setEscrevendoId(null);
-      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}) };
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -439,6 +448,7 @@ export default function ChatScreen({
    * sozinha no próximo envio (`ensureVoiceConnection`).
    */
   const bolhaAtualRef = useRef<ReturnType<typeof bolhaEmPedacos> | null>(null);
+  const inputRef = useRef<TextInput>(null);
   function pararResposta() {
     if (!enviandoRef.current || paradoRef.current) return;
     paradoRef.current = true;
@@ -493,6 +503,7 @@ export default function ChatScreen({
       let reply: string;
       let fontes: Fonte[] | undefined;
       let local = false;
+      let rapidas: Rapidas | undefined;
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
@@ -505,6 +516,7 @@ export default function ChatScreen({
         reply = r.reply;
         fontes = r.fontes;
         local = r.local === true;
+        rapidas = r.rapidas;
       } catch (wsErr) {
         // 21/10: só cai no HTTP se a conexão NEM ABRIU (o comando não chegou ao PC). Com o
         // comando já enviado, mandar de novo rodaria duas vezes — a retomada cuida da queda.
@@ -514,7 +526,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes, local);
+      bolha.fechar(reply, fontes, local, rapidas);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -572,16 +584,10 @@ export default function ChatScreen({
       const enviados: string[] = [];
       const grandes: string[] = [];
       for (const asset of arquivos) {
-        const bytes = new Uint8Array(await new File(asset.uri).arrayBuffer());
-        if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) { grandes.push(asset.name); continue; }
-        await sendMessage(pairing, {
-          kind: 'file',
-          attachment: {
-            name: asset.name,
-            mimeType: asset.mimeType ?? 'application/octet-stream',
-            base64: fromByteArray(bytes),
-          },
-        });
+        // 22/10: até 500 MB, em stream (PC 2.15+); PC antigo recusa acima de 5 MB com aviso.
+        const tamanho = asset.size ?? new File(asset.uri).size ?? 0;
+        if (tamanho > LIMITE_ENVIO_PARA_O_PC) { grandes.push(asset.name); continue; }
+        await mandarArquivoParaPc(pairing, { uri: asset.uri, nome: asset.name, mimeType: asset.mimeType ?? 'application/octet-stream', bytes: tamanho }, null);
         enviados.push(asset.name);
       }
       const ts = Date.now();
@@ -592,7 +598,7 @@ export default function ChatScreen({
           { id: `file-ok-${ts + 1}`, from: 'reply', text: enviados.length === 1 ? 'Arquivo entregue na caixa do PC.' : `${enviados.length} arquivos entregues na caixa do PC.`, ts: ts + 1 },
         ]);
       }
-      if (grandes.length) Alert.alert(grandes.length === 1 ? 'Arquivo grande demais' : 'Arquivos grandes demais', `Limite de ${Math.round(MAILBOX_MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB por anexo — ficou de fora: ${grandes.join(', ')}.`);
+      if (grandes.length) Alert.alert(grandes.length === 1 ? 'Arquivo grande demais' : 'Arquivos grandes demais', `Limite de ${Math.round(LIMITE_ENVIO_PARA_O_PC / 1024 / 1024)} MB por anexo — ficou de fora: ${grandes.join(', ')}.`);
       if (escolha.assets.length > arquivos.length) Alert.alert('Até 10 de cada vez', `Mandei os 10 primeiros; ${escolha.assets.length - arquivos.length} ficaram para a próxima.`);
     } catch (err) {
       if (err instanceof AuthError) {
@@ -725,12 +731,12 @@ export default function ChatScreen({
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
+      const { reply, rapidas } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
       if (paradoRef.current) { fala?.abortar(); return null; }
-      bolha.fechar(reply);
+      bolha.fechar(reply, undefined, false, rapidas);
       return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       // Erro no meio: o que já foi dito fica, e a voz para junto com a resposta.
@@ -864,9 +870,9 @@ export default function ChatScreen({
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
       bolhaAtualRef.current = bolha;
-      const { reply } = await conn.sendText(texto, (parcial) => { bolha.onChunk(parcial); ant.aoPedaco(parcial); });
+      const { reply, rapidas } = await conn.sendText(texto, (parcial) => { bolha.onChunk(parcial); ant.aoPedaco(parcial); });
       if (paradoRef.current) { fala?.abortar(); return null; }
-      bolha.fechar(reply);
+      bolha.fechar(reply, undefined, false, rapidas);
       return { reply, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       fala?.abortar();
@@ -1045,6 +1051,7 @@ export default function ChatScreen({
           const bg = item.from === 'me' ? comAlfa(tinta, ren ? 0.16 : 0.18) : item.from === 'error' ? palette.errorSoft : (palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)');
           const color = item.from === 'error' ? palette.error : palette.text;
           return (
+            <>
             <BolhaEntrando
               style={[
                 styles.bubble,
@@ -1082,6 +1089,11 @@ export default function ChatScreen({
                 </View>
               ) : null}
             </BolhaEntrando>
+            {/* 22/10: respostas rápidas embaixo da última resposta (somem quando ele responde). */}
+            {item.from === 'reply' && !sending && messages[messages.length - 1]?.id === item.id ? (
+              <RespostasRapidas botoes={botoesDasRapidas(item.rapidas, item.sugestoes)} onEscolher={(t) => handleSend(t)} onOutra={() => inputRef.current?.focus()} />
+            ) : null}
+            </>
           );
         }}
       />
@@ -1171,6 +1183,7 @@ export default function ChatScreen({
           <Feather name={maisAberto ? 'x' : 'plus'} size={20} color={palette.primary} />
         </GlassCircle>
         <TextInput
+          ref={inputRef}
           style={[
             styles.input,
             {

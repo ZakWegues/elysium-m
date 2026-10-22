@@ -28,6 +28,7 @@ import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
 import { useCompartilharDoAndroid, useShareIntent } from './src/lib/shareIntent';
+import { FolhaCompartilhar } from './src/components/FolhaCompartilhar';
 import { pedirSobreImagem } from './src/lib/imagemParaEly';
 import { MOV, tempo } from './src/lib/motion';
 import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedirPermissao } from './src/lib/notificacoes';
@@ -279,12 +280,8 @@ function AppInner() {
   // Bloco 137: o que foi compartilhado pode passar por um comando de IA (ou "Resumir a página").
   const [textoParaIa, setTextoParaIa] = useState<string | null>(null);
 
-  const handleShared = useCallback((text: string, ok: boolean) => {
-    Alert.alert(
-      ok ? 'Enviado pro PC' : 'Não consegui enviar',
-      ok ? text.slice(0, 120) : 'O PC está fora de alcance. Tente de novo quando ele voltar.',
-      ok ? [{ text: 'OK' }, { text: /^https?:\/\//i.test(text.trim()) ? 'Resumir / IA' : 'Usar IA', onPress: () => setTextoParaIa(text) }] : undefined,
-    );
+  // 22/10: o aviso de enviado/erro mora na própria folha de compartilhar.
+  const handleShared = useCallback((_text: string, ok: boolean) => {
     if (!ok) return;
     refreshMailboxBadge();
     // A Caixa deixou de ser uma tela: abre o Chat já no lado do PC, que é onde o recado
@@ -593,6 +590,8 @@ function AppInner() {
       </GlassModal>
       {/* Fase 23.1: estouros e fogos por cima de tudo (micro-detalhes do PC). */}
       <CamadaEstouros />
+      {/* 22/10: a folha de compartilhar própria, por cima até das gavetas. */}
+      <FolhaCompartilhar />
     </View>
     </SobreposicaoContext.Provider>
     </AjustesProvider>

@@ -423,7 +423,9 @@ export type EstadoHermes = {
   latenciaMs: number | null;
   ligado: boolean;
 };
-export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string; /** Fase 16: como a Ely chama o dono ("chefe"). PC antigo não manda. */ tratamento?: string };
+export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string; /** Fase 16: como a Ely chama o dono ("chefe"). PC antigo não manda. */ tratamento?: string;
+  /** 22/10: respostas rápidas e telas interativas. PC anterior à 2.15 não manda. */
+  respostasRapidas?: boolean; respostasProntas?: string[]; respostasInterativas?: 'nunca' | 'pedir' | 'perguntar' | 'priorizar' };
 
 /** Hábito com as contas do PC (fase 16). `mapa`: 30 dias, true feito, false não, null não vale. */
 export type Habito = {

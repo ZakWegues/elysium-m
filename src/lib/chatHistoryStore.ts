@@ -1,3 +1,4 @@
+import type { Rapidas } from './respostasRapidas';
 import { chavePorPc } from './pcAtivo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -9,7 +10,7 @@ const MAX_NON_FAVORITE_SESSIONS = 5;
 export type Fonte = { titulo: string; url: string };
 /** `fontes`: as páginas que a busca na web leu para essa resposta (bloco 131). */
 /** `local` (fase 18): a nuvem falhou e quem respondeu foi o cérebro do PC — selo "modo local". */
-export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[]; local?: boolean };
+export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[]; local?: boolean; /** 22/10: botões de resposta da última mensagem. */ rapidas?: Rapidas; sugestoes?: string[] };
 
 export type ChatSession = {
   id: string;

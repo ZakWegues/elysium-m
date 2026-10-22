@@ -4,8 +4,6 @@ import { TextoComLinks } from '../components/TextoComLinks';
 import { useAbaAtiva } from '../components/AbaViva';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
-import { File } from 'expo-file-system';
-import { fromByteArray } from 'base64-js';
 import Feather from '@expo/vector-icons/Feather';
 import { baseUrl, Pairing } from '../lib/pairing';
 import { AuthError } from '../lib/api';
@@ -24,7 +22,8 @@ import { errMessage } from '../lib/errors';
 import { comAlfa, useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 import { avisarTokenRecusado } from '../lib/erroRpc';
-import { abrirArquivo, baixarAnexo, planejarEnvio, resumoDosArquivos, salvarArquivo, tamanhoLegivel, tipoDoArquivo } from '../lib/anexos';
+import { mandarArquivoParaPc } from '../lib/shareIntent';
+import { abrirArquivo, baixarAnexo, LIMITE_ENVIO_PARA_O_PC, planejarEnvio, resumoDosArquivos, salvarArquivo, tamanhoLegivel, tipoDoArquivo } from '../lib/anexos';
 import { aoChegarRecado } from '../lib/mailboxAviso';
 
 const POLL_INTERVAL_MS = 15000;
@@ -229,11 +228,12 @@ export default function MailboxScreen({
       uri: a.uri,
       sizeBytes: a.size ?? 0,
     }));
-    const { aceitos, grandes } = planejarEnvio([...attachments, ...escolhidos], MAILBOX_MAX_ATTACHMENT_BYTES);
+    // 22/10: até 500 MB por arquivo (PC 2.15+, em stream). PC antigo recusa acima de 5 MB com aviso.
+    const { aceitos, grandes } = planejarEnvio([...attachments, ...escolhidos], LIMITE_ENVIO_PARA_O_PC);
     if (grandes.length) {
       Alert.alert(
         grandes.length === 1 ? 'Um arquivo ficou de fora' : `${grandes.length} arquivos ficaram de fora`,
-        `Passam de 5 MB: ${grandes.map((g) => g.name).join(', ')}`,
+        `Passam de 500 MB: ${grandes.map((g) => g.name).join(', ')}`,
       );
     }
     setAttachments(aceitos);
@@ -256,14 +256,11 @@ export default function MailboxScreen({
       }
       // Um recado por arquivo (o PC guarda um anexo por recado); o texto vai junto do primeiro.
       for (const [i, a] of fila.entries()) {
-        setProgresso(fila.length > 1 ? `${i + 1}/${fila.length}` : null);
-        const bytes = new Uint8Array(await new File(a.uri).arrayBuffer());
-        if (bytes.byteLength > MAILBOX_MAX_ATTACHMENT_BYTES) throw new Error(`${a.name} passa de 5 MB`);
-        await sendMessage(pairing, {
-          kind: 'file',
-          text: i === 0 && text ? text : undefined,
+        const contagem = fila.length > 1 ? `${i + 1}/${fila.length}` : '';
+        setProgresso(contagem || null);
+        await mandarArquivoParaPc(pairing, { uri: a.uri, nome: a.name, mimeType: a.mimeType, bytes: a.sizeBytes }, i === 0 && text ? text : null, {
           sessionId: sessionId ?? null,
-          attachment: { name: a.name, mimeType: a.mimeType, base64: fromByteArray(bytes) },
+          progresso: (p) => setProgresso(`${contagem ? `${contagem} · ` : ''}${Math.round(p * 100)}%`),
         });
         enviados++;
         // O que já foi não volta para a fila se o próximo falhar.

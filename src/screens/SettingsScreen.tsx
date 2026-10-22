@@ -126,11 +126,12 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [rascunho, setRascunho] = useState('');
   const [tratamento, setTratamento] = useState('');
+  const [prontas, setProntas] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   useEffect(() => {
     callRpc(pairing, 'perfil.get')
-      .then((p) => { setPerfil(p); setRascunho(p.instrucoesPessoais); setTratamento(p.tratamento ?? ''); })
+      .then((p) => { setPerfil(p); setRascunho(p.instrucoesPessoais); setTratamento(p.tratamento ?? ''); setProntas((p.respostasProntas ?? []).join('\n')); })
       .catch((e) => setErro(`O PC não respondeu (ou é anterior à 1.8.0): ${errMessage(e)}`));
   }, [pairing]);
   async function gravar(patch: Partial<Perfil>) {
@@ -193,6 +194,41 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
         style={{ minHeight: 110, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }}
       />
       <Button title={salvando ? 'Salvando…' : 'Salvar instruções'} disabled={salvando || rascunho === perfil.instrucoesPessoais} onPress={() => gravar({ instrucoesPessoais: rascunho })} />
+      {/* 22/10: respostas rápidas e telas interativas. PC anterior à 2.15 não tem os campos. */}
+      {perfil.respostasRapidas !== undefined && (
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: tokens.spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <Text variant="subheading">Respostas rápidas</Text>
+              <Text variant="caption" color={palette.textMuted}>Botões embaixo da resposta quando ela pergunta: Sim, Não, as opções dela e “Outra resposta…”. Falar continua valendo.</Text>
+            </View>
+            <Switch value={perfil.respostasRapidas} disabled={salvando} onValueChange={(v) => gravar({ respostasRapidas: v })} trackColor={{ true: palette.primary }} accessibilityLabel="Respostas rápidas" />
+          </View>
+          <Text variant="subheading" style={{ marginTop: tokens.spacing.sm }}>Respostas prontas</Text>
+          <Text variant="caption" color={palette.textMuted}>Uma por linha, até 6.</Text>
+          <TextInput
+            value={prontas}
+            onChangeText={setProntas}
+            multiline
+            maxLength={400}
+            style={{ minHeight: 90, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }}
+          />
+          <Button title="Salvar respostas prontas" disabled={salvando || prontas === (perfil.respostasProntas ?? []).join('\n')}
+            onPress={() => gravar({ respostasProntas: prontas.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 6) })} />
+          <Text variant="subheading" style={{ marginTop: tokens.spacing.md }}>Respostas interativas</Text>
+          <Text variant="caption" color={palette.textMuted}>Telas no chat (gráfico, mapa, tabela, calculadora, flashcards). Ainda em construção: por enquanto só fica guardado.</Text>
+          {([['nunca', 'Nunca'], ['pedir', 'Quando eu pedir'], ['perguntar', 'A Ely pergunta quando fizer sentido'], ['priorizar', 'Priorizar sempre que couber']] as const).map(([valor, rotulo]) => {
+            const sel = (perfil.respostasInterativas ?? 'perguntar') === valor;
+            return (
+              <Pressable key={valor} disabled={salvando} onPress={() => gravar({ respostasInterativas: valor })}
+                style={[styles.familiaBtn, { borderRadius: tokens.radii.md, backgroundColor: sel ? palette.primarySoft : 'transparent', borderColor: sel ? palette.primary : palette.border }]}>
+                <Text variant="body" color={sel ? palette.primary : palette.text} style={{ flex: 1 }}>{rotulo}</Text>
+                {sel && <Feather name="check" size={16} color={palette.primary} />}
+              </Pressable>
+            );
+          })}
+        </>
+      )}
     </View>
   );
 }

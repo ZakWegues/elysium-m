@@ -1,3 +1,4 @@
+import { lerRapidas, type Rapidas } from './respostasRapidas';
 import { File as FSFile } from 'expo-file-system';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
@@ -12,7 +13,7 @@ import { AuthError } from './http';
 
 import type { Fonte } from './chatHistoryStore';
 
-type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean };
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; rapidas?: Rapidas };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -200,7 +201,7 @@ export function openVoiceConnection(
   }
 
   function tratarMensagem(event: MessageEvent) {
-    let data: { type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; id?: string; direction?: string } & Partial<Entrega>;
+    let data: { rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -238,7 +239,7 @@ export function openVoiceConnection(
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true }));
+      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, rapidas: lerRapidas(data.rapidas) }));
     } else if (data.type === 'sugestoes') {
       if (Array.isArray(data.sugestoes)) onSugestoes?.(data.sugestoes.filter((s): s is string => typeof s === 'string').slice(0, 3));
     } else if (data.type === 'notify') {

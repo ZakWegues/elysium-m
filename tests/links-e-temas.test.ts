@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("expo-share-intent", () => ({ useShareIntent: () => ({}) }));
 vi.mock("expo-file-system", () => ({ File: class {}, Paths: {} }));
+// 22/10: o shareIntent agora puxa o pareamento e os anexos (envio grande para o PC).
+vi.mock("expo-secure-store", () => ({}));
+vi.mock("expo-intent-launcher", () => ({}));
+vi.mock("@react-native-async-storage/async-storage", () => ({ default: {} }));
 import { destinoDaUrl } from "../src/lib/deepLinks";
 import { lerCompartilhado, parseSharedUrl } from "../src/lib/shareIntent";
 import { getPalette, resolverFamiliaEscolhida, TEMAS_APOSENTADOS } from "../src/theme/palettes";
