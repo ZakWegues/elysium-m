@@ -169,3 +169,34 @@ export function telaVisivel(tela: TelaDaMensagem | undefined, ts: number, agora 
   if (tela.programa || tela.falhou) return true;
   return tela.gerando === true && agora - (tela.desde ?? ts) < 3 * 60_000;
 }
+
+// ── Guarda contra o crash da WebView (23/10, depois do "tela cinza" no aparelho) ───────────────
+
+/** Uma tela que estava sendo montada (a WebView subindo). Vai para o disco antes de montar. */
+export type MarcaTela = { em: number; tamanho: number };
+
+/** Abertura que morreu há menos que isto, com tela montando, conta como crash da tela. */
+export const JANELA_DO_CRASH_MS = 10 * 60_000;
+
+/**
+ * A abertura anterior morreu montando uma tela? Lê o que ficou no disco (marcas por id) e
+ * devolve a mais recente dentro da janela, ou null. Pura.
+ */
+export function marcaDoCrash(guardado: unknown, agora = Date.now()): MarcaTela | null {
+  if (!guardado || typeof guardado !== 'object' || Array.isArray(guardado)) return null;
+  let melhor: MarcaTela | null = null;
+  for (const v of Object.values(guardado as Record<string, unknown>)) {
+    const m = v as Partial<MarcaTela> | null;
+    if (!m || typeof m.em !== 'number' || !Number.isFinite(m.em)) continue;
+    const idade = agora - m.em;
+    if (idade < 0 || idade > JANELA_DO_CRASH_MS) continue;
+    if (!melhor || m.em > melhor.em) melhor = { em: m.em, tamanho: typeof m.tamanho === 'number' ? m.tamanho : 0 };
+  }
+  return melhor;
+}
+
+/** A linha que vai para o log do PC (`diag.registrar`): sem conteúdo da tela, só o contexto. Pura. */
+export function linhaDoCrash(m: MarcaTela, aparelho: { modelo?: string | null; android?: string | number | null }, agora = Date.now()): string {
+  const seg = Math.max(0, Math.round((agora - m.em) / 1000));
+  return `tela inteligente: o app fechou montando uma tela (programa de ${m.tamanho} caracteres; reaberto ${seg} s depois; aparelho ${aparelho.modelo ?? '?'}, Android ${aparelho.android ?? '?'}). Telas desligadas até religar em Ajustes.`;
+}

@@ -10,7 +10,7 @@ vi.mock("../src/lib/modo", () => ({ receberFrameModo: () => {} }));
 vi.mock("../src/lib/pomodoro", () => ({ receberFramePomodoro: () => {} }));
 
 import type { StoredMessage } from "../src/lib/chatHistoryStore";
-import { aplicarUi, lerUi, linkSeguro, mensagemDaTela, scriptParaTela, telaVisivel, temaDaPaleta, type FrameUi } from "../src/lib/telas";
+import { aplicarUi, lerUi, linkSeguro, mensagemDaTela, scriptParaTela, telaVisivel, temaDaPaleta, type FrameUi, JANELA_DO_CRASH_MS, linhaDoCrash, marcaDoCrash } from "../src/lib/telas";
 
 class WsFalso {
   static OPEN = 1;
@@ -170,5 +170,29 @@ describe("telas inteligentes no celular: stream (22/10)", () => {
     WsFalso.todos[2].pc({ type: "retomada_falhou", id: cmd2.id });
     expect(telas.at(-1)).toEqual({ id: cmd2.id, falhou: true });
     conn.close();
+  });
+});
+
+describe('guarda contra o crash da WebView (23/10)', () => {
+  const agora = 1_000_000_000;
+  it('marca recente = a abertura anterior morreu montando uma tela', () => {
+    expect(marcaDoCrash({ a: { em: agora - 30_000, tamanho: 900 } }, agora)).toEqual({ em: agora - 30_000, tamanho: 900 });
+    // Duas telas montando: vale a mais recente.
+    expect(marcaDoCrash({ a: { em: agora - 60_000, tamanho: 1 }, b: { em: agora - 5_000, tamanho: 2 } }, agora)?.tamanho).toBe(2);
+  });
+  it('marca velha, do futuro, ausente ou torta não desliga nada', () => {
+    expect(marcaDoCrash({ a: { em: agora - JANELA_DO_CRASH_MS - 1, tamanho: 1 } }, agora)).toBeNull();
+    expect(marcaDoCrash({ a: { em: agora + 5_000, tamanho: 1 } }, agora)).toBeNull();
+    expect(marcaDoCrash(null, agora)).toBeNull();
+    expect(marcaDoCrash({}, agora)).toBeNull();
+    expect(marcaDoCrash([{ em: agora }], agora)).toBeNull();
+    expect(marcaDoCrash({ a: { em: 'ontem' } }, agora)).toBeNull();
+  });
+  it('a linha do diagnóstico leva só o contexto, nunca o programa da tela', () => {
+    const l = linhaDoCrash({ em: agora - 12_000, tamanho: 3400 }, { modelo: 'Pixel 7', android: '15' }, agora);
+    expect(l).toMatch(/3400 caracteres/);
+    expect(l).toMatch(/reaberto 12 s depois/);
+    expect(l).toMatch(/Pixel 7, Android 15/);
+    expect(linhaDoCrash({ em: agora, tamanho: 0 }, {}, agora)).toMatch(/aparelho \?, Android \?/);
   });
 });

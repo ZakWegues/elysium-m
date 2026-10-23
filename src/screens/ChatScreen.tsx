@@ -49,6 +49,8 @@ import * as Clipboard from 'expo-clipboard';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { sincronizarModo, trocarModo, useModo } from '../lib/modo';
 import type { ModoDaLista } from '../lib/rpc';
+import { useTelasLigadas } from '../lib/telasGuarda';
+import { Component as ComponenteReact } from 'react';
 
 
 type MicStatus = 'checking' | 'ready' | 'denied';
@@ -119,6 +121,8 @@ export default function ChatScreen({
    * liga). A troca feita no PC ou pela voz chega pelo WebSocket (`lib/modo.ts`).
    */
   const modo = useModo();
+  /** 23/10: as telas inteligentes podem estar desligadas (Ajustes, ou pela guarda de crash). */
+  const telasLigadas = useTelasLigadas();
   const [modosLista, setModosLista] = useState<ModoDaLista[] | null>(null);
   useEffect(() => { void sincronizarModo(pairing); }, [pairing]);
   // A aba fica montada: voltar a ela confere o modo (expirou, ou mudou pela voz sem WS aberto).
@@ -1064,9 +1068,12 @@ export default function ChatScreen({
       )}
 
       {/* A WebView sobe cedo: a 1ª tela inteligente não espera o motor. */}
-      <PreAquecerTelas />
+      {telasLigadas ? <PreAquecerTelas /> : null}
       <FlatList
         ref={listRef}
+        // 23/10: no Android a FlatList desanexa da janela o que sai da área visível, e uma WebView
+        // (a tela inteligente) desanexada no meio da animação derrubava o app.
+        removeClippedSubviews={false}
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
@@ -1126,9 +1133,11 @@ export default function ChatScreen({
               ) : null}
             </BolhaEntrando>
             {/* 22/10 (Fase 4): a tela inteligente da resposta, embaixo da bolha. */}
-            {item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
+            {telasLigadas && item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
+              <ErroNaTela key={`erro-${item.id}`} onErro={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: undefined } : m)))}>
               <TelaNaBolha
                 key={`tela-${item.id}`}
+                id={item.id}
                 tela={item.tela!}
                 onPerguntar={(t) => handleSend(t)}
                 onEstado={(vars) => setMessages((prev) => prev.map((m) => (m.id === item.id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m)))}
@@ -1144,9 +1153,10 @@ export default function ChatScreen({
                   else aoCrescerConteudo();
                 }}
               />
+              </ErroNaTela>
             ) : null}
             {/* 23/10: "Ver como tela" na última resposta longa que ainda não tem tela (como no PC). */}
-            {item.from === 'reply' && !item.tela && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
+            {telasLigadas && item.from === 'reply' && !item.tela && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
               <Pressable onPress={() => { haptica.leve(); void telaDaResposta(item); }} accessibilityRole="button" accessibilityLabel="Ver esta resposta como tela" hitSlop={6}
                 style={({ pressed }) => [styles.verTela, { borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
                 <Feather name="layout" size={12} color={palette.textMuted} />
@@ -1327,6 +1337,20 @@ export default function ChatScreen({
       />
     </View>
   );
+}
+
+/**
+ * Um erro de JS dentro da tela inteligente fica nela: a tela sai e a resposta continua em texto
+ * (antes ia até o ErrorBoundary do app e trocava o app inteiro pela tela de erro).
+ */
+class ErroNaTela extends ComponenteReact<{ onErro: () => void; children: React.ReactNode }, { erro: boolean }> {
+  state = { erro: false };
+  static getDerivedStateFromError() { return { erro: true }; }
+  componentDidCatch(e: unknown) {
+    console.warn('[tela] erro de JS na tela inteligente:', e);
+    this.props.onErro();
+  }
+  render() { return this.state.erro ? null : this.props.children; }
 }
 
 /**

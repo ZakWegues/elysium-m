@@ -39,6 +39,7 @@ import { urlDoWidget } from './src/lib/chaveWidget';
 import * as QuickActions from 'expo-quick-actions';
 import * as SplashScreen from 'expo-splash-screen';
 import { callRpc } from './src/lib/rpc';
+import { conferirAberturaAnterior } from './src/lib/telasGuarda';
 import { errMessage } from './src/lib/errors';
 import { falar } from './src/lib/falar';
 import { aoMudarPalavra, DiagPalavra, palavraLigada, usePalavraNoCelular } from './src/lib/palavraNoCelular';
@@ -86,6 +87,21 @@ function AppInner() {
   /** Lendo o QR de um PC a mais (bloco 121) — o atual continua pareado até dar certo. */
   const [adicionandoPc, setAdicionandoPc] = useState(false);
   const [screen, setScreen] = useState<Screen>('home');
+  // 23/10: a abertura anterior morreu montando uma tela inteligente? As telas desligam, ele é
+  // avisado uma vez, e a linha do diagnóstico vai ao PC assim que houver pareamento.
+  const [linhaDoCrash, setLinhaDoCrash] = useState<string | null>(null);
+  useEffect(() => {
+    conferirAberturaAnterior().then((linha) => {
+      if (!linha) return;
+      setLinhaDoCrash(linha);
+      Alert.alert('Telas inteligentes desligadas', 'O app fechou ao abrir uma tela da Ely, então desliguei as telas para não acontecer de novo. As respostas continuam em texto. Dá para religar em Ajustes → Jeito de responder.');
+    }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!pairing || !linhaDoCrash) return;
+    setLinhaDoCrash(null);
+    callRpc(pairing, 'diag.registrar', { origem: 'tela-celular', linhas: [linhaDoCrash] }).catch(() => {});
+  }, [pairing, linhaDoCrash]);
   // 21/10: a aba sobrevive se o Android fechar o app no fundo — voltar não joga na Início.
   const abaLida = useRef(false);
   useEffect(() => {

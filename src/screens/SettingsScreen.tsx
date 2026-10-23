@@ -3,6 +3,7 @@ import * as Application from 'expo-application';
 import AvisoAtualizacao from '../components/AvisoAtualizacao';
 import { versaoInstalada } from '../lib/atualizacao';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ligarTelas, useTelasLigadas } from '../lib/telasGuarda';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
@@ -99,7 +100,12 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       </Pressable>
       {secao === 'aparencia' && <SecaoAparencia />}
       {secao === 'voz' && <VozSection pairing={pairing} />}
-      {secao === 'conversa' && <SecaoConversa pairing={pairing} />}
+      {secao === 'conversa' && (
+        <View style={{ gap: tokens.spacing.lg }}>
+          <ChaveTelas />
+          <SecaoConversa pairing={pairing} />
+        </View>
+      )}
       {secao === 'modos' && <SecaoModos pairing={pairing} />}
       {secao === 'memoria' && <PainelMemoria pairing={pairing} onError={(err, ctx) => Alert.alert(ctx, errMessage(err))} />}
       {/* Fase 22: uma seção só — o aviso local e o push do PC no mesmo cartão. */}
@@ -121,6 +127,26 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
  * Mora na config do PC (dado pessoal fica nos dados do app, não no código) — o celular
  * só lê e grava pelo RPC.
  */
+/**
+ * Telas inteligentes ligadas ou não (23/10). Fica fora da `SecaoConversa`, que depende do PC
+ * responder: religar não pode exigir o PC no ar. A guarda de crash desliga sozinha.
+ */
+function ChaveTelas() {
+  const { palette, tokens } = useTheme();
+  const ligadas = useTelasLigadas();
+  return (
+    <View style={{ gap: tokens.spacing.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <Text variant="subheading">Telas inteligentes</Text>
+          <Text variant="caption" color={palette.textMuted}>A Ely monta uma tela embaixo da resposta quando ajuda. Desligadas, as respostas ficam só em texto.</Text>
+        </View>
+        <Switch value={ligadas} onValueChange={(v) => { haptica.leve(); void ligarTelas(v); }} trackColor={{ true: palette.primary }} accessibilityLabel="Telas inteligentes" />
+      </View>
+    </View>
+  );
+}
+
 function SecaoConversa({ pairing }: { pairing: Pairing }) {
   const { palette, tokens } = useTheme();
   const [perfil, setPerfil] = useState<Perfil | null>(null);

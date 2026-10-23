@@ -13,6 +13,7 @@ import { Text } from './ui';
 import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { linkSeguro, mensagemDaTela, scriptParaTela, temaDaPaleta, type TelaDaMensagem } from '../lib/telas';
+import { limparMarca, marcarMontando } from '../lib/telasGuarda';
 
 /**
  * Tela inteligente embaixo da resposta da Ely (Fase 4, 22/10; prévia + tela cheia, 23/10). O
@@ -23,6 +24,17 @@ import { linkSeguro, mensagemDaTela, scriptParaTela, temaDaPaleta, type TelaDaMe
  * No chat ela é uma PRÉVIA de altura limitada (o resto esmaece e "Abrir tela inteira" abre um
  * Modal com a tela rolando sozinha). Enquanto é gerada: esqueleto vivo (blocos com brilho, barras
  * que respiram, frase que troca, segundos e Cancelar). Falhou: faixa com "Tentar de novo".
+ */
+
+/*
+ * 🔴 23/10 — "tela cinza e o app para" no aparelho. Era crash NATIVO da WebView no Android (o
+ * ErrorBoundary nem chega a ver): (1) o processo que desenha a página morria e, sem
+ * `onRenderProcessGone`, o Android derrubava o app inteiro; (2) a WebView estava dentro de view
+ * com opacidade animada (FadeIn, `opacity: 0 → 1`) e altura animada a cada quadro — crash
+ * documentado do react-native-webview no RenderThread; (3) a lista do chat desanexava a WebView
+ * (`removeClippedSubviews`). Regra daqui para a frente: NENHUM ancestral da WebView com
+ * opacidade, `entering`/`exiting` ou animação por quadro, e toda WebView com `onRenderProcessGone`.
+ * O que sobra de risco fica com a guarda de `telasGuarda.ts` (desliga as telas se o app cair).
  */
 
 let htmlDoRenderer: Promise<string> | null = null;
@@ -43,6 +55,8 @@ const ALTURA_ESQUELETO = 236;
 const FRASES = ['Escolhendo o layout…', 'Organizando as informações…', 'Fazendo as contas…', 'Desenhando a tela…', 'Ajustando os detalhes…', 'Quase lá…'];
 
 type Props = {
+  /** Id da mensagem: é por ele que a marca de "montando" vai para o disco. */
+  id: string;
   tela: TelaDaMensagem;
   /** Botão da tela que pergunta algo à Ely: vira mensagem no chat. */
   onPerguntar: (texto: string) => void;
@@ -81,9 +95,8 @@ export function TelaNaBolha(props: Props) {
   return <Previa {...props} />;
 }
 
-function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, onRolar }: Props) {
+function Previa({ id, tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, onRolar }: Props) {
   const { palette, tokens } = useTheme();
-  const reduzir = useReducedMotion();
   const { height: alturaJanela } = useWindowDimensions();
   const maxPrevia = Math.min(460, Math.round(alturaJanela * 0.55));
   const [html, setHtml] = useState<string | null>(null);
@@ -93,7 +106,8 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
   /** Muda ao fechar a tela cheia: a prévia remonta com o que foi digitado lá. */
   const [versao, setVersao] = useState(0);
   const estadoRef = useRef(tela.estado);
-  const altura = useSharedValue(ALTURA_ESQUELETO);
+  // Altura num View comum, num salto só: animação por quadro em volta da WebView derruba o app.
+  const [altura, setAltura] = useState(ALTURA_ESQUELETO);
 
   useEffect(() => {
     if (!tela.programa) return;
@@ -108,10 +122,9 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
     if (px <= 40 && !mostrou) return;
     const c = Math.min(px, 4000);
     setConteudo(c);
-    const alvo = c > maxPrevia + 24 ? maxPrevia : c;
-    altura.value = withTiming(alvo, { duration: reduzir ? 0 : MOV.base, easing: Easing.out(Easing.cubic) });
+    setAltura(c > maxPrevia + 24 ? maxPrevia : c);
     if (!mostrou) setMostrou(true);
-    setTimeout(() => onCresceu?.(), (reduzir ? 0 : MOV.base) + 40);
+    setTimeout(() => onCresceu?.(), 60);
   }
 
   function aoEstado(vars: Record<string, unknown>) {
@@ -119,21 +132,20 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
     onEstado(vars);
   }
 
-  const estiloAltura = useAnimatedStyle(() => ({ height: altura.value }));
   const raio = tokens.radii.lg + 4;
 
   return (
     <View>
-    <AnimatedReanimated.View style={[styles.caixa, { borderRadius: raio }, estiloAltura]}
-      entering={FadeIn.duration(MOV.base).reduceMotion(ReduceMotion.System)}>
+    <View style={[styles.caixa, { borderRadius: raio, height: altura }]}>
       {html ? (
-        <View key={versao} style={[styles.quadroPrevia, { height: Math.max(conteudo, ALTURA_ESQUELETO), opacity: mostrou ? 1 : 0 }]}>
-          <Quadro html={html} modo="previa" tela={{ ...tela, estado: estadoRef.current }} rolavel={false}
+        <View key={versao} style={[styles.quadroPrevia, { height: Math.max(conteudo, ALTURA_ESQUELETO) }]}>
+          <Quadro id={id} html={html} modo="previa" tela={{ ...tela, estado: estadoRef.current }} rolavel={false}
             onAltura={aoMedir} onEstado={aoEstado} onPerguntar={onPerguntar} onPedido={onPedido}
-            onErro={() => { if (!mostrou) onFalhou(); }} onRolar={onRolar} />
+            onErro={() => { if (!mostrou) onFalhou(); }} onMorreu={onFalhou} onRolar={onRolar} />
         </View>
       ) : null}
-      {!mostrou ? <View style={StyleSheet.absoluteFill}><EsqueletoVivo /></View> : null}
+      {/* O esqueleto cobre a WebView (que fica opaca, sem animação) até a 1ª medida chegar. */}
+      {!mostrou ? <View style={StyleSheet.absoluteFill}><EsqueletoVivo semSaida /></View> : null}
       {mostrou && cortada ? (
         <View style={styles.rodapeCortada} pointerEvents="box-none">
           <LinearGradient colors={[comAlfa(palette.surface, 0), comAlfa(palette.surface, 0.94)]} style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -141,11 +153,11 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
         </View>
       ) : null}
       {cheia && html ? (
-        <TelaCheia html={html} tela={{ ...tela, estado: estadoRef.current }}
+        <TelaCheia id={`${id}-cheia`} html={html} tela={{ ...tela, estado: estadoRef.current }}
           onFechar={() => { setCheia(false); setVersao((v) => v + 1); }}
           onEstado={aoEstado} onPerguntar={(t) => { setCheia(false); onPerguntar(t); }} onPedido={onPedido} />
       ) : null}
-    </AnimatedReanimated.View>
+    </View>
     {/* Inteira à vista: o "Tela cheia" fica embaixo, sem cobrir nada da tela. */}
     {mostrou && !cortada ? (
       <View style={styles.rodapeInteira}>
@@ -172,15 +184,16 @@ function BotaoAbrir({ rotulo, forte, onPress }: { rotulo: string; forte?: boolea
 }
 
 /** A tela inteira por cima do app: a mesma tela, rolando sozinha; ✕ ou "voltar" fecha. */
-function TelaCheia({ html, tela, onFechar, onEstado, onPerguntar, onPedido }: {
-  html: string; tela: TelaDaMensagem; onFechar: () => void;
+function TelaCheia({ id, html, tela, onFechar, onEstado, onPerguntar, onPedido }: {
+  id: string; html: string; tela: TelaDaMensagem; onFechar: () => void;
   onEstado: (vars: Record<string, unknown>) => void; onPerguntar: (t: string) => void;
   onPedido: Props['onPedido'];
 }) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible animationType="fade" onRequestClose={onFechar} statusBarTranslucent>
+    // Sem "fade": é a mesma opacidade animada por cima da WebView.
+    <Modal visible animationType="none" onRequestClose={onFechar} statusBarTranslucent>
       <View style={[styles.cheia, { backgroundColor: palette.surface, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={[styles.cheiaTopo, { borderColor: palette.border }]}>
           <Text variant="label" color={palette.textMuted}>TELA DA ELY</Text>
@@ -190,7 +203,7 @@ function TelaCheia({ html, tela, onFechar, onEstado, onPerguntar, onPedido }: {
           </Pressable>
         </View>
         <View style={{ flex: 1 }}>
-          <Quadro html={html} modo="cheia" tela={tela} rolavel onEstado={onEstado} onPerguntar={onPerguntar} onPedido={onPedido} />
+          <Quadro id={id} html={html} modo="cheia" tela={tela} rolavel onEstado={onEstado} onPerguntar={onPerguntar} onPedido={onPedido} onMorreu={onFechar} />
         </View>
       </View>
     </Modal>
@@ -198,6 +211,7 @@ function TelaCheia({ html, tela, onFechar, onEstado, onPerguntar, onPedido }: {
 }
 
 type QuadroProps = {
+  id: string;
   html: string;
   modo: 'previa' | 'cheia';
   tela: TelaDaMensagem;
@@ -207,11 +221,13 @@ type QuadroProps = {
   onPerguntar: (t: string) => void;
   onPedido: Props['onPedido'];
   onErro?: () => void;
+  /** O processo da WebView morreu (memória, GPU): a tela sai, o app fica. */
+  onMorreu: () => void;
   onRolar?: (dy: number) => void;
 };
 
 /** A ponte com o renderer (WebView ou iframe): manda config/programa/tema e trata o que volta. */
-function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, onPedido, onErro, onRolar }: QuadroProps) {
+function Quadro({ id, html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, onPedido, onErro, onMorreu, onRolar }: QuadroProps) {
   const { palette } = useTheme();
   const reduzir = useReducedMotion();
   const enviarRef = useRef<(m: unknown) => void>(() => {});
@@ -219,6 +235,13 @@ function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, on
   const tema = temaDaPaleta(palette, reduzir);
   // Trocou o tema do app com a tela aberta: ela acompanha.
   useEffect(() => { if (iniciouRef.current) enviarRef.current({ tipo: 'tema', tema }); }, [palette]);
+  // A marca de "montando" vai para o disco ANTES da WebView subir e sai quando ela responde
+  // (ou quando desmonta). Se o app cair no meio, a próxima abertura sabe — ver telasGuarda.ts.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    marcarMontando(id, tela.programa?.length ?? 0);
+    return () => limparMarca(id);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function iniciar() {
     if (!tela.programa) return;
@@ -231,7 +254,7 @@ function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, on
     const m = mensagemDaTela(bruto);
     if (!m) return;
     if (m.tipo === 'pronta') iniciar();
-    else if (m.tipo === 'altura') onAltura?.(m.px);
+    else if (m.tipo === 'altura') { limparMarca(id); onAltura?.(m.px); }
     else if (m.tipo === 'rolar') onRolar?.(m.dy);
     else if (m.tipo === 'acao') {
       if (m.acao === 'perguntar') {
@@ -260,7 +283,8 @@ function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, on
 
   return Platform.OS === 'web'
     ? <QuadroWeb html={html} enviarRef={enviarRef} onMensagem={receber} onCarregou={iniciar} />
-    : <QuadroNativo html={html} enviarRef={enviarRef} onMensagem={receber} onCarregou={iniciar} rolavel={rolavel} />;
+    : <QuadroNativo html={html} enviarRef={enviarRef} onMensagem={receber} onCarregou={iniciar} rolavel={rolavel}
+        onMorreu={() => { limparMarca(id); console.warn('[tela] o processo da WebView morreu'); onMorreu(); }} />;
 }
 
 function avisar(texto: string) {
@@ -269,9 +293,11 @@ function avisar(texto: string) {
 
 type Ponte = { html: string; enviarRef: React.MutableRefObject<(m: unknown) => void>; onMensagem: (m: unknown) => void; onCarregou: () => void };
 
-function QuadroNativo({ html, enviarRef, onMensagem, onCarregou, rolavel }: Ponte & { rolavel: boolean }) {
+function QuadroNativo({ html, enviarRef, onMensagem, onCarregou, rolavel, onMorreu }: Ponte & { rolavel: boolean; onMorreu: () => void }) {
   const ref = useRef<WebView>(null);
-  enviarRef.current = (m) => ref.current?.injectJavaScript(scriptParaTela(m));
+  const morreuRef = useRef(false);
+  // Depois que o processo morreu, `injectJavaScript` numa WebView sem processo também derruba.
+  enviarRef.current = (m) => { if (!morreuRef.current) ref.current?.injectJavaScript(scriptParaTela(m)); };
   return (
     <WebView
       ref={ref}
@@ -296,7 +322,14 @@ function QuadroNativo({ html, enviarRef, onMensagem, onCarregou, rolavel }: Pont
       overScrollMode="never"
       showsVerticalScrollIndicator={rolavel}
       webviewDebuggingEnabled={__DEV__}
-      style={styles.web}
+      // Sem isto o Android MATA O APP quando o processo da página morre (tela cinza). Com isto,
+      // só a tela sai e a resposta fica em texto.
+      onRenderProcessGone={() => { morreuRef.current = true; onMorreu(); }}
+      // iOS: o processo da página foi encerrado — recarrega.
+      onContentProcessDidTerminate={() => ref.current?.reload()}
+      // Contorno documentado do crash da WebView com animação em volta (RenderThread).
+      androidLayerType="hardware"
+      style={[styles.web, { opacity: 0.99 }]}
       containerStyle={styles.web}
     />
   );
@@ -322,7 +355,7 @@ function QuadroWeb({ html, enviarRef, onMensagem, onCarregou }: Ponte) {
  * brilho em cascata e barras que respiram; embaixo, os três pontos, a frase que troca a cada 4 s,
  * os segundos e o Cancelar. Com "reduzir movimento": parado, só o texto muda.
  */
-function EsqueletoVivo({ onCancelar }: { onCancelar?: () => void }) {
+function EsqueletoVivo({ onCancelar, semSaida }: { onCancelar?: () => void; /** Por cima da WebView: sai sem fade. */ semSaida?: boolean }) {
   const { palette, tokens } = useTheme();
   const reduzir = useReducedMotion();
   const [segundos, setSegundos] = useState(0);
@@ -334,7 +367,7 @@ function EsqueletoVivo({ onCancelar }: { onCancelar?: () => void }) {
   const frase = FRASES[Math.min(Math.floor(segundos / 4), FRASES.length - 1)];
   const cor = palette.primary;
   return (
-    <AnimatedReanimated.View entering={FadeIn.duration(MOV.base).reduceMotion(ReduceMotion.System)} exiting={FadeOut.duration(MOV.saida)}
+    <AnimatedReanimated.View entering={FadeIn.duration(MOV.base).reduceMotion(ReduceMotion.System)} exiting={semSaida ? undefined : FadeOut.duration(MOV.saida)}
       style={[styles.esqueleto, { height: ALTURA_ESQUELETO, borderColor: palette.border, borderRadius: tokens.radii.lg + 4, backgroundColor: comAlfa(palette.surface, 0.7) }]}
       accessibilityLabel={`Montando a tela. ${frase}`} accessibilityLiveRegion="polite">
       <View style={styles.esqFolha}>
@@ -392,15 +425,13 @@ function Ponto({ cor, atraso, parado }: { cor: string; atraso: number; parado: b
   return <AnimatedReanimated.View style={[styles.ponto, { backgroundColor: cor }, estilo]} />;
 }
 
-/** Uma WebView escondida, montada cedo: a 1ª tela não paga a subida do motor da WebView. */
+/**
+ * Lê o HTML do renderer cedo (é o que demora). A WebView escondida que também subia aqui saiu
+ * (23/10): ficava montada com `opacity: 0` em todo chat aberto — o mesmo gatilho do crash.
+ */
 export function PreAquecerTelas() {
   useEffect(() => { carregarRenderer().catch(() => {}); }, []);
-  if (Platform.OS === 'web') return null;
-  return (
-    <View style={styles.escondida} pointerEvents="none">
-      <WebView source={{ html: '<html></html>' }} javaScriptEnabled={false} allowFileAccess={false} />
-    </View>
-  );
+  return null;
 }
 
 const styles = StyleSheet.create({
