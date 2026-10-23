@@ -1,4 +1,5 @@
 import { lerRapidas, type Rapidas } from './respostasRapidas';
+import { lerUi, type FrameUi } from './telas';
 import { File as FSFile } from 'expo-file-system';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
@@ -13,7 +14,8 @@ import { AuthError } from './http';
 
 import type { Fonte } from './chatHistoryStore';
 
-type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; rapidas?: Rapidas };
+/** `id`: o do pedido de texto — a tela inteligente (frame `ui`) chega depois com ele. */
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; rapidas?: Rapidas; id?: string };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -99,6 +101,8 @@ export function openVoiceConnection(
   /** Sugestões de próxima pergunta (bloco 132): chegam DEPOIS do reply, fora de pedido. */
   onSugestoes?: (sugestoes: string[]) => void,
   onEstado?: (e: EstadoConexao) => void,
+  /** 22/10: a tela inteligente de um pedido (gerando, pronta ou falhou) — chega depois do reply. */
+  onUi?: (f: FrameUi) => void,
 ): VoiceConnection {
   const pegarPairing = typeof origem === 'function' ? origem : () => origem;
 
@@ -111,6 +115,8 @@ export function openVoiceConnection(
   let tentativas = 0;
   let timerReconexao: ReturnType<typeof setTimeout> | null = null;
   let timerRetomada: ReturnType<typeof setTimeout> | null = null;
+  /** O pedido cuja tela ainda está sendo gerada: se a conexão cair, pede `retomar` ao voltar. */
+  let telaEsperada: string | null = null;
 
   let resolverReady: () => void = () => {};
   let rejeitarReady: ((e: Error) => void) | null = null;
@@ -140,7 +146,8 @@ export function openVoiceConnection(
     if (!ws || ws.readyState !== WebSocket.OPEN || !p.texto) return;
     try {
       // PC antigo ignora os campos novos: o comando roda igual, só que no curto de sempre.
-      ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer }));
+      // `telas`: este app desenha telas inteligentes (Fase 4) — PC antigo ignora.
+      ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer, telas: p.canal === 'texto' }));
       p.enviado = true;
     } catch (err) {
       console.warn('[voice-ws] envio falhou, tenta ao reconectar', errMessage(err));
@@ -167,7 +174,11 @@ export function openVoiceConnection(
     onEstado?.('conectado');
     try { ws?.send(JSON.stringify({ type: 'ping' })); } catch { /* */ }
     const p = pending;
-    if (!p) return;
+    if (!p) {
+      // Caiu enquanto a tela era gerada: o PC guarda e manda de novo (reply + ui).
+      if (telaEsperada) { try { ws?.send(JSON.stringify({ type: 'retomar', id: telaEsperada })); } catch { /* */ } }
+      return;
+    }
     if (!p.enviado) enviarComando(p);
     else if (p.aguardandoRetomada) pedirRetomada(p);
   }
@@ -229,7 +240,10 @@ export function openVoiceConnection(
         if (pending.parcial) pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'retomada_falhou') {
-      if (pending && (!data.id || pending.id === data.id)) {
+      if (telaEsperada && data.id === telaEsperada && !(pending && pending.id === data.id)) {
+        onUi?.({ id: telaEsperada, falhou: true });
+        telaEsperada = null;
+      } else if (pending && (!data.id || pending.id === data.id)) {
         settlePending((p) => p.reject(new Error('A conexão caiu e a resposta se perdeu. Toque em Refazer.')));
       }
     } else if (data.type === 'chunk') {
@@ -239,7 +253,14 @@ export function openVoiceConnection(
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, rapidas: lerRapidas(data.rapidas) }));
+      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, rapidas: lerRapidas(data.rapidas), id: p.id }));
+    } else if (data.type === 'ui') {
+      const f = lerUi(data);
+      if (f) {
+        if (f.gerando) telaEsperada = f.id;
+        else if (telaEsperada === f.id) telaEsperada = null;
+        onUi?.(f);
+      }
     } else if (data.type === 'sugestoes') {
       if (Array.isArray(data.sugestoes)) onSugestoes?.(data.sugestoes.filter((s): s is string => typeof s === 'string').slice(0, 3));
     } else if (data.type === 'notify') {

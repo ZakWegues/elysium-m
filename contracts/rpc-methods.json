@@ -177,6 +177,10 @@
       "destructive": false
     },
     {
+      "method": "groq.modelos",
+      "destructive": false
+    },
+    {
       "method": "habitos.delete",
       "destructive": true
     },
@@ -678,6 +682,10 @@
     },
     {
       "method": "treinos.save",
+      "destructive": false
+    },
+    {
+      "method": "ui.gerar",
       "destructive": false
     },
     {

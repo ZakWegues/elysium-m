@@ -1,0 +1,2 @@
+# O renderer das telas (cópia do elysium/ui-render/dist): bytes exatos, sem troca de fim de linha.
+assets/ui/* -text

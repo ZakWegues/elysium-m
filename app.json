@@ -337,7 +337,8 @@
           ],
           "disableIOS": true
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {

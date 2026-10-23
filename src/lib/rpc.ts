@@ -39,6 +39,8 @@ export type RpcMethod =
   | 'perfil.set'
   | 'hermes.status'
   | 'hermes.set'
+  | 'groq.modelos'
+  | 'ui.gerar'
   | 'hoje.painel'
   | 'habitos.list'
   | 'habitos.save'
@@ -531,6 +533,10 @@ export type RpcResults = {
   'timers.cancel': { timer: TimerPc };
   'perfil.set': Perfil;
   'hermes.status': EstadoHermes;
+  /** 22/10: modelos da Groq (bancada das telas). */
+  'groq.modelos': { modelos: string[] };
+  /** 22/10: gera uma tela inteligente sob pedido (bancada; o chat usa o frame `ui` do stream). */
+  'ui.gerar': { tela: { programa: string; tentativas: number; ms: number; provedor: string; modelo: string | null; declaracoes: number } | null; registro: unknown[] };
   'hermes.set': EstadoHermes;
   'hoje.painel': PainelHoje;
   'habitos.list': { habitos: Habito[]; metas: Meta[] };

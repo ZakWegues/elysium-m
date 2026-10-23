@@ -23,7 +23,7 @@ import { MotivoParada, resumoRodada } from '../lib/vozDiag';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
-import { AuthError, sendCommand } from '../lib/api';
+import { AuthError, pedidoDaTela, sendCommand } from '../lib/api';
 import { TimeoutError } from '../lib/http';
 import { enqueueCommand } from '../lib/commandQueue';
 import { ConexaoNaoAbriu, EstadoConexao, openVoiceConnection, VoiceConnection } from '../lib/stream';
@@ -40,6 +40,8 @@ import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
 import { RespostasRapidas } from '../components/RespostasRapidas';
+import { PreAquecerTelas, TelaNaBolha } from '../components/TelaNaBolha';
+import { aplicarUi, telaVisivel } from '../lib/telas';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
 import { LIMITE_ENVIO_PARA_O_PC } from '../lib/anexos';
 import { paraFala, textoPuro } from '../lib/markdown';
@@ -331,7 +333,10 @@ export default function ChatScreen({
         if (!ultima || ultima.from !== 'reply' || ultima.rapidas?.pergunta) return prev;
         return [...prev.slice(0, -1), { ...ultima, sugestoes }];
       });
-    }, setConexao);
+    }, setConexao, (f) => {
+      // 22/10 (Fase 4): a tela inteligente da resposta — acha a bolha pelo id do pedido.
+      setMessages((prev) => aplicarUi(prev, f));
+    });
     voiceConnRef.current = conn;
     try {
       await conn.ready;
@@ -352,6 +357,8 @@ export default function ChatScreen({
    */
   const jaAncorou = useRef(false);
   const coladoNoFim = useRef(true);
+  /** Quando ele mandou a última mensagem: a tela da resposta que cresce logo depois puxa a lista. */
+  const ultimoEnvio = useRef(0);
 
   // Abrir OUTRA conversa precisa ancorar de novo — senão a segunda abre na posição da
   // primeira, que é o mesmo sintoma com outra causa.
@@ -419,7 +426,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -433,9 +440,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string) => {
       setEscrevendoId(null);
-      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}) };
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -490,6 +497,9 @@ export default function ChatScreen({
       if (alvo) { rodarComandoIa(comandoEscolhido, alvo); return; }
     }
     setDraft('');
+    // Quem manda mensagem quer ver a resposta (e a tela que vier): a lista volta a seguir o fim.
+    coladoNoFim.current = true;
+    ultimoEnvio.current = Date.now();
     // Refazer (bloco 130): a pergunta já está na tela; só a resposta antiga saiu.
     if (!opcoes.refazer) setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
@@ -504,6 +514,7 @@ export default function ChatScreen({
       let fontes: Fonte[] | undefined;
       let local = false;
       let rapidas: Rapidas | undefined;
+      let pedidoId: string | undefined;
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
@@ -517,6 +528,7 @@ export default function ChatScreen({
         fontes = r.fontes;
         local = r.local === true;
         rapidas = r.rapidas;
+        pedidoId = r.id;
       } catch (wsErr) {
         // 21/10: só cai no HTTP se a conexão NEM ABRIU (o comando não chegou ao PC). Com o
         // comando já enviado, mandar de novo rodaria duas vezes — a retomada cuida da queda.
@@ -526,7 +538,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes, local, rapidas);
+      bolha.fechar(reply, fontes, local, rapidas, pedidoId);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -1030,6 +1042,8 @@ export default function ChatScreen({
         />
       )}
 
+      {/* A WebView sobe cedo: a 1ª tela inteligente não espera o motor. */}
+      <PreAquecerTelas />
       <FlatList
         ref={listRef}
         data={messages}
@@ -1089,6 +1103,23 @@ export default function ChatScreen({
                 </View>
               ) : null}
             </BolhaEntrando>
+            {/* 22/10 (Fase 4): a tela inteligente da resposta, embaixo da bolha. */}
+            {item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
+              <TelaNaBolha
+                key={`tela-${item.id}`}
+                tela={item.tela!}
+                onPerguntar={(t) => handleSend(t)}
+                onEstado={(vars) => setMessages((prev) => prev.map((m) => (m.id === item.id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m)))}
+                onPedido={(rota, params) => pedidoDaTela(pairingRef.current, rota, params)}
+                onFalhou={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: undefined } : m)))}
+                onCresceu={() => {
+                  // A tela da última resposta, pedida há pouco: desce até ela mesmo no meio da rolagem.
+                  const ultima = messages[messages.length - 1]?.id === item.id;
+                  if (ultima && Date.now() - ultimoEnvio.current < 60_000) listRef.current?.scrollToEnd({ animated: true });
+                  else aoCrescerConteudo();
+                }}
+              />
+            ) : null}
             {/* 22/10: respostas rápidas embaixo da última resposta (somem quando ele responde). */}
             {item.from === 'reply' && !sending && messages[messages.length - 1]?.id === item.id ? (
               <RespostasRapidas botoes={botoesDasRapidas(item.rapidas, item.sugestoes)} onEscolher={(t) => handleSend(t)} onOutra={() => inputRef.current?.focus()} />
