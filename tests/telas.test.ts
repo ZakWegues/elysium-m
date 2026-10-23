@@ -86,10 +86,15 @@ describe("telas inteligentes no celular: protocolo (22/10)", () => {
     ];
     const f = (x: Omit<FrameUi, "id">): FrameUi => ({ id: "pedido-0001", ...x });
     let r = aplicarUi(msgs, f({ gerando: true }));
-    expect(r[0].tela).toEqual({ gerando: true });
+    expect(r[0].tela).toMatchObject({ gerando: true });
     r = aplicarUi(r, f({ programa: PROG, texto: "Pronto, aqui está a tela." }));
     expect(r[0]).toMatchObject({ text: "Pronto, aqui está a tela.", tela: { programa: PROG } });
     expect(aplicarUi(r, f({ falhou: true }))[0].tela).toBeUndefined();
+    // Falhou com o pedido: fica a faixa "Tentar de novo"; cancelada: some.
+    expect(aplicarUi(r, f({ falhou: true, pergunta: "p", resposta: "r" }))[0].tela).toEqual({ falhou: { pergunta: "p", resposta: "r" } });
+    expect(aplicarUi(r, f({ falhou: true, cancelada: true, pergunta: "p", resposta: "r" }))[0].tela).toBeUndefined();
+    expect(lerUi({ type: "ui", id: "pedido-0001", falhou: true, cancelada: true })).toEqual({ id: "pedido-0001", falhou: true, cancelada: true });
+    expect(telaVisivel({ gerando: true, desde: 10 ** 12 }, 0, 10 ** 12 + 1000)).toBe(true);
     expect(aplicarUi(msgs, { id: "outro-pedido", programa: PROG })).toBe(msgs);
     expect(telaVisivel({ gerando: true }, 0, 60_000)).toBe(true);
     expect(telaVisivel({ gerando: true }, 0, 4 * 60_000)).toBe(false);

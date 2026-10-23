@@ -9,10 +9,13 @@
 
 import type { Palette } from '../theme/palettes';
 
-export type FrameUi = { id: string; gerando?: true; programa?: string; texto?: string; falhou?: true; internet?: boolean };
+export type FrameUi = { id: string; gerando?: true; programa?: string; texto?: string; falhou?: true; cancelada?: true; pergunta?: string; resposta?: string; internet?: boolean };
 
-/** A tela guardada na mensagem (vai para o histórico): programa e o que foi digitado nela. */
-export type TelaDaMensagem = { gerando?: true; programa?: string; estado?: Record<string, unknown>; internet?: boolean };
+/**
+ * A tela guardada na mensagem (vai para o histórico): programa e o que foi digitado nela; ou, se
+ * a geração falhou, o pedido para o "Tentar de novo".
+ */
+export type TelaDaMensagem = { gerando?: true; desde?: number; programa?: string; estado?: Record<string, unknown>; internet?: boolean; falhou?: { pergunta: string; resposta: string } };
 
 const MAX_PROGRAMA = 200_000;
 
@@ -25,15 +28,24 @@ export function lerUi(d: unknown): FrameUi | null {
   const internet = typeof x.internet === 'boolean' ? x.internet : undefined;
   const base = { id: x.id, ...(texto ? { texto } : {}), ...(internet === undefined ? {} : { internet }) };
   if (typeof x.programa === 'string' && x.programa.trim() && x.programa.length <= MAX_PROGRAMA) return { ...base, programa: x.programa };
-  if (x.falhou === true) return { ...base, falhou: true };
+  if (x.falhou === true) {
+    if (x.cancelada === true) return { ...base, falhou: true, cancelada: true };
+    const pergunta = typeof x.pergunta === 'string' ? x.pergunta.slice(0, 2000) : undefined;
+    const resposta = typeof x.resposta === 'string' ? x.resposta.slice(0, 6000) : undefined;
+    return { ...base, falhou: true, ...(pergunta !== undefined ? { pergunta } : {}), ...(resposta !== undefined ? { resposta } : {}) };
+  }
   if (x.estado === 'gerando') return { ...base, gerando: true };
   return null;
 }
 
-/** Aplica o frame na tela da mensagem: o que fica guardado. `null` = sem tela (falhou). Pura. */
-export function telaDoFrame(f: FrameUi): TelaDaMensagem | null {
+/**
+ * Aplica o frame na tela da mensagem: o que fica guardado. `null` = sem tela (cancelada, ou
+ * falhou sem como tentar de novo). Falhou com o pedido: fica a faixa "Tentar de novo". Pura.
+ */
+export function telaDoFrame(f: FrameUi, agora = Date.now()): TelaDaMensagem | null {
   if (f.programa) return { programa: f.programa, ...(f.internet === undefined ? {} : { internet: f.internet }) };
-  if (f.gerando) return { gerando: true };
+  if (f.gerando) return { gerando: true, desde: agora };
+  if (f.falhou && !f.cancelada && f.pergunta !== undefined && f.resposta !== undefined) return { falhou: { pergunta: f.pergunta, resposta: f.resposta } };
   return null;
 }
 
@@ -43,7 +55,8 @@ export type MensagemDaTela =
   | { tipo: 'acao'; acao: 'perguntar' | 'abrirLink' | 'copiar'; valor: string }
   | { tipo: 'estado'; vars: Record<string, unknown> }
   | { tipo: 'pedido'; id: number; rota: 'fotos' | 'rota'; params: Record<string, string> }
-  | { tipo: 'erro'; mensagem: string };
+  | { tipo: 'erro'; mensagem: string }
+  | { tipo: 'rolar'; dy: number };
 
 const ehTexto = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max;
 
@@ -76,6 +89,7 @@ export function mensagemDaTela(bruto: unknown): MensagemDaTela | null {
       return { tipo: 'pedido', id: x.id as number, rota: x.rota, params };
     }
     case 'erro': return ehTexto(x.mensagem, 1000) ? { tipo: 'erro', mensagem: x.mensagem } : null;
+    case 'rolar': return typeof x.dy === 'number' && Number.isFinite(x.dy) && Math.abs(x.dy) <= 2000 ? { tipo: 'rolar', dy: x.dy } : null;
     default: return null;
   }
 }
@@ -152,6 +166,6 @@ export function aplicarUi<M extends ComTela>(msgs: M[], f: FrameUi): M[] {
 /** Tela "gerando" esquecida (o app fechou no meio): depois de 3 min não mostra mais o esqueleto. Pura. */
 export function telaVisivel(tela: TelaDaMensagem | undefined, ts: number, agora = Date.now()): boolean {
   if (!tela) return false;
-  if (tela.programa) return true;
-  return tela.gerando === true && agora - ts < 3 * 60_000;
+  if (tela.programa || tela.falhou) return true;
+  return tela.gerando === true && agora - (tela.desde ?? ts) < 3 * 60_000;
 }

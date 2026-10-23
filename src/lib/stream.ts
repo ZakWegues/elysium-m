@@ -84,6 +84,13 @@ export type VoiceConnection = {
   viva(): boolean;
   /** Refaz a conexão agora (app voltou para a frente, o endereço do PC mudou). */
   reconectar(): void;
+  /**
+   * 23/10: "Ver como tela" / "Tentar de novo" — o PC gera a tela desta resposta e manda os frames
+   * `ui` com `id`. false = sem conexão agora.
+   */
+  pedirTela(id: string, pergunta: string, resposta: string): boolean;
+  /** 23/10: o "Cancelar" do esqueleto. */
+  cancelarTela(id: string): void;
 };
 
 /**
@@ -412,5 +419,17 @@ export function openVoiceConnection(
     conectar();
   }
 
-  return { ready, sendAudio, sendText, close, viva, reconectar };
+  function pedirTela(id: string, pergunta: string, resposta: string): boolean {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try { ws.send(JSON.stringify({ type: 'ui.ver', id, pergunta: pergunta.slice(0, 2000), resposta: resposta.slice(0, 6000) })); } catch { return false; }
+    telaEsperada = id;
+    return true;
+  }
+
+  function cancelarTela(id: string) {
+    if (telaEsperada === id) telaEsperada = null;
+    try { ws?.send(JSON.stringify({ type: 'ui.cancelar', id })); } catch { /* */ }
+  }
+
+  return { ready, sendAudio, sendText, close, viva, reconectar, pedirTela, cancelarTela };
 }

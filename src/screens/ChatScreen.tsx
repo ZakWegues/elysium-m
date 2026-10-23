@@ -26,7 +26,7 @@ import { Pairing } from '../lib/pairing';
 import { AuthError, pedidoDaTela, sendCommand } from '../lib/api';
 import { TimeoutError } from '../lib/http';
 import { enqueueCommand } from '../lib/commandQueue';
-import { ConexaoNaoAbriu, EstadoConexao, openVoiceConnection, VoiceConnection } from '../lib/stream';
+import { ConexaoNaoAbriu, EstadoConexao, novoIdDePedido, openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
@@ -357,6 +357,8 @@ export default function ChatScreen({
    */
   const jaAncorou = useRef(false);
   const coladoNoFim = useRef(true);
+  /** Onde a lista está (a roda do mouse em cima de uma tela, na prévia web, rola a partir daqui). */
+  const deslocamento = useRef(0);
   /** Quando ele mandou a última mensagem: a tela da resposta que cresce logo depois puxa a lista. */
   const ultimoEnvio = useRef(0);
 
@@ -465,6 +467,25 @@ export default function ChatScreen({
     else setEscrevendoId(null);
     voiceConnRef.current?.close();
     voiceConnRef.current = null;
+  }
+
+  /**
+   * 23/10: "Ver como tela" e "Tentar de novo": o PC gera a tela desta resposta pelo WebSocket
+   * (frames `ui` com um id novo, que a mensagem passa a carregar).
+   */
+  async function telaDaResposta(item: StoredMessage, pergunta?: string, resposta?: string) {
+    const id = novoIdDePedido();
+    // Pediu agora: a tela que vier puxa a lista até ela (como depois de mandar mensagem).
+    ultimoEnvio.current = Date.now();
+    coladoNoFim.current = true;
+    const idx = messages.findIndex((m) => m.id === item.id);
+    const perg = pergunta ?? [...messages.slice(0, Math.max(0, idx))].reverse().find((m) => m.from === 'me')?.text ?? '';
+    const resp = resposta ?? item.text;
+    setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, pedidoId: id, tela: { gerando: true, desde: Date.now() } } : m)));
+    const conn = await ensureVoiceConnection().catch(() => null);
+    if (!conn || !conn.pedirTela(id, perg, resp)) {
+      setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: { falhou: { pergunta: perg, resposta: resp } } } : m)));
+    }
   }
 
   async function rodarComandoIa(cmd: { id: string; nome: string }, alvo: string) {
@@ -1052,6 +1073,7 @@ export default function ChatScreen({
         onContentSizeChange={aoCrescerConteudo}
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          deslocamento.current = contentOffset.y;
           coladoNoFim.current =
             contentSize.height - layoutMeasurement.height - contentOffset.y < 80;
         }}
@@ -1112,6 +1134,9 @@ export default function ChatScreen({
                 onEstado={(vars) => setMessages((prev) => prev.map((m) => (m.id === item.id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m)))}
                 onPedido={(rota, params) => pedidoDaTela(pairingRef.current, rota, params)}
                 onFalhou={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: undefined } : m)))}
+                onCancelar={() => { if (item.pedidoId) voiceConnRef.current?.cancelarTela(item.pedidoId); setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: undefined } : m))); }}
+                onTentarDeNovo={() => void telaDaResposta(item, item.tela?.falhou?.pergunta, item.tela?.falhou?.resposta)}
+                onRolar={(dy) => listRef.current?.scrollToOffset({ offset: Math.max(0, deslocamento.current + dy), animated: false })}
                 onCresceu={() => {
                   // A tela da última resposta, pedida há pouco: desce até ela mesmo no meio da rolagem.
                   const ultima = messages[messages.length - 1]?.id === item.id;
@@ -1119,6 +1144,14 @@ export default function ChatScreen({
                   else aoCrescerConteudo();
                 }}
               />
+            ) : null}
+            {/* 23/10: "Ver como tela" na última resposta longa que ainda não tem tela (como no PC). */}
+            {item.from === 'reply' && !item.tela && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
+              <Pressable onPress={() => { haptica.leve(); void telaDaResposta(item); }} accessibilityRole="button" accessibilityLabel="Ver esta resposta como tela" hitSlop={6}
+                style={({ pressed }) => [styles.verTela, { borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
+                <Feather name="layout" size={12} color={palette.textMuted} />
+                <Text variant="caption" color={palette.textMuted}>Ver como tela</Text>
+              </Pressable>
             ) : null}
             {/* 22/10: respostas rápidas embaixo da última resposta (somem quando ele responde). */}
             {item.from === 'reply' && !sending && messages[messages.length - 1]?.id === item.id ? (
@@ -1364,6 +1397,7 @@ function hostDe(url: string): string {
 }
 
 const styles = StyleSheet.create({
+  verTela: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', marginTop: 2 },
   fontes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   selo: { marginTop: 4, fontSize: 10, letterSpacing: 1 },
   fonte: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, maxWidth: 180 },

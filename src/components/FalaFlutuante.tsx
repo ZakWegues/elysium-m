@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, LinearTransition, ZoomIn, ZoomOut } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeInUp, FadeOut, FadeOutUp, LinearTransition, ReduceMotion, ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -8,6 +8,10 @@ import { Text } from './ui';
 import { Reator } from './Reator';
 import { pararDeFalar, pausarFala, retomarFala, useFala } from '../lib/falar';
 import { haptica } from '../lib/haptica';
+import { MOV } from '../lib/motion';
+
+/** A curva do app (a mesma das telas e do PC): sai rápido e assenta sem quicar. */
+const CURVA = Easing.bezier(0.2, 0.8, 0.2, 1);
 
 const RECOLHER_MS = 5000;
 
@@ -17,9 +21,10 @@ const RECOLHER_MS = 5000;
  *
  * O Zak pôs a Ely para ler o resumo e trocou de aba: a tela desmontava, a fala parava, e o
  * resumo não servia para nada. Agora a fala não depende de tela nenhuma e esta pílula mora no
- * App, por cima de tudo. Fechada é discreta (o reator girando + "Falando"); um toque abre,
- * com uma mola na largura, e mostra o trecho atual, Pausar ⇄ Retomar e Parar. Recolhe sozinha
- * depois de 5 s sem toque, ou com um toque fora.
+ * App, por cima de tudo. Fechada é discreta (o reator girando + "Falando"); um toque abre e mostra
+ * o trecho atual, Pausar ⇄ Retomar e Parar. Recolhe sozinha depois de 5 s sem toque, ou com um
+ * toque fora. 23/10: entra descendo 8 px com fade, sai subindo; abrir/fechar anima largura e altura
+ * na curva do app (a mola quicava), o raio fica o mesmo (trocava de golpe) e o conteúdo cruza.
  *
  * Fica a 64 px do topo pelo mesmo motivo da pílula antiga: embaixo cobriria o campo de texto
  * e a barra de abas, e colada no topo tapava o switch IA/PC do Chat.
@@ -55,21 +60,22 @@ export function FalaFlutuante() {
       {aberta && <Pressable style={[StyleSheet.absoluteFill, { zIndex: 49 }]} onPress={() => setAberta(false)} accessible={false} />}
       <View pointerEvents="box-none" style={[styles.camada, { top: insets.top + 64 }]}>
         <Animated.View
-          entering={FadeIn.duration(160)}
-          exiting={FadeOut.duration(160)}
-          layout={LinearTransition.springify().damping(18).stiffness(220)}
+          entering={FadeInUp.duration(MOV.base).easing(CURVA).withInitialValues({ opacity: 0, transform: [{ translateY: -8 }] }).reduceMotion(ReduceMotion.System)}
+          exiting={FadeOutUp.duration(MOV.saida).reduceMotion(ReduceMotion.System)}
+          layout={LinearTransition.duration(MOV.base).easing(CURVA).reduceMotion(ReduceMotion.System)}
           style={[
             styles.pilula,
             {
               backgroundColor: palette.surface,
               borderColor: palette.primary,
-              borderRadius: aberta ? tokens.radii.xl : 24,
+              borderRadius: 24,
               width: aberta ? 320 : undefined,
               maxWidth: '92%',
             },
           ]}
         >
           {!aberta ? (
+            <Animated.View key="fechada" entering={FadeIn.duration(MOV.base).delay(60)} exiting={FadeOut.duration(MOV.micro)}>
             <Pressable
               onPress={abrir}
               hitSlop={8}
@@ -81,8 +87,9 @@ export function FalaFlutuante() {
               <Text variant="caption" color={palette.primary}>{fala.pausada ? 'Pausada' : 'Falando'}</Text>
               <Feather name="chevron-down" size={14} color={palette.primary} />
             </Pressable>
+            </Animated.View>
           ) : (
-            <Animated.View entering={FadeIn.duration(180).delay(60)} style={styles.aberta}>
+            <Animated.View key="aberta" entering={FadeIn.duration(MOV.base).delay(60)} exiting={FadeOut.duration(MOV.micro)} style={styles.aberta}>
               <View style={styles.topo}>
                 <Reator tamanho={34} fracao={fala.total > 1 ? fala.parte / fala.total : 1} vivo={!fala.pausada} />
                 <View style={{ flex: 1 }}>
