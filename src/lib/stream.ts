@@ -92,6 +92,11 @@ export type VoiceConnection = {
   pedirTela(id: string, pergunta: string, resposta: string): boolean;
   /** 23/10: o "Cancelar" do esqueleto. */
   cancelarTela(id: string): void;
+  /**
+   * 24/10: o app reabriu com uma tela "gerando" na conversa (foi fechado no meio): pede ao PC a
+   * tela daquele pedido (ele guarda 10 min) — agora, ou assim que a conexão abrir.
+   */
+  retomarTela(id: string): void;
 };
 
 /**
@@ -434,10 +439,17 @@ export function openVoiceConnection(
     return true;
   }
 
+  function retomarTela(id: string) {
+    telaEsperada = id;
+    if (ws && ws.readyState === WebSocket.OPEN && !pending) {
+      try { ws.send(JSON.stringify({ type: 'retomar', id })); } catch { /* aoAbrir tenta de novo */ }
+    }
+  }
+
   function cancelarTela(id: string) {
     if (telaEsperada === id) telaEsperada = null;
     try { ws?.send(JSON.stringify({ type: 'ui.cancelar', id })); } catch { /* */ }
   }
 
-  return { ready, sendAudio, sendText, close, viva, reconectar, pedirTela, cancelarTela };
+  return { ready, sendAudio, sendText, close, viva, reconectar, pedirTela, cancelarTela, retomarTela };
 }

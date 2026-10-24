@@ -365,6 +365,15 @@ export default function ChatScreen({
   /** Onde a lista está (a roda do mouse em cima de uma tela, na prévia web, rola a partir daqui). */
   const deslocamento = useRef(0);
   useEffect(() => { ligarDiagTela(() => pairingRef.current); }, []);
+  // 24/10: a conversa voltou com uma tela ainda "gerando" (o app fechou no meio): pede ao PC.
+  const retomadaPedida = useRef<string | null>(null);
+  useEffect(() => {
+    const m = [...messages].reverse().find((x) => x.tela?.gerando && x.pedidoId && telaVisivel(x.tela, x.ts));
+    if (!m?.pedidoId || retomadaPedida.current === m.pedidoId || voiceConnRef.current?.viva()) return;
+    retomadaPedida.current = m.pedidoId;
+    diagTela(`retomando tela …${m.pedidoId.slice(-6)}`);
+    ensureVoiceConnection().then((c) => c.retomarTela(m.pedidoId!)).catch(() => {});
+  }, [messages]);
   /** Quando ele mandou a última mensagem: a tela da resposta que cresce logo depois puxa a lista. */
   const ultimoEnvio = useRef(0);
 

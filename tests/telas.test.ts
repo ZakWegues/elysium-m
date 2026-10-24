@@ -128,6 +128,20 @@ describe("telas inteligentes no celular: stream (22/10)", () => {
     conn.close();
   });
 
+  it("app reaberto com tela gerando: retomarTela pede ao PC e a tela chega", async () => {
+    const telas: FrameUi[] = [];
+    const conn = openVoiceConnection(pairing, undefined, undefined, undefined, (f) => telas.push(f));
+    WsFalso.todos[0].abrir();
+    await conn.ready;
+    conn.retomarTela("pedido-antigo-1");
+    expect(JSON.parse(WsFalso.todos[0].enviados.at(-1)!)).toEqual({ type: "retomar", id: "pedido-antigo-1" });
+    WsFalso.todos[0].pc({ type: "retomada", id: "pedido-antigo-1", text: "" });
+    WsFalso.todos[0].pc({ type: "reply", reply: "Montando a tela…", id: "pedido-antigo-1" });
+    WsFalso.todos[0].pc({ type: "ui", id: "pedido-antigo-1", programa: PROG });
+    expect(telas.at(-1)?.programa).toBe(PROG);
+    conn.close();
+  });
+
   it("voz não pede tela", async () => {
     const conn = openVoiceConnection(pairing);
     WsFalso.todos[0].abrir();

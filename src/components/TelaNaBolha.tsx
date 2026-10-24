@@ -376,13 +376,18 @@ function EsqueletoVivo({ onCancelar }: { onCancelar?: () => void }) {
   );
 }
 
+/**
+ * 🔴 24/10: dentro do useAnimatedStyle só valor e Math — o worklet roda na thread de UI e chamar
+ * uma função JS comum dali (era `comAlfa(cor, a.value)`) DERRUBA o app no Android. Na prévia web
+ * não aparecia (lá tudo roda no JS). A cor fica fixa fora do worklet e só a opacidade anima.
+ */
 function Bloco({ cor, atraso, parado, style }: { cor: string; atraso: number; parado: boolean; style: object }) {
-  const a = useSharedValue(0.08);
+  const a = useSharedValue(0.4);
   useEffect(() => {
-    if (!parado) a.value = withDelay(atraso, withRepeat(withTiming(0.2, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true));
+    if (!parado) a.value = withDelay(atraso, withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true));
   }, [parado]);
-  const estilo = useAnimatedStyle(() => ({ backgroundColor: comAlfa(cor, a.value) }));
-  return <AnimatedReanimated.View style={[{ borderRadius: 8 }, style, estilo]} />;
+  const estilo = useAnimatedStyle(() => ({ opacity: a.value }));
+  return <AnimatedReanimated.View style={[{ borderRadius: 8, backgroundColor: comAlfa(cor, 0.2) }, style, estilo]} />;
 }
 
 function Barra({ cor, h, atraso, parado }: { cor: string; h: number; atraso: number; parado: boolean }) {
@@ -390,7 +395,8 @@ function Barra({ cor, h, atraso, parado }: { cor: string; h: number; atraso: num
   useEffect(() => {
     if (!parado) s.value = withDelay(atraso, withRepeat(withTiming(h * 0.6 + 0.35, { duration: 1200, easing: Easing.inOut(Easing.quad) }), -1, true));
   }, [parado]);
-  const estilo = useAnimatedStyle(() => ({ height: `${Math.round(s.value * 100)}%` as `${number}%` }));
+  // Escala em Y a partir da base (sem refazer o layout a cada quadro).
+  const estilo = useAnimatedStyle(() => ({ transform: [{ scaleY: s.value }] }));
   return <AnimatedReanimated.View style={[styles.barra, { backgroundColor: comAlfa(cor, 0.16) }, estilo]} />;
 }
 
@@ -429,7 +435,7 @@ const styles = StyleSheet.create({
   esqFolha: { flex: 1, gap: 10, padding: 16, paddingBottom: 0 },
   esqCartoes: { flexDirection: 'row', gap: 8 },
   esqBarras: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  barra: { flex: 1, borderTopLeftRadius: 6, borderTopRightRadius: 6 },
+  barra: { flex: 1, height: '100%', transformOrigin: 'bottom', borderTopLeftRadius: 6, borderTopRightRadius: 6 },
   esqRodape: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderTopWidth: 1 },
   pontos: { flexDirection: 'row', gap: 4 },
   ponto: { width: 5, height: 5, borderRadius: 3 },
