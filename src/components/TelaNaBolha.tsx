@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, useState } from 'react';
+import { createElement, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, ToastAndroid, useWindowDimensions, View } from 'react-native';
 import AnimatedReanimated, { Easing, FadeIn, FadeOut, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -66,7 +66,42 @@ type Props = {
   onRolar?: (dy: number) => void;
 };
 
-export function TelaNaBolha(props: Props) {
+/**
+ * O que o chat faz por uma tela. O ChatScreen cria UM objeto destes (estável, lê o estado atual
+ * por refs): assim a tela não é redesenhada a cada letra digitada ou pedaço de resposta.
+ */
+export type AcoesTela = {
+  perguntar: (texto: string) => void;
+  estado: (msgId: string, vars: Record<string, unknown>) => void;
+  pedido: Props['onPedido'];
+  falhou: (msgId: string) => void;
+  cancelar: (msgId: string) => void;
+  tentar: (msgId: string) => void;
+  rolar: (dy: number) => void;
+  cresceu: (msgId: string) => void;
+};
+
+/**
+ * 24/10: `memo` — antes cada render da lista do chat redesenhava as telas e mandava de novo os 3 MB
+ * do renderer para a WebView ("tudo no celular demora mil vezes mais"). Só redesenha quando a
+ * tela daquela mensagem muda.
+ */
+export const TelaNaBolha = memo(function TelaNaBolha({ tela, id, acoes }: { tela: TelaDaMensagem; id: string; acoes: AcoesTela }) {
+  const props = useMemo<Props>(() => ({
+    tela,
+    onPerguntar: acoes.perguntar,
+    onEstado: (vars) => acoes.estado(id, vars),
+    onPedido: acoes.pedido,
+    onFalhou: () => acoes.falhou(id),
+    onCresceu: () => acoes.cresceu(id),
+    onCancelar: () => acoes.cancelar(id),
+    onTentarDeNovo: () => acoes.tentar(id),
+    onRolar: acoes.rolar,
+  }), [tela, id, acoes]);
+  return <TelaInterna {...props} />;
+});
+
+function TelaInterna(props: Props) {
   const { tela } = props;
   const { palette, tokens } = useTheme();
   if (tela.falhou && !tela.programa) {
@@ -280,11 +315,13 @@ type Ponte = { html: string; enviarRef: React.MutableRefObject<(m: unknown) => v
 
 function QuadroNativo({ html, enviarRef, onMensagem, onCarregou, rolavel }: Ponte & { rolavel: boolean }) {
   const ref = useRef<WebView>(null);
+  // O MESMO objeto enquanto o HTML não muda: objeto novo = a WebView recebe (e pode recarregar) 3 MB.
+  const fonte = useMemo(() => ({ html, baseUrl: 'about:blank' }), [html]);
   enviarRef.current = (m) => ref.current?.injectJavaScript(scriptParaTela(m));
   return (
     <WebView
       ref={ref}
-      source={{ html, baseUrl: 'about:blank' }}
+      source={fonte}
       originWhitelist={['about:blank']}
       // Só o HTML da tela: nenhum link navega (os links passam pela ação abrirLink, com confirmação).
       onShouldStartLoadWithRequest={(r) => r.url === 'about:blank' || r.url.startsWith('data:') || r.url.startsWith('blob:')}
@@ -411,15 +448,17 @@ function Ponto({ cor, atraso, parado }: { cor: string; atraso: number; parado: b
 }
 
 /** Uma WebView escondida, montada cedo: a 1ª tela não paga a subida do motor da WebView. */
-export function PreAquecerTelas() {
+const FONTE_VAZIA = { html: '<html></html>' };
+
+export const PreAquecerTelas = memo(function PreAquecerTelas() {
   useEffect(() => { carregarRenderer().catch(() => {}); }, []);
   if (Platform.OS === 'web') return null;
   return (
     <View style={styles.escondida} pointerEvents="none">
-      <WebView source={{ html: '<html></html>' }} javaScriptEnabled={false} allowFileAccess={false} />
+      <WebView source={FONTE_VAZIA} javaScriptEnabled={false} allowFileAccess={false} />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   caixa: { alignSelf: 'stretch', overflow: 'hidden', marginTop: 4, marginBottom: 6 },

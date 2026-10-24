@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, TextStyle, StyleProp } from 'react-native';
 import { Text } from './ui';
 import { useTheme } from '../theme';
@@ -8,7 +9,7 @@ import { partesComLinks } from '../lib/links';
  * Texto simples com os links clicáveis (fase 23) — a minha mensagem no chat da Ely e os
  * recados da Caixa. O Android entrega o link ao app certo (YouTube, Instagram…).
  */
-export function TextoComLinks({ texto, cor, variant = 'body', style }: {
+export const TextoComLinks = memo(function TextoComLinks({ texto, cor, variant = 'body', style }: {
   texto: string; cor: string; variant?: 'body' | 'caption'; style?: StyleProp<TextStyle>;
 }) {
   const { palette } = useTheme();
@@ -24,6 +25,6 @@ export function TextoComLinks({ texto, cor, variant = 'body', style }: {
       ))}
     </Text>
   );
-}
+});
 
 const styles = StyleSheet.create({ link: { textDecorationLine: 'underline' } });

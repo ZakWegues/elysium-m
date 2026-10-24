@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
@@ -10,8 +11,9 @@ import { Bloco, parseMarkdown, Trecho } from '../lib/markdown';
 /**
  * Desenha a resposta do chat com o markdown mínimo de `lib/markdown.ts` (bloco 130).
  * Tudo é `Text` aninhado — seleção e cópia continuam funcionando como antes.
+ * 24/10: `memo` — sem ele cada letra digitada no chat reprocessava todas as respostas visíveis.
  */
-export function Markdown({ texto, cor }: { texto: string; cor: string }) {
+export const Markdown = memo(function Markdown({ texto, cor }: { texto: string; cor: string }) {
   const { palette, tokens } = useTheme();
   const blocos = parseMarkdown(texto);
   // Uma linha só, sem marcação: o caminho de sempre, sem custo.
@@ -85,7 +87,7 @@ export function Markdown({ texto, cor }: { texto: string; cor: string }) {
     }
   };
   return <View style={{ gap: 6 }}>{blocos.map(bloco)}</View>;
-}
+});
 
 const styles = StyleSheet.create({
   negrito: { fontWeight: '700' },

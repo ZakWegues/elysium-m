@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
 import { aoChegarImagem, pegarImagemPendente } from '../lib/imagemParaEly';
@@ -40,7 +40,7 @@ import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
 import { RespostasRapidas } from '../components/RespostasRapidas';
-import { PreAquecerTelas, TelaNaBolha } from '../components/TelaNaBolha';
+import { PreAquecerTelas, TelaNaBolha, type AcoesTela } from '../components/TelaNaBolha';
 import { aplicarUi, telaVisivel } from '../lib/telas';
 import { diagTela, ligarDiagTela } from '../lib/telaDiag';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
@@ -502,6 +502,36 @@ export default function ChatScreen({
       setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: { falhou: { pergunta: perg, resposta: resp } } } : m)));
     }
   }
+
+  // 24/10: as ações das telas num objeto ESTÁVEL (lê o estado atual por ref): a TelaNaBolha é memo
+  // e não redesenha (nem reenvia os 3 MB do renderer) a cada letra digitada ou pedaço de resposta.
+  const atual = useRef({ handleSend, telaDaResposta, messages, aoCrescerConteudo });
+  atual.current = { handleSend, telaDaResposta, messages, aoCrescerConteudo };
+  const acoesTela = useMemo<AcoesTela>(() => {
+    const semTela = (id: string) => setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, tela: undefined } : m)));
+    return {
+      perguntar: (t) => { void atual.current.handleSend(t); },
+      estado: (id, vars) => setMessages((prev) => prev.map((m) => (m.id === id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m))),
+      pedido: (rota, params) => pedidoDaTela(pairingRef.current, rota, params),
+      falhou: semTela,
+      cancelar: (id) => {
+        const m = atual.current.messages.find((x) => x.id === id);
+        if (m?.pedidoId) voiceConnRef.current?.cancelarTela(m.pedidoId);
+        semTela(id);
+      },
+      tentar: (id) => {
+        const m = atual.current.messages.find((x) => x.id === id);
+        if (m) void atual.current.telaDaResposta(m, m.tela?.falhou?.pergunta, m.tela?.falhou?.resposta);
+      },
+      rolar: (dy) => listRef.current?.scrollToOffset({ offset: Math.max(0, deslocamento.current + dy), animated: false }),
+      cresceu: (id) => {
+        // A tela da última resposta, pedida há pouco: desce até ela mesmo no meio da rolagem.
+        const lista = atual.current.messages;
+        if (lista[lista.length - 1]?.id === id && Date.now() - ultimoEnvio.current < 60_000) listRef.current?.scrollToEnd({ animated: true });
+        else atual.current.aoCrescerConteudo();
+      },
+    };
+  }, []);
 
   async function rodarComandoIa(cmd: { id: string; nome: string }, alvo: string) {
     setDraft('');
@@ -1143,23 +1173,7 @@ export default function ChatScreen({
             </BolhaEntrando>
             {/* 22/10 (Fase 4): a tela inteligente da resposta, embaixo da bolha. */}
             {item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
-              <TelaNaBolha
-                key={`tela-${item.id}`}
-                tela={item.tela!}
-                onPerguntar={(t) => handleSend(t)}
-                onEstado={(vars) => setMessages((prev) => prev.map((m) => (m.id === item.id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m)))}
-                onPedido={(rota, params) => pedidoDaTela(pairingRef.current, rota, params)}
-                onFalhou={() => setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: undefined } : m)))}
-                onCancelar={() => { if (item.pedidoId) voiceConnRef.current?.cancelarTela(item.pedidoId); setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, tela: undefined } : m))); }}
-                onTentarDeNovo={() => void telaDaResposta(item, item.tela?.falhou?.pergunta, item.tela?.falhou?.resposta)}
-                onRolar={(dy) => listRef.current?.scrollToOffset({ offset: Math.max(0, deslocamento.current + dy), animated: false })}
-                onCresceu={() => {
-                  // A tela da última resposta, pedida há pouco: desce até ela mesmo no meio da rolagem.
-                  const ultima = messages[messages.length - 1]?.id === item.id;
-                  if (ultima && Date.now() - ultimoEnvio.current < 60_000) listRef.current?.scrollToEnd({ animated: true });
-                  else aoCrescerConteudo();
-                }}
-              />
+              <TelaNaBolha key={`tela-${item.id}`} tela={item.tela!} id={item.id} acoes={acoesTela} />
             ) : null}
             {/* 23/10: "Ver como tela" na última resposta longa que ainda não tem tela (como no PC). */}
             {item.from === 'reply' && !item.tela && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
