@@ -562,6 +562,7 @@ export default function ChatScreen({
         const naoAbriu = wsErr instanceof ConexaoNaoAbriu || (wsErr instanceof Error && wsErr.message === 'WebSocket demorou a abrir');
         if (!naoAbriu || bolha.comecou() || paradoRef.current) throw wsErr;
         console.warn('[chat] WS indisponível, caindo no HTTP', errMessage(wsErr));
+        diagTela(`chat: WS indisponível, foi pelo HTTP (${errMessage(wsErr).slice(0, 80)})`);
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;

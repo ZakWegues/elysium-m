@@ -1,5 +1,6 @@
 import { lerRapidas, type Rapidas } from './respostasRapidas';
 import { lerUi, type FrameUi } from './telas';
+import { diagTela } from './telaDiag';
 import { File as FSFile } from 'expo-file-system';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
@@ -156,6 +157,7 @@ export function openVoiceConnection(
       // `telas`: este app desenha telas inteligentes (Fase 4) — PC antigo ignora.
       ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer, telas: p.canal === 'texto' }));
       p.enviado = true;
+      diagTela(`ws: comando ${p.canal ?? 'voz'} id …${(p.id ?? '').slice(-6)}`);
     } catch (err) {
       console.warn('[voice-ws] envio falhou, tenta ao reconectar', errMessage(err));
     }
@@ -178,6 +180,7 @@ export function openVoiceConnection(
     ultimoSinal = Date.now();
     if (!abriuUmaVez) { abriuUmaVez = true; resolverReady(); }
     console.log('[voice-ws] conectado', ws ? streamUrl(pegarPairing()) : '');
+    diagTela(`ws: conectado${abriuUmaVez ? '' : ' (1ª)'}`);
     onEstado?.('conectado');
     try { ws?.send(JSON.stringify({ type: 'ping' })); } catch { /* */ }
     const p = pending;
@@ -192,6 +195,7 @@ export function openVoiceConnection(
 
   function aoCair() {
     if (encerrada) return;
+    diagTela(`ws: caiu${pending ? ' com pedido pendente' : ''}${telaEsperada ? ' esperando tela' : ''}`);
     if (!abriuUmaVez) {
       // Nem abriu: quem chamou cai no HTTP (o comando não chegou ao PC).
       rejeitarReady?.(new ConexaoNaoAbriu('Não consegui abrir a conexão com o PC'));
@@ -229,6 +233,10 @@ export function openVoiceConnection(
     // Frame de outro pedido (um antigo que terminou depois): não é desta bolha.
     const doPedido = (id?: string) => !id || !pending?.id || id === pending.id;
 
+    // 24/10: diagnóstico das telas — que frames chegam (sem conteúdo).
+    if (data.type && !['pong', 'pc.estado', 'chunk', 'telemetry', 'modo', 'pomodoro'].includes(data.type)) {
+      diagTela(`ws: frame ${data.type} id …${String(data.id ?? '').slice(-6)} pendente …${(pending?.id ?? '-').slice(-6)}`);
+    }
     if (data.type === 'pong') {
       suportaPong = true;
     } else if (data.type === 'transcript') {
