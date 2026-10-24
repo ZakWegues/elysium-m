@@ -264,11 +264,12 @@ function AppInner() {
   }, [pairing]);
 
   useEffect(() => {
-    if (!pairing) return;
+    // 24/10: só com o app na frente — no fundo o badge ninguém vê, e a volta já reconsulta.
+    if (!pairing || !appNaFrente) return;
     refreshMailboxBadge();
     const interval = setInterval(refreshMailboxBadge, MAILBOX_BADGE_POLL_MS);
     return () => clearInterval(interval);
-  }, [pairing, refreshMailboxBadge]);
+  }, [pairing, refreshMailboxBadge, appNaFrente]);
 
   // Reconsulta ao sair do Chat (o usuário pode ter lido recados no lado do PC) em vez de
   // esperar o poll de 45 s.

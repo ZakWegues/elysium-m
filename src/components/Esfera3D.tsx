@@ -8,6 +8,7 @@ import { useTheme } from '../theme';
 import { reduzirUI } from '../lib/motion';
 import { envelopeDoTrecho, estadoDaBolota, nivelDaBolota, palavrasDoTrecho, useFaseDaBolota } from '../lib/bolota';
 import { RITMO_PENSANDO, fatorNoturno } from '../lib/esferaLogica';
+import { useAbaAtiva } from './AbaViva';
 
 /**
  * A esfera 3D no fundo do Chat (fase 21) — a mesma do PC.
@@ -95,7 +96,7 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
     return () => clearInterval(id);
   }, [fala.falando, fala.pausada, fala.trecho, pulso]);
 
-  useFrameCallback((f) => {
+  const quadro = useFrameCallback((f) => {
     const dt = Math.min(0.05, (f.timeSincePreviousFrame ?? 16) / 1000);
     const lento = reduzirUI.value;
     t.value += dt * (lento ? 0.35 : 1);
@@ -106,6 +107,10 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
     nivel.value += (alvo - nivel.value) * (alvo > nivel.value ? 0.35 : 0.08);
     rot.value += dt * (lento ? 0.12 : 0.28 + nivel.value * 1.6) * giro.value;
   });
+  // 24/10: a aba do chat fica montada escondida (abas vivas); fora da tela a esfera não redesenha
+  // os 240 pontos a cada quadro.
+  const ativa = useAbaAtiva();
+  useEffect(() => { quadro.setActive(ativa); }, [ativa, quadro]);
 
   const meio = tamanho / 2;
   // Fase 23: UM passe por quadro desenha as três faixas de profundidade (eram três passes,

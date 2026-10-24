@@ -26,7 +26,8 @@ import { mandarArquivoParaPc } from '../lib/shareIntent';
 import { abrirArquivo, baixarAnexo, LIMITE_ENVIO_PARA_O_PC, planejarEnvio, resumoDosArquivos, salvarArquivo, tamanhoLegivel, tipoDoArquivo } from '../lib/anexos';
 import { aoChegarRecado } from '../lib/mailboxAviso';
 
-const POLL_INTERVAL_MS = 15000;
+// 24/10: o recado novo já chega pelo WebSocket (aoChegarRecado); a consulta é só rede de segurança.
+const POLL_INTERVAL_MS = 60000;
 
 type PendingAttachment = { name: string; mimeType: string; uri: string; sizeBytes: number };
 
@@ -111,7 +112,7 @@ export default function MailboxScreen({
   // 21/10: recado/arquivo novo do PC chega pelo WebSocket — recarrega na hora.
   useEffect(() => aoChegarRecado(() => { refresh(); }), [refresh]);
 
-  // Com o Chat escondido (abas vivas), a Caixa não consulta o PC a cada 15 s à toa.
+  // Com o Chat escondido (abas vivas), a Caixa não consulta o PC a cada minuto à toa.
   const ativa = useAbaAtiva();
   useEffect(() => {
     if (!ativa) return;
