@@ -13,6 +13,7 @@ import { Text } from './ui';
 import { MOV } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { linkSeguro, mensagemDaTela, scriptParaTela, temaDaPaleta, type TelaDaMensagem } from '../lib/telas';
+import { diagTela, erroCurto } from '../lib/telaDiag';
 
 /**
  * Tela inteligente embaixo da resposta da Ely (Fase 4, 22/10; prévia + tela cheia, 23/10). O
@@ -30,12 +31,15 @@ let htmlDoRenderer: Promise<string> | null = null;
 /** O HTML do renderer, lido uma vez (asset do APK/OTA). */
 export function carregarRenderer(): Promise<string> {
   htmlDoRenderer ??= (async () => {
+    const t0 = Date.now();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const asset = Asset.fromModule(require('../../assets/ui/render.html'));
     await asset.downloadAsync();
-    if (Platform.OS === 'web') return (await fetch(asset.uri)).text();
-    return new File(asset.localUri ?? asset.uri).text();
-  })().catch((err) => { htmlDoRenderer = null; throw err; });
+    const onde = (asset.localUri ?? asset.uri).replace(/^(\w+:\/\/\/?[^/]*).*$/, '$1');
+    const html = Platform.OS === 'web' ? await (await fetch(asset.uri)).text() : await new File(asset.localUri ?? asset.uri).text();
+    diagTela(`html lido: ${html.length} chars em ${Date.now() - t0} ms (${onde})`);
+    return html;
+  })().catch((err) => { diagTela(`html ERRO: ${erroCurto(err)}`); htmlDoRenderer = null; throw err; });
   return htmlDoRenderer;
 }
 
@@ -98,7 +102,7 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
   useEffect(() => {
     if (!tela.programa) return;
     let vivo = true;
-    carregarRenderer().then((h) => { if (vivo) setHtml(h); }).catch(() => { if (vivo) onFalhou(); });
+    carregarRenderer().then((h) => { if (vivo) setHtml(h); }).catch(() => { diagTela('prévia: falhou (html)'); if (vivo) onFalhou(); });
     return () => { vivo = false; };
   }, [tela.programa]);
 
@@ -130,7 +134,7 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
         <View key={versao} style={[styles.quadroPrevia, { height: Math.max(conteudo, ALTURA_ESQUELETO), opacity: mostrou ? 1 : 0 }]}>
           <Quadro html={html} modo="previa" tela={{ ...tela, estado: estadoRef.current }} rolavel={false}
             onAltura={aoMedir} onEstado={aoEstado} onPerguntar={onPerguntar} onPedido={onPedido}
-            onErro={() => { if (!mostrou) onFalhou(); }} onRolar={onRolar} />
+            onErro={() => { if (!mostrou) { diagTela('prévia: falhou (erro antes de aparecer)'); onFalhou(); } }} onRolar={onRolar} />
         </View>
       ) : null}
       {!mostrou ? <View style={StyleSheet.absoluteFill}><EsqueletoVivo /></View> : null}
@@ -227,11 +231,15 @@ function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, on
     enviarRef.current({ tipo: 'programa', texto: tela.programa, tema, ...(tela.estado ? { estado: tela.estado } : {}) });
   }
 
+  const alturasRef = useRef(0);
   async function receber(bruto: unknown) {
     const m = mensagemDaTela(bruto);
-    if (!m) return;
-    if (m.tipo === 'pronta') iniciar();
-    else if (m.tipo === 'altura') onAltura?.(m.px);
+    if (!m) { diagTela(`${modo}: mensagem fora do formato (${String(bruto).slice(0, 60)})`); return; }
+    if (m.tipo === 'pronta') { diagTela(`${modo}: pronta`); iniciar(); }
+    else if (m.tipo === 'altura') {
+      if (alturasRef.current++ < 2) diagTela(`${modo}: altura ${m.px}`);
+      onAltura?.(m.px);
+    }
     else if (m.tipo === 'rolar') onRolar?.(m.dy);
     else if (m.tipo === 'acao') {
       if (m.acao === 'perguntar') {
@@ -254,13 +262,14 @@ function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, on
       enviarRef.current(r.dados !== undefined ? { tipo: 'resposta', id: m.id, dados: r.dados } : { tipo: 'resposta', id: m.id, erro: String(r.erro ?? 'falhou').slice(0, 200) });
     } else if (m.tipo === 'erro') {
       console.warn('[tela]', m.mensagem);
+      diagTela(`${modo}: erro do programa: ${m.mensagem.slice(0, 160)}`);
       onErro?.();
     }
   }
 
   return Platform.OS === 'web'
     ? <QuadroWeb html={html} enviarRef={enviarRef} onMensagem={receber} onCarregou={iniciar} />
-    : <QuadroNativo html={html} enviarRef={enviarRef} onMensagem={receber} onCarregou={iniciar} rolavel={rolavel} />;
+    : <QuadroNativo html={html} enviarRef={enviarRef} onMensagem={receber} onCarregou={() => { diagTela(`${modo}: webview carregou`); iniciar(); }} rolavel={rolavel} />;
 }
 
 function avisar(texto: string) {
@@ -281,6 +290,9 @@ function QuadroNativo({ html, enviarRef, onMensagem, onCarregou, rolavel }: Pont
       onShouldStartLoadWithRequest={(r) => r.url === 'about:blank' || r.url.startsWith('data:') || r.url.startsWith('blob:')}
       onMessage={(e: WebViewMessageEvent) => onMensagem(e.nativeEvent.data)}
       onLoadEnd={onCarregou}
+      onError={(e) => diagTela(`webview ERRO: ${e.nativeEvent.code} ${e.nativeEvent.description}`.slice(0, 200))}
+      onHttpError={(e) => diagTela(`webview HTTP ${e.nativeEvent.statusCode}`)}
+      onRenderProcessGone={(e) => diagTela(`webview CAIU (didCrash=${e.nativeEvent.didCrash})`)}
       javaScriptEnabled
       domStorageEnabled={false}
       allowFileAccess={false}

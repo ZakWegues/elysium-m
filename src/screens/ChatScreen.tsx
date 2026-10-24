@@ -42,6 +42,7 @@ import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
 import { RespostasRapidas } from '../components/RespostasRapidas';
 import { PreAquecerTelas, TelaNaBolha } from '../components/TelaNaBolha';
 import { aplicarUi, telaVisivel } from '../lib/telas';
+import { diagTela, ligarDiagTela } from '../lib/telaDiag';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
 import { LIMITE_ENVIO_PARA_O_PC } from '../lib/anexos';
 import { paraFala, textoPuro } from '../lib/markdown';
@@ -335,7 +336,11 @@ export default function ChatScreen({
       });
     }, setConexao, (f) => {
       // 22/10 (Fase 4): a tela inteligente da resposta — acha a bolha pelo id do pedido.
-      setMessages((prev) => aplicarUi(prev, f));
+      setMessages((prev) => {
+        const novas = aplicarUi(prev, f);
+        diagTela(`frame ui ${f.programa ? `programa ${f.programa.length} chars` : f.gerando ? 'gerando' : f.cancelada ? 'cancelada' : 'falhou'} ${novas === prev ? 'SEM BOLHA (id ' + f.id.slice(-6) + ')' : 'na bolha'}`);
+        return novas;
+      });
     });
     voiceConnRef.current = conn;
     try {
@@ -359,6 +364,7 @@ export default function ChatScreen({
   const coladoNoFim = useRef(true);
   /** Onde a lista está (a roda do mouse em cima de uma tela, na prévia web, rola a partir daqui). */
   const deslocamento = useRef(0);
+  useEffect(() => { ligarDiagTela(() => pairingRef.current); }, []);
   /** Quando ele mandou a última mensagem: a tela da resposta que cresce logo depois puxa a lista. */
   const ultimoEnvio = useRef(0);
 
