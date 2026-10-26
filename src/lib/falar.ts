@@ -283,7 +283,9 @@ async function baixarParte(texto: string, pairing: Pairing): Promise<File> {
   const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${pairing.token}` } }, PRAZO_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
-  const arquivo = new File(Paths.cache, `fala-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.mp3`);
+  // 26/10: a voz do Gemini chega em WAV; a do Edge, em MP3.
+  const ext = /wav/i.test(res.headers.get('content-type') ?? '') ? 'wav' : 'mp3';
+  const arquivo = new File(Paths.cache, `fala-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`);
   arquivo.write(bytes);
   return arquivo;
 }
