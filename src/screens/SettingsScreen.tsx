@@ -19,7 +19,7 @@ import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { Button, Card, Text, Toque } from '../components/ui';
 import { PainelMemoria } from './ControlScreen';
-import { falaAntecipadaLigada, falar, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas, ligarVozDoPc, vozDoPcLigada } from '../lib/falar';
+import { falaAntecipadaLigada, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 import { trocarModo, useModo } from '../lib/modo';
 import { confirmDestructive } from '../lib/confirm';
@@ -52,16 +52,15 @@ type Secao = 'aparencia' | 'voz' | 'conversa' | 'modos' | 'memoria' | 'avisos' |
 export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens, familiaResolvida, name } = useTheme();
   const [secao, setSecao] = useState<Secao | null>(null);
-  const [vozPc, setVozPc] = useState(true);
   const [avisos, setAvisos] = useState(false);
   const modo = useModo();
-  useEffect(() => { vozDoPcLigada().then(setVozPc); notificacoesAtivas().then(setAvisos); }, [secao]);
+  useEffect(() => { notificacoesAtivas().then(setAvisos); }, [secao]);
 
   // O Minimal monta a paleta na hora (modo do aparelho), então o resumo usa a que está valendo.
   const cor = palette.minimal ? palette : getPalette(name, familiaResolvida);
   const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
     { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.minimal || cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
-    { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: vozPc ? 'Voz do PC' : 'Voz do celular' },
+    { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: 'Voz neural do PC' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
     { id: 'modos', titulo: 'Modos', icone: 'layers', resumo: modo ? `Ligado: ${modo.nome}` : 'Matemática, inglês… e os seus' },
     // Fase 23: a memória da Ely também mora aqui (é o mesmo painel da aba PC).
@@ -98,7 +97,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
         <Text variant="label" color={palette.primary}>{azulejos.find(a => a.id === secao)?.titulo}</Text>
       </Pressable>
       {secao === 'aparencia' && <SecaoAparencia />}
-      {secao === 'voz' && <VozSection pairing={pairing} />}
+      {secao === 'voz' && <VozSection />}
       {secao === 'conversa' && <SecaoConversa pairing={pairing} />}
       {secao === 'modos' && <SecaoModos pairing={pairing} />}
       {secao === 'memoria' && <PainelMemoria pairing={pairing} onError={(err, ctx) => Alert.alert(ctx, errMessage(err))} />}
@@ -615,21 +614,16 @@ function SecaoSobre({ pairing }: { pairing: Pairing }) {
   );
 }
 
-/** Voz das respostas: a neural do PC (bloco 85) ou a do aparelho. */
-function VozSection({ pairing }: { pairing: Pairing }) {
+/** Voz das respostas: só a neural do PC (25/10 — a do Android saiu). */
+function VozSection() {
   const { palette, tokens } = useTheme();
-  const [doPc, setDoPc] = useState(true);
   const [palavra, setPalavra] = useState(true);
   const [ler, setLer] = useState(true);
   const [antecipada, setAntecipada] = useState(true);
   // Fase 22: só "Ouvir Ely" e "Ler respostas" à vista; o resto mora em Avançado.
   const [avancado, setAvancado] = useState(false);
   const estado = useEstadoPalavra();
-  useEffect(() => { vozDoPcLigada().then(setDoPc); palavraLigada().then(setPalavra); lerRespostasEscritas().then(setLer); falaAntecipadaLigada().then(setAntecipada); }, []);
-  const opcoes: { valor: boolean; rotulo: string; nota: string; icone: keyof typeof Feather.glyphMap }[] = [
-    { valor: true, rotulo: 'Voz do PC', nota: 'A mesma voz neural da caixa de som do PC (escolhida em Ajustes → Voz lá). Sem PC, cai na do celular.', icone: 'monitor' },
-    { valor: false, rotulo: 'Voz do celular', nota: 'A voz do Android. Funciona sem o PC, mas soa mais robótica.', icone: 'smartphone' },
-  ];
+  useEffect(() => { palavraLigada().then(setPalavra); lerRespostasEscritas().then(setLer); falaAntecipadaLigada().then(setAntecipada); }, []);
   return (
     <View style={{ gap: tokens.spacing.sm }}>
       {/* Bloco 129: a palavra de ativação do celular. Vale na hora (aoMudarPalavra). */}
@@ -676,24 +670,6 @@ function VozSection({ pairing }: { pairing: Pairing }) {
             : 'Agora: pausado (escuta só com a Início ou o Chat na tela, e para enquanto Ajustes está aberto).'}
         </Text>
       )}
-      <Text variant="subheading">Voz das respostas</Text>
-      {opcoes.map(o => {
-        const sel = o.valor === doPc;
-        return (
-          <Pressable
-            key={o.rotulo}
-            onPress={async () => { setDoPc(o.valor); await ligarVozDoPc(o.valor); falar('Assim fica a minha voz.', pairing); }}
-            style={[styles.familiaBtn, { borderRadius: tokens.radii.md, backgroundColor: sel ? palette.primarySoft : 'transparent', borderColor: sel ? palette.primary : palette.border }]}
-          >
-            <Feather name={o.icone} size={17} color={sel ? palette.primary : palette.textMuted} />
-            <View style={{ flex: 1 }}>
-              <Text variant="body" color={sel ? palette.primary : palette.text}>{o.rotulo}</Text>
-              <Text variant="caption" color={palette.textMuted}>{o.nota}</Text>
-            </View>
-            {sel && <Feather name="check" size={16} color={palette.primary} />}
-          </Pressable>
-        );
-      })}
       </>)}
     </View>
   );

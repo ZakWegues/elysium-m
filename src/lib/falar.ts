@@ -1,25 +1,23 @@
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Speech from 'expo-speech';
 import { createAudioPlayer, AudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import { Pairing } from './pairing';
 import { fetchWithTimeout } from './http';
 import { liberarMicrofone, ocuparMicrofone } from './microfone';
-import { escolherVozFeminina } from './vozFeminina';
-import { frasesDe, partesDaFala, trechoParaMostrar } from './divisaoFala';
+import { partesDaFala, trechoParaMostrar } from './divisaoFala';
 
 /**
  * Falar uma resposta no celular (bloco 85) — e, desde 08/10, um pequeno player da Ely.
  *
  * Antes era sempre o `expo-speech` — a voz do Android, bem pior que a neural que o PC usa.
  * Agora o celular pede o MP3 ao PC (`GET /api/tts`) e toca; é a mesma voz que sai na caixa
- * de som do PC, escolhida em Ajustes → Voz lá. Sem PC, sem rede, ou se a síntese passar de
- * 8 s (a primeira do dia leva ~14 s para abrir a conexão com o serviço de voz), cai no
- * `expo-speech`: responder com a voz pior é melhor que ficar mudo.
+ * de som do PC, escolhida em Ajustes → Voz lá. 25/10: é a ÚNICA voz — o Zak não quer a do
+ * Android ("travada e sem sentimento"). Sem PC, sem rede ou síntese acima de 8 s, a resposta
+ * fica só em texto.
  *
  * Baixa para um arquivo em vez de dar a URL ao player: assim o prazo é nosso, e uma falha
- * vira fallback em vez de um player mudo esperando para sempre.
+ * termina a fala em vez de deixar um player mudo esperando para sempre.
  *
  * A promessa só resolve quando a fala TERMINA (bloco 89): o pedido por voz e o botão Interromper precisam
  * saber a hora de voltar a ouvir — antes disso o microfone gravaria a própria resposta.
@@ -28,7 +26,7 @@ import { frasesDe, partesDaFala, trechoParaMostrar } from './divisaoFala';
  * 1. **Trocar de aba não para a fala.** Ninguém mais chama `pararDeFalar()` ao sair de uma
  *    tela; quem para é o botão (a pílula `FalaFlutuante`) ou uma fala nova.
  * 2. **Pausar e retomar.** Texto longo vai em partes (`divisaoFala.ts`); a voz do PC pausa o
- *    player, a do aparelho cala e recomeça a frase em que estava.
+ *    player.
  * 3. **Continuar com o app minimizado.** O player vira o "ativo da tela de bloqueio": o
  *    Android mostra a notificação de mídia com play/pausa, e o serviço de reprodução do
  *    `expo-audio` (já no APK 2.0 — o plugin liga `enableBackgroundPlayback` por padrão)
@@ -36,36 +34,12 @@ import { frasesDe, partesDaFala, trechoParaMostrar } from './divisaoFala';
  *    `playbackStatusUpdate` e a pílula acompanha.
  */
 
-const CHAVE = 'elysium_voz_do_pc_v1';
-const PRAZO_MS = 8000;
+// 25/10: sem voz do aparelho para cair, o prazo cobre a 1ª síntese do dia (abre a conexão).
+const PRAZO_MS = 15000;
 
 let player: AudioPlayer | null = null;
-/** Voz feminina do aparelho, procurada uma vez (02/10). `null` = não achou; usa a padrão. */
-let vozDoAparelho: Promise<string | null> | null = null;
-function vozFemininaDoAparelho(): Promise<string | null> {
-  if (!vozDoAparelho) {
-    // No Android a lista volta VAZIA enquanto o motor de voz ainda sobe; guardar esse `null`
-    // deixava a voz padrão (muitas vezes masculina) pela sessão inteira. Lista vazia = tentar
-    // de novo na próxima fala.
-    vozDoAparelho = Speech.getAvailableVoicesAsync()
-      .then(v => {
-        if (!v.length) vozDoAparelho = null;
-        return escolherVozFeminina(v);
-      })
-      .catch(() => { vozDoAparelho = null; return null; });
-  }
-  return vozDoAparelho;
-}
-let preferencia: boolean | null = null;
 /** Resolve a fala em curso quando alguém interrompe — ninguém fica esperando para sempre. */
 let terminarAtual: (() => void) | null = null;
-
-export async function vozDoPcLigada(): Promise<boolean> {
-  if (preferencia === null) {
-    try { preferencia = (await AsyncStorage.getItem(CHAVE)) !== '0'; } catch { preferencia = true; }
-  }
-  return preferencia;
-}
 
 /**
  * Ler em voz alta as respostas DIGITADAS (02/10). A voz é o padrão desde o bloco 85, mas
@@ -100,11 +74,6 @@ export async function falaAntecipadaLigada(): Promise<boolean> {
 export async function ligarFalaAntecipada(ligar: boolean): Promise<void> {
   antecipada = ligar;
   try { await AsyncStorage.setItem(CHAVE_ANTECIPADA, ligar ? '1' : '0'); } catch { /* fica só na memória */ }
-}
-
-export async function ligarVozDoPc(ligar: boolean): Promise<void> {
-  preferencia = ligar;
-  try { await AsyncStorage.setItem(CHAVE, ligar ? '1' : '0'); } catch { /* fica só na memória */ }
 }
 
 // ── Estado da fala, para a pílula e para quem mais quiser olhar ─────────────────
@@ -165,9 +134,7 @@ export function pararDeFalar(): void {
   const acordar = acordarFonte;
   acordarFonte = null;
   acordar?.();
-  Speech.stop();
   soltarPlayer();
-  void tirarAvisoDaVozDoAparelho();
   const t = terminarAtual;
   terminarAtual = null;
   t?.();
@@ -322,51 +289,35 @@ async function baixarParte(texto: string, pairing: Pairing): Promise<File> {
 }
 
 async function falarAgora(fonte: FontePartes, pairing: Pairing | null, minha: number): Promise<void> {
-  // Partes que pegamos da fonte e não chegaram a tocar: viram a voz do aparelho se a do PC falhar.
-  const sobra: string[] = [];
-  if (pairing && (await vozDoPcLigada())) {
-    let atual: string | null = null;
-    try {
-      await prepararModo();
-      // Cada parte começa a baixar assim que existe; a próxima é pedida enquanto a atual toca.
-      // Numa lista, "existe" é já; no fluxo (fala antecipada), é quando a frase fecha.
-      const pedir = () => fonte.proxima().then((texto) => {
-        if (texto === null) return null;
-        const arquivo = baixarParte(texto, pairing);
-        // Uma falha baixando a PRÓXIMA não pode virar rejeição solta enquanto esta toca.
-        arquivo.catch(() => {});
-        return { texto, arquivo };
-      });
-      let parte = await pedir();
-      let n = 0;
-      while (parte) {
-        atual = parte.texto;
-        const arquivo = await parte.arquivo;
-        // Interrompida (ou trocada por outra fala) durante o download: não toca.
-        if (minha !== geracao) { try { arquivo.delete(); } catch { /* cache */ } return; }
-        const seguinte = pedir();
-        n++;
-        publicar({ trecho: trechoParaMostrar(parte.texto), parte: n, total: Math.max(n, fonte.conhecidas()) });
-        await tocarArquivo(arquivo, parte.texto, minha);
-        if (minha !== geracao) return;
-        atual = null;
-        parte = await seguinte;
-      }
-      return;
-    } catch {
-      // Falhou antes de sair som: cai na voz do aparelho com o texto inteiro. Falhou no meio:
-      // o resto vai pela voz do aparelho, sem repetir o que já foi dito.
+  if (!pairing) return;
+  try {
+    await prepararModo();
+    // Cada parte começa a baixar assim que existe; a próxima é pedida enquanto a atual toca.
+    // Numa lista, "existe" é já; no fluxo (fala antecipada), é quando a frase fecha.
+    const pedir = () => fonte.proxima().then((texto) => {
+      if (texto === null) return null;
+      const arquivo = baixarParte(texto, pairing);
+      // Uma falha baixando a PRÓXIMA não pode virar rejeição solta enquanto esta toca.
+      arquivo.catch(() => {});
+      return { texto, arquivo };
+    });
+    let parte = await pedir();
+    let n = 0;
+    while (parte) {
+      const arquivo = await parte.arquivo;
+      // Interrompida (ou trocada por outra fala) durante o download: não toca.
+      if (minha !== geracao) { try { arquivo.delete(); } catch { /* cache */ } return; }
+      const seguinte = pedir();
+      n++;
+      publicar({ trecho: trechoParaMostrar(parte.texto), parte: n, total: Math.max(n, fonte.conhecidas()) });
+      await tocarArquivo(arquivo, parte.texto, minha);
       if (minha !== geracao) return;
-      if (atual) sobra.push(atual);
+      parte = await seguinte;
     }
+    return;
+  } catch {
+    // Falhou (PC fora, rede, síntese lenta): o resto da resposta fica só em texto.
   }
-  if (minha !== geracao) return;
-  for (let p = await fonte.proxima(); p !== null; p = await fonte.proxima()) {
-    if (minha !== geracao) return;
-    sobra.push(p);
-  }
-  const t = sobra.join(' ');
-  if (t) await falarComVozDoAparelho(t, minha);
 }
 
 /** Toca um MP3 até o fim (ou até alguém parar), com a notificação de mídia ligada. */
@@ -416,89 +367,4 @@ function tocarArquivo(arquivo: File, texto: string, minha: number): Promise<void
     // Pausada no intervalo entre duas partes: a parte nova nasce pausada, como a pílula mostra.
     if (estado.pausada) { if (teto) { clearTimeout(teto); teto = null; } } else este.play();
   });
-}
-
-/**
- * A voz do aparelho, frase por frase. O `expo-speech` não pausa no Android: pausar cala e
- * guarda a frase; retomar recomeça a frase em que estava.
- */
-async function falarComVozDoAparelho(t: string, minha: number): Promise<void> {
-  const voz = await vozFemininaDoAparelho();
-  if (minha !== geracao) return;
-  // "Ely" lido "Éli" (02/10), como na voz do PC.
-  const frases = frasesDe(t.replace(/\bEly\b/gi, 'Éli'));
-  if (!frases.length) return;
-  void mostrarAvisoDaVozDoAparelho();
-  let indice = 0;
-  let pausada = false;
-  let retomar: (() => void) | null = null;
-  controle = {
-    pausar: () => { pausada = true; Speech.stop(); },
-    retomar: () => { pausada = false; const r = retomar; retomar = null; r?.(); },
-  };
-  try {
-    while (indice < frases.length) {
-      if (minha !== geracao) return;
-      if (pausada) {
-        await new Promise<void>((r) => { retomar = r; terminarAtual = () => { retomar = null; r(); }; });
-        continue;
-      }
-      publicar({ trecho: trechoParaMostrar(frases[indice]), parte: indice + 1, total: frases.length });
-      const completou = await falarFrase(frases[indice], voz, minha);
-      if (minha !== geracao) return;
-      // Calada pela pausa: a mesma frase recomeça ao retomar. Senão, a próxima.
-      if (completou || !pausada) indice++;
-    }
-  } finally {
-    void tirarAvisoDaVozDoAparelho();
-  }
-}
-
-/** Uma frase. Devolve true se chegou ao fim (false = calada por pausa ou parada). */
-function falarFrase(frase: string, voz: string | null, minha: number): Promise<boolean> {
-  return new Promise<boolean>((resolver) => {
-    let feito = false;
-    const terminar = (completou: boolean) => {
-      if (feito) return;
-      feito = true;
-      clearTimeout(teto);
-      if (terminarAtual === parar) terminarAtual = null;
-      resolver(completou);
-    };
-    const parar = () => terminar(false);
-    // O teto CALA o aparelho além de resolver: antes ele só resolvia, o microfone era solto
-    // com a voz ainda saindo, e a escuta do "Ely" ouvia o "Éli" da própria resposta.
-    const teto = setTimeout(() => { Speech.stop(); terminar(true); }, tetoDaFala(frase));
-    terminarAtual = parar;
-    // Voz feminina do aparelho quando achar uma (02/10); senão a padrão com o tom um pouco
-    // acima. Se a escolhida falhar (voz só de rede, sem internet), repete com a padrão.
-    const padrao = () => Speech.speak(frase, { language: 'pt-BR', pitch: 1.1, onDone: () => terminar(true), onStopped: parar, onError: () => terminar(true) });
-    if (voz) Speech.speak(frase, { language: 'pt-BR', voice: voz, onDone: () => terminar(true), onStopped: parar, onError: () => { if (!feito && minha === geracao) padrao(); else terminar(true); } });
-    else padrao();
-  });
-}
-
-// ── Aviso fora do app para a voz do aparelho ─────────────────────────────────────
-// A voz do PC tem a notificação de mídia do `expo-audio`. A do aparelho (sem PC) continua
-// falando minimizada, mas sem controle nenhum: este aviso fixo, com o botão Parar, cobre isso.
-const ID_AVISO = 'ely-falando';
-/**
- * A promessa do "mostrar" fica guardada: tirar o aviso espera ela terminar. Sem isso, parar a
- * fala logo no começo tirava um aviso que ainda nem existia — ele aparecia logo depois e ficava
- * fixo (a revisão pegou).
- */
-let avisoPendente: Promise<boolean> | null = null;
-async function mostrarAvisoDaVozDoAparelho(): Promise<void> {
-  avisoPendente = import('./notificacoes').then(({ avisoDeFala }) => avisoDeFala(ID_AVISO, true, pararDeFalar)).catch(() => false);
-  await avisoPendente;
-}
-async function tirarAvisoDaVozDoAparelho(): Promise<void> {
-  const p = avisoPendente;
-  if (!p) return;
-  avisoPendente = null;
-  try {
-    if (!(await p)) return;
-    const { avisoDeFala } = await import('./notificacoes');
-    await avisoDeFala(ID_AVISO, false);
-  } catch { /* some sozinho ao fechar o app */ }
 }
