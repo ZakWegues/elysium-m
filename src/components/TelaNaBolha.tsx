@@ -289,6 +289,8 @@ function Quadro({ html, modo, tela, rolavel, onAltura, onEstado, onPerguntar, on
         else Alert.alert('Abrir no navegador?', curto, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Abrir', onPress: () => { Linking.openURL(url).catch(() => {}); } }]);
       } else if (m.acao === 'copiar') {
         try { await Clipboard.setStringAsync(m.valor); haptica.leve(); avisar('Copiado.'); } catch { avisar('Não consegui copiar.'); }
+      } else if (m.acao === 'haptica') {
+        if (m.valor === 'sucesso') haptica.sucesso(); else if (m.valor === 'erro') haptica.erro(); else haptica.leve();
       }
     } else if (m.tipo === 'estado') {
       onEstado(m.vars);

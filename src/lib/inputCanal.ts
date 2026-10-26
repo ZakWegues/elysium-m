@@ -2,6 +2,7 @@ import { Pairing } from './pairing';
 import { openAuthedWebSocket } from './ws';
 import { callRpc } from './rpc';
 import { Coalescedor, EventoInput } from './trackpad';
+import { canaisParados, marcarVivo } from './conexao/sinais';
 
 /**
  * O canal do trackpad (fase 22).
@@ -46,6 +47,7 @@ export class CanalInput {
       this.vigia = setInterval(() => this.ping(), 20_000);
     };
     ws.onmessage = (e) => {
+      marcarVivo();
       try {
         const msg = JSON.parse(String(e.data));
         if (msg?.type === 'input.pong') {
@@ -61,7 +63,8 @@ export class CanalInput {
       if (this.fechado) return;
       this.mudarModo('http');
       // 21/10: caiu (Wi-Fi trocou, app no fundo) — tenta voltar ao WebSocket, até 15 s entre tentativas.
-      const espera = Math.min(15000, 1000 * 2 ** this.tentativas++);
+      // 26/10: com 401/429 em algum canal, espera o estado liberar em vez de somar recusas.
+      const espera = canaisParados() ? 15000 : Math.min(15000, 1000 * 2 ** this.tentativas++);
       setTimeout(() => { if (!this.fechado && !this.ws) this.abrir(); }, espera);
     };
   }

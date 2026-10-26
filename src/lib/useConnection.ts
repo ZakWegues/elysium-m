@@ -3,42 +3,63 @@
  *
  * Antes cada tela descobria por conta própria que o PC não respondia — e só quando
  * o usuário tentava alguma coisa. Aqui o app sonda periodicamente, troca de endereço
- * sozinho quando o IP muda, e expõe um estado que o banner e as telas leem.
+ * sozinho quando o IP muda, e expõe um estado que o indicador e as telas leem.
+ *
+ * 26/10: as decisões saíram para `conexao/maquina.ts` (carência ao abrir/voltar do fundo,
+ * offline só com 3 falhas, 401/429 sem insistir). Aqui ficam a sonda (uma de cada vez), o único
+ * ouvinte de AppState da conexão e os sinais de vida dos canais (`conexao/sinais.ts`).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { Pairing, resolveActiveEndpoint, scanSubnet, UnauthorizedError } from './pairing';
+import { BloqueadoError, Pairing, resolveActiveEndpoint, scanSubnet, UnauthorizedError } from './pairing';
 import { callRpc } from './rpc';
-import { backoffDelay } from './http';
-import { registrarConexao, registrarEstadoApp } from './estadoPc';
+import { registrarConexao, registrarEstadoApp, useEstadoPc } from './estadoPc';
+import { aplicar, memoriaInicial, proximaSonda, statusLegado, type EstadoConexao, type EventoConexao, type MemoriaConexao } from './conexao/maquina';
+import { aoSinal, liberarCanais, marcarRecusa } from './conexao/sinais';
+import { diagTela } from './telaDiag';
 
 export type ConnectionStatus = 'checking' | 'online' | 'offline' | 'unauthorized';
 
-const HEALTHY_POLL_MS = 30000;
+/** Depois de voltar do fundo, o rádio/Tailscale do Android leva um instante para acordar. */
+const ESPERA_AO_VOLTAR_MS = 600;
+/** A 1ª sonda depois de abrir/voltar tem mais folga; as seguintes, o prazo curto de sempre. */
+const PRAZO_PRIMEIRA_MS = 4000;
+const INTERVALO_MINIMO_MS = 1500;
 
 export function useConnection(
   pairing: Pairing | null,
   onPairingUpdate: (p: Pairing) => void
 ) {
-  const [status, setStatus] = useState<ConnectionStatus>('checking');
-  const statusRef = useRef<ConnectionStatus>('checking');
-  // Espelha o status no ref para que closures de loop e timers leiam o valor corrente.
-  const setStatusAndRef = useCallback((s: ConnectionStatus) => {
-    statusRef.current = s;
-    setStatus(s);
-  }, []);
+  const memRef = useRef<MemoriaConexao>(memoriaInicial(Date.now()));
+  const [mem, setMem] = useState<MemoriaConexao>(memRef.current);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   /** null enquanto nunca conseguimos perguntar ao PC. */
   const [hasTunnel, setHasTunnel] = useState<boolean | null>(null);
 
-  const attemptRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stoppedRef = useRef(false);
+  const emAndamento = useRef<Promise<boolean> | null>(null);
+  const ultimaSonda = useRef(0);
+  const primeira = useRef(true);
   // Evita que o efeito reinicie a cada novo objeto de pairing devolvido pela sonda.
   const pairingRef = useRef<Pairing | null>(pairing);
   pairingRef.current = pairing;
+
+  const evento = useCallback((ev: EventoConexao) => {
+    const antes = memRef.current;
+    const depois = aplicar(antes, ev, Date.now());
+    if (depois === antes) return;
+    memRef.current = depois;
+    setMem(depois);
+    // A linha "PC sem resposta" da Início só com offline de verdade — na carência, nada muda.
+    if (depois.estado !== antes.estado) {
+      diagTela(`conexão: ${antes.estado} → ${depois.estado} (${ev.tipo}, ${depois.falhas} falha${depois.falhas === 1 ? '' : 's'})`);
+      if (depois.estado === 'conectado') registrarConexao(true);
+      else if (depois.estado === 'offline' || depois.estado === 'bloqueado' || depois.estado === 'token') registrarConexao(false);
+    }
+  }, []);
 
   /**
    * Reaprende os endereços do PC enquanto há conexão.
@@ -69,79 +90,89 @@ export function useConnection(
     }
   }, []);
 
-  const check = useCallback(async (): Promise<boolean> => {
+  const sondar = useCallback(async (): Promise<boolean> => {
     const current = pairingRef.current;
     if (!current) return false;
-
-    // Não pisca 'checking' se a última sonda teve sucesso — já existe feedback no app.
-    if (statusRef.current !== 'online') setStatusAndRef('checking');
     try {
-      const resolved = await resolveActiveEndpoint(current);
-
-      if (resolved) {
-        const refreshed = await refreshEndpoints(resolved);
-        if (refreshed !== resolved || resolved.activeIp !== current.activeIp) {
-          onPairingUpdate(refreshed);
-        }
-        setStatusAndRef('online');
-        registrarConexao(true);
-        attemptRef.current = 0;
-        // Em que pé está o app no PC (janela, bandeja, tela bloqueada). PC anterior à 2.5 não
-        // tem o método: fica só o "online".
-        callRpc(refreshed, 'pc.estado', {}, { timeoutMs: 6000 })
-          .then(r => { if (r.estado) registrarEstadoApp(r.estado); })
-          .catch(() => {});
-        return true;
-      }
-
-      setStatusAndRef('offline');
-      registrarConexao(false);
-      return false;
+      const prazo = primeira.current ? PRAZO_PRIMEIRA_MS : undefined;
+      primeira.current = false;
+      const resolved = await resolveActiveEndpoint(current, prazo);
+      if (!resolved) { evento({ tipo: 'falhou' }); return false; }
+      const refreshed = await refreshEndpoints(resolved);
+      if (refreshed !== resolved || resolved.activeIp !== current.activeIp) onPairingUpdate(refreshed);
+      evento({ tipo: 'ok' });
+      // Em que pé está o app no PC (janela, bandeja, tela bloqueada). PC anterior à 2.5 não
+      // tem o método: fica só o "online".
+      callRpc(refreshed, 'pc.estado', {}, { timeoutMs: 6000 })
+        .then(r => { if (r.estado) registrarEstadoApp(r.estado); })
+        .catch(() => {});
+      return true;
     } catch (err) {
-      if (err instanceof UnauthorizedError) {
-        // O token foi regenerado no PC. Não é "offline" — é "token inválido".
-        // O loop de polling para aqui; o App.tsx apresenta o Alert de despareamento.
-        setStatusAndRef('unauthorized');
-        return false;
-      }
-      // Outro erro inesperado: tratar como offline.
-      setStatusAndRef('offline');
-      registrarConexao(false);
+      // O token foi regenerado no PC: não é "offline", é "token inválido". 429: o PC pausou
+      // este IP. Nos dois, os canais param de tentar (cada tentativa contaria como recusa).
+      if (err instanceof UnauthorizedError) { marcarRecusa('token'); evento({ tipo: 'token' }); return false; }
+      if (err instanceof BloqueadoError) { marcarRecusa('bloqueado'); evento({ tipo: 'bloqueado' }); return false; }
+      evento({ tipo: 'falhou' });
       return false;
     }
-  }, [onPairingUpdate, refreshEndpoints, setStatusAndRef]);
+  }, [evento, onPairingUpdate, refreshEndpoints]);
+
+  /** Uma sonda de cada vez: quem chama durante uma em curso recebe a mesma promessa. */
+  const check = useCallback((forcar = false): Promise<boolean> => {
+    if (emAndamento.current) return emAndamento.current;
+    if (!forcar && Date.now() - ultimaSonda.current < INTERVALO_MINIMO_MS) return Promise.resolve(memRef.current.estado === 'conectado');
+    ultimaSonda.current = Date.now();
+    const p = sondar().finally(() => { emAndamento.current = null; });
+    emAndamento.current = p;
+    return p;
+  }, [sondar]);
+
+  const agendar = useCallback(function agendarProxima() {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (stoppedRef.current) return;
+    const espera = proximaSonda(memRef.current, Date.now());
+    if (!Number.isFinite(espera)) return; // token recusado: só um pareamento novo resolve
+    timerRef.current = setTimeout(async () => {
+      if (memRef.current.estado === 'bloqueado' && Date.now() >= memRef.current.bloqueadoAte) liberarCanais();
+      await check(true);
+      agendarProxima();
+    }, espera);
+  }, [check]);
 
   useEffect(() => {
     if (!pairing) return;
     stoppedRef.current = false;
+    liberarCanais();
+    primeira.current = true;
+    evento({ tipo: 'acordou' });
+    void check(true).then(() => agendar());
 
-    async function loop() {
-      if (stoppedRef.current) return;
-      const ok = await check();
-      if (stoppedRef.current) return;
-
-      // PC no ar: sonda espaçada. Fora do ar: backoff, sem martelar a rede.
-      // Token inválido: não reagenda — só o reparear resolve isso.
-      attemptRef.current = ok ? 0 : attemptRef.current + 1;
-      const currentStatus = statusRef.current;
-      if (currentStatus === 'unauthorized') return;
-      const delay = ok ? HEALTHY_POLL_MS : backoffDelay(attemptRef.current, 30000);
-      timerRef.current = setTimeout(loop, delay);
-    }
-
-    loop();
-
-    // Voltar pro app é o momento mais provável de a rede ter mudado.
+    // O único ouvinte de AppState da conexão: voltar é o momento mais provável de a rede ter
+    // mudado — mas o rádio ainda está acordando, então espera um instante e dá mais folga.
     const sub = AppState.addEventListener('change', s => {
-      if (s === 'active') check();
+      if (s !== 'active') return;
+      evento({ tipo: 'acordou' });
+      primeira.current = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => { void check(true).then(() => agendar()); }, ESPERA_AO_VOLTAR_MS);
+    });
+    // Frame de WebSocket ou RPC bom = o PC está lá; 401/429 vindos de um canal valem igual.
+    const tirar = aoSinal((sinal) => {
+      if (sinal === 'vivo') { const antes = memRef.current.estado; evento({ tipo: 'vivo' }); if (antes !== 'conectado') agendar(); }
+      else evento({ tipo: sinal });
     });
 
     return () => {
       stoppedRef.current = true;
       if (timerRef.current) clearTimeout(timerRef.current);
       sub.remove();
+      tirar();
     };
-  }, [pairing?.token, pairing?.port, check]);
+  }, [pairing?.token, pairing?.port, check, agendar, evento]);
+
+  // O PC avisou que fechou ou vai dormir: offline na hora, sem esperar a carência.
+  const { encerrando } = useEstadoPc();
+  useEffect(() => { if (encerrando) evento({ tipo: 'pcFechou' }); }, [encerrando?.em, evento]);
 
   /** Varredura da sub-rede: só sob pedido explícito do usuário (254 requisições). */
   const runScan = useCallback(async (): Promise<boolean> => {
@@ -164,12 +195,20 @@ export function useConnection(
           : [found, ...current.endpoints],
       };
       onPairingUpdate(updated);
-      setStatus('online');
+      evento({ tipo: 'ok' });
       return true;
     } finally {
       setScanning(false);
     }
-  }, [scanning, onPairingUpdate]);
+  }, [scanning, onPairingUpdate, evento]);
 
-  return { status, recheck: check, scanning, scanProgress, runScan, hasTunnel };
+  const estado: EstadoConexao = mem.estado;
+  return {
+    status: statusLegado(estado) as ConnectionStatus,
+    estado,
+    ultimoContato: mem.ultimoVivo || null,
+    bloqueadoAte: mem.bloqueadoAte || null,
+    recheck: () => check(true),
+    scanning, scanProgress, runScan, hasTunnel,
+  };
 }

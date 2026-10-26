@@ -31,7 +31,8 @@ function enviar() {
   const p = origemPairing?.();
   const linhas = fila.splice(0, 20);
   if (!p || !linhas.length) return;
-  callRpc(p, 'diag.registrar', { origem: 'tela', linhas }).catch(() => {});
+  // 26/10: sem o PC (as transições da conexão são justamente isso), as linhas voltam para a fila.
+  callRpc(p, 'diag.registrar', { origem: 'tela', linhas }).catch(() => { fila = [...linhas, ...fila].slice(-40); });
   if (fila.length) timer = setTimeout(enviar, 2000);
 }
 

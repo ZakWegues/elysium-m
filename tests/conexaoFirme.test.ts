@@ -65,7 +65,7 @@ describe("conexão firme do chat (21/10)", () => {
     WsFalso.todos[0].cair();
     await vi.advanceTimersByTimeAsync(1100);
     WsFalso.todos[1].abrir();
-    const verificacao = expect(r).rejects.toThrow(/Refazer/);
+    const verificacao = expect(r).rejects.toThrow(/conexão caiu/);
     await vi.advanceTimersByTimeAsync(10_500);
     await verificacao;
     conn.close();

@@ -1,3 +1,4 @@
+import { CartaoErro, textoDoErro } from '../components/chat/CartaoErro';
 import { limiaresDaGravacao } from '../lib/silencio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
@@ -26,7 +27,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError, pedidoDaTela, sendCommand } from '../lib/api';
 import { TimeoutError } from '../lib/http';
-import { enqueueCommand } from '../lib/commandQueue';
+import { enqueueCommand, removeFromQueue } from '../lib/commandQueue';
 import { ConexaoNaoAbriu, EstadoConexao, novoIdDePedido, openVoiceConnection, VoiceConnection } from '../lib/stream';
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
@@ -585,10 +586,12 @@ export default function ChatScreen({
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
+        // 26/10: o prazo é cancelado quando o WS abre (antes ficava pendurado em todo envio).
+        let prazoWs: ReturnType<typeof setTimeout> | undefined;
         const conn = await Promise.race([
           ensureVoiceConnection(),
-          new Promise<never>((_, rej) => setTimeout(() => rej(new Error('WebSocket demorou a abrir')), 5000)),
-        ]);
+          new Promise<never>((_, rej) => { prazoWs = setTimeout(() => rej(new Error('WebSocket demorou a abrir')), 5000); }),
+        ]).finally(() => clearTimeout(prazoWs));
         // Bloco 130: digitado = canal "texto" — resposta de chat, com markdown.
         const r = await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer });
         reply = r.reply;
@@ -623,15 +626,19 @@ export default function ChatScreen({
       // Erro de resposta do servidor (comando chegou e falhou lá) não entra na fila —
       // repetir não conserta.
       if (err instanceof TimeoutError || err instanceof TypeError) {
-        await enqueueCommand(text);
+        const q = await enqueueCommand(text);
         setMessages((prev) => [
           ...prev,
-          { id: `queued-${Date.now()}`, from: 'reply', text: '⏳ PC fora do ar. Guardei esse comando e mando assim que ele voltar.', ts: Date.now() },
+          { id: `queued-${Date.now()}`, from: 'error', text: 'Guardei para mandar quando o PC voltar.', ts: Date.now(),
+            erro: { titulo: 'Guardei para mandar depois', detalhe: 'O PC não respondeu. Mando sozinho assim que ele voltar.', acoes: ['cancelar'], filaId: q.id } },
         ]);
         return;
       }
 
-      pushError(errMessage(err));
+      // 26/10: erro vira cartão com Refazer/Mandar depois (CartaoErro), não texto vermelho solto.
+      const t = textoDoErro(errMessage(err));
+      setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text: t.titulo, ts: Date.now(),
+        erro: { ...t, acoes: ['refazer', 'depois'], pergunta: text } }]);
     } finally {
       setSending(false);
       setConexao('conectado');
@@ -1129,6 +1136,19 @@ export default function ChatScreen({
           // Fase 23.1: as bolhas do PC. A minha é translúcida na cor do tema (18% + borda de
           // 35%), não um bloco sólido; a da Ely é a superfície com borda fina. Renascença: a
           // minha vai no pigmento, em itálico, e a da Ely ganha a moldura dourada.
+          if (item.from === 'error' && item.erro) {
+            const erro = item.erro;
+            return (
+              <CartaoErro titulo={erro.titulo} detalhe={erro.detalhe} acoes={erro.acoes} fila={!!erro.filaId}
+                onAcao={(a) => {
+                  // O cartão sai da conversa; a ação decide o que vem no lugar.
+                  setMessages((prev) => prev.filter((m) => m.id !== item.id));
+                  if (a === 'refazer' && erro.pergunta) void handleSend(erro.pergunta, { refazer: true });
+                  else if (a === 'depois' && erro.pergunta) void enqueueCommand(erro.pergunta).then((q) => setMessages((prev) => [...prev, { id: `queued-${Date.now()}`, from: 'error', text: 'Guardado.', ts: Date.now(), erro: { titulo: 'Guardei para mandar depois', detalhe: 'Mando sozinho assim que o PC responder.', acoes: ['cancelar'], filaId: q.id } }]));
+                  else if (a === 'cancelar' && erro.filaId) void removeFromQueue(erro.filaId);
+                }} />
+            );
+          }
           const ren = palette.familia === 'renascenca';
           const tinta = ren ? palette.accent : palette.primary;
           const bg = item.from === 'me' ? comAlfa(tinta, ren ? 0.16 : 0.18) : item.from === 'error' ? palette.errorSoft : (palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)');

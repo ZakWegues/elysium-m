@@ -1,3 +1,5 @@
+import { lembrado, lembrar } from '../lib/conexao/cache';
+import { AtualizadoHa } from '../components/ui/AtualizadoHa';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Pressable, RefreshControl, ScrollView,
@@ -286,9 +288,25 @@ export default function HomeScreen({
       (await callRpc(pairing, 'clipboard.get')).text));
 
     await Promise.all(jobs);
-    setDados(prev => ({ ...prev, ...d }));
+    setDados(prev => {
+      const novo = { ...prev, ...d };
+      // 26/10: o que veio do PC fica guardado (modo offline); sem nada novo, segue o guardado.
+      if (Object.keys(d).length) { void lembrar('inicio', novo); setGuardadoEm(null); }
+      return novo;
+    });
     setPrimeiraLeitura(true);
   }, [pairing, visiveis]);
+
+  // 26/10: abre com o último estado guardado (sem esqueleto e sem tela vazia fora de casa).
+  const [guardadoEm, setGuardadoEm] = useState<number | null>(null);
+  useEffect(() => {
+    void lembrado<Dados>('inicio').then((c) => {
+      if (!c) return;
+      setDados((prev) => ({ ...c.dados, ...Object.fromEntries(Object.entries(prev).filter(([, v]) => v !== null && !(Array.isArray(v) && !v.length) && v !== '')) }));
+      setGuardadoEm(c.em);
+      setPrimeiraLeitura(true);
+    });
+  }, [pairing]);
 
   useEffect(() => { carregar(); }, [carregar]);
   // Puxar para atualizar com o círculo de verdade (08/10): antes ficava fixo em "parado".
@@ -472,6 +490,7 @@ export default function HomeScreen({
                 desligado), com os detalhes num toque. */}
             {/* Fase 22: uma linha só — PC, lembretes e clima juntos. */}
             <EstadoPcLinha extra={resumoDaInicio(dados.lembretes.length, dados.clima ? dados.clima.temperatura : null)} />
+            {!online && <AtualizadoHa em={guardadoEm} />}
           </View>
         )}
 

@@ -1,3 +1,4 @@
+import { Abertura } from './src/components/abertura/Abertura';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, InteractionManager, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -22,7 +23,7 @@ import { ThemeProvider, useTheme } from './src/theme';
 import { TabBar, Screen } from './src/components/TabBar';
 import { AjustesProvider, AppBackground, BlurTargetProvider, GlassModal, SobreposicaoContext } from './src/components/ui';
 import { CamadaEstouros, registrarToque } from './src/components/Estouros';
-import { ConnectionBanner } from './src/components/ConnectionBanner';
+import { IndicadorConexao } from './src/components/conexao/IndicadorConexao';
 import { useConnection } from './src/lib/useConnection';
 import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
@@ -194,7 +195,8 @@ function AppInner() {
     savePairing(updated).catch((err) => console.warn('[pairing] falha ao persistir', err));
   }, []);
 
-  const { status, recheck, scanning, scanProgress, runScan, hasTunnel } =
+  const [abrindo, setAbrindo] = useState(true);
+  const { status, estado: estadoConexao, ultimoContato, bloqueadoAte, recheck, scanning, scanProgress, runScan, hasTunnel } =
     useConnection(pairing, handlePairingUpdate);
   const keyboard = useKeyboard();
   const insets = useSafeAreaInsets();
@@ -443,19 +445,8 @@ function AppInner() {
     setAdicionandoPc(true);
   }, []);
 
-  // 401 na sonda é o único caso em que a rede está boa e o app não tem como se recuperar
-  // sozinho: o token foi regenerado no PC. Antes isso aparecia como "PC fora do ar", que
-  // mandava a pessoa investigar Wi-Fi e túnel à toa (§15, pendência 4). O hook já parou de
-  // sondar; aqui só resta explicar e oferecer o QR.
-  useEffect(() => {
-    if (status !== 'unauthorized') return;
-    Alert.alert(
-      'Pareamento inválido',
-      'O PC respondeu, mas recusou o token deste celular. Isso acontece quando o QR é regenerado no ELYSIUM. Leia o QR novo para voltar.',
-      [{ text: 'Ler QR', onPress: () => setAdicionandoPc(true) }],
-      { cancelable: false },
-    );
-  }, [status]);
+  // 26/10: o token recusado (401) virou um cartão do IndicadorConexao com "Ler QR" — o Alert
+  // modal travava o app inteiro numa decisão que pode esperar.
 
   if (loading) {
     return (
@@ -552,15 +543,18 @@ function AppInner() {
       {/* Sem a barra de abas (gaveta aberta), os avisos ficavam debaixo da barra de gestos do
           Android: o recuo da área segura entra só nesse caso (08/10). */}
       <View style={{ paddingBottom: !keyboard.visible && sobreposicoes > 0 ? insets.bottom : 0 }}>
-      <ConnectionBanner
-        status={status}
+      <IndicadorConexao
+        estado={estadoConexao}
         queued={queued}
         scanning={scanning}
         scanProgress={scanProgress}
         hasTunnel={hasTunnel}
         motivo={status === 'offline' || estadoPc.online === false ? descreverEstadoPc(estadoPc) : null}
-        onRetry={recheck}
-        onScan={runScan}
+        bloqueadoAte={bloqueadoAte}
+        ultimoContato={ultimoContato}
+        onTentar={() => { void recheck(); }}
+        onProcurar={() => { void runScan(); }}
+        onLerQr={() => setAdicionandoPc(true)}
       />
       <AvisoOta pendente={ota.pendente} />
       </View>
@@ -593,6 +587,8 @@ function AppInner() {
       <CamadaEstouros />
       {/* 22/10: a folha de compartilhar própria, por cima até das gavetas. */}
       <FolhaCompartilhar />
+      {/* 26/10: a esfera se formando enquanto conecta; some quando a conexão sai (teto 2,5 s). */}
+      {abrindo && <Abertura pronto={estadoConexao === 'conectado'} aoSumir={() => setAbrindo(false)} />}
     </View>
     </SobreposicaoContext.Provider>
     </AjustesProvider>

@@ -10,6 +10,11 @@ export class UnauthorizedError extends Error {
   constructor() { super('token inválido ou expirado — repareie o celular'); }
 }
 
+/** 26/10: o PC respondeu 429 — recusou tentativas demais deste IP e pausou por 10 min. */
+export class BloqueadoError extends Error {
+  constructor() { super('o PC pausou este celular por alguns minutos'); }
+}
+
 /**
  * O pareamento guarda VÁRIOS endereços do mesmo PC, não um só.
  *
@@ -250,15 +255,17 @@ async function pareceElysium(ip: string, port: number): Promise<boolean> {
   } catch { return false; }
 }
 
-async function probe(ip: string, port: number, token: string): Promise<string> {
+async function probe(ip: string, port: number, token: string, prazoMs = PROBE_TIMEOUT_MS): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrlFor(ip, port)}/api/health`,
     { headers: { Authorization: `Bearer ${token}` } },
-    PROBE_TIMEOUT_MS
+    prazoMs
   );
   // 401: o servidor está respondendo mas o token mudou. Isso é diferente de PC offline —
   // tentar outro endpoint não vai ajudar, e o usuário precisa de outra orientação.
   if (res.status === 401) throw new UnauthorizedError();
+  // 26/10: 429 é o PC pausando este IP (recusas demais) — também não adianta tentar outro endereço.
+  if (res.status === 429) throw new BloqueadoError();
   if (!res.ok) throw new Error(`health ${res.status}`);
   return ip;
 }
@@ -274,7 +281,7 @@ async function probe(ip: string, port: number, token: string): Promise<string> {
  * 🔴 Propaga `UnauthorizedError` imediatamente: se qualquer endpoint responde 401,
  * é o token que está errado — não adianta tentar os outros.
  */
-export async function resolveActiveEndpoint(pairing: Pairing): Promise<Pairing | null> {
+export async function resolveActiveEndpoint(pairing: Pairing, prazoMs = PROBE_TIMEOUT_MS): Promise<Pairing | null> {
   const others = pairing.endpoints.filter(ip => ip !== pairing.activeIp);
 
   // O endereço atual é SEMPRE preferido quando responde, mesmo que outro responda
@@ -284,13 +291,13 @@ export async function resolveActiveEndpoint(pairing: Pairing): Promise<Pairing |
   //
   // `currentOk` propaga UnauthorizedError: se o endereço atual devolve 401, já
   // sabemos que o token está inválido e não precisamos tentar os outros.
-  const currentOk = probe(pairing.activeIp, pairing.port, pairing.token)
-    .then(() => true, (err) => { if (err instanceof UnauthorizedError) throw err; return false; });
+  const currentOk = probe(pairing.activeIp, pairing.port, pairing.token, prazoMs)
+    .then(() => true, (err) => { if (err instanceof UnauthorizedError || err instanceof BloqueadoError) throw err; return false; });
 
   // Os outros correm em paralelo, não depois: fora de casa o endereço local vai dar
   // timeout, e esperar por ele antes de tentar o túnel deixaria a abertura do app
   // lenta à toa.
-  const fallback = firstSuccess(others.map(ip => probe(ip, pairing.port, pairing.token)));
+  const fallback = firstSuccess(others.map(ip => probe(ip, pairing.port, pairing.token, prazoMs)));
 
   if (await currentOk) return pairing;
 

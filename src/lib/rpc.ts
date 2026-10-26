@@ -10,6 +10,7 @@ import { baseUrl, Pairing } from './pairing';
 import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
 import type { EstadoAppPc } from './estadoPc';
 import contrato from '../../contracts/rpc-methods.json';
+import { marcarRecusa, marcarVivo } from './conexao/sinais';
 
 /** O desktop recusa (403) métodos destrutivos sem este header. */
 export class ConfirmationRequiredError extends Error {}
@@ -809,7 +810,9 @@ export async function callRpc<M extends RpcMethod>(
     options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   );
 
-  if (res.status === 401) throw new AuthError('token inválido ou expirado');
+  // 26/10: recusas avisam o estado da conexão (cartão "Ler QR" / "o PC pausou este celular").
+  if (res.status === 401) { marcarRecusa('token'); throw new AuthError('token inválido ou expirado'); }
+  if (res.status === 429) marcarRecusa('bloqueado');
 
   if (!res.ok) {
     let detail = '';
@@ -827,6 +830,7 @@ export async function callRpc<M extends RpcMethod>(
   }
 
   const body = (await res.json()) as { result: RpcResults[M] };
+  marcarVivo();
   return body.result;
 }
 

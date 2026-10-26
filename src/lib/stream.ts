@@ -12,6 +12,7 @@ import { receberFrameModo } from './modo';
 import { receberFramePomodoro } from './pomodoro';
 import { receberMailboxNovo } from './mailboxAviso';
 import { AuthError } from './http';
+import { marcarRecusa, marcarVivo, recusaDoErro } from './conexao/sinais';
 
 import type { Fonte } from './chatHistoryStore';
 
@@ -151,7 +152,7 @@ export function openVoiceConnection(
       // Com a conexão caída, quem decide é a espera da retomada, não a inatividade.
       if (p.aguardandoRetomada) return;
       console.error('[voice-ws] PC parou de responder');
-      settlePending((x) => x.reject(new Error('O PC parou de responder no meio. Toque em Refazer.')));
+      settlePending((x) => x.reject(new Error('O PC parou de responder no meio.')));
     }, INATIVIDADE_MS);
   }
 
@@ -174,7 +175,7 @@ export function openVoiceConnection(
     if (timerRetomada) clearTimeout(timerRetomada);
     timerRetomada = setTimeout(() => {
       if (pending === p && p.aguardandoRetomada) {
-        settlePending((x) => x.reject(new Error('A conexão caiu e a resposta se perdeu. Toque em Refazer.')));
+        settlePending((x) => x.reject(new Error('A conexão caiu e a resposta se perdeu.')));
       }
     }, 10000);
   }
@@ -215,7 +216,7 @@ export function openVoiceConnection(
       onEstado?.(abriuUmaVez ? 'reconectando' : 'caiu');
     }
     if (p && p.caiuEm && Date.now() - p.caiuEm > ESPERA_RETOMADA_MS) {
-      settlePending((x) => x.reject(new Error('Sem conexão com o PC agora. A resposta fica no PC por 10 minutos — toque em Refazer quando voltar.')));
+      settlePending((x) => x.reject(new Error('Sem conexão com o PC agora. A resposta fica no PC por 10 minutos.')));
     }
     agendarReconexao();
   }
@@ -258,7 +259,7 @@ export function openVoiceConnection(
         onUi?.({ id: telaEsperada, falhou: true });
         telaEsperada = null;
       } else if (pending && (!data.id || pending.id === data.id)) {
-        settlePending((p) => p.reject(new Error('A conexão caiu e a resposta se perdeu. Toque em Refazer.')));
+        settlePending((p) => p.reject(new Error('A conexão caiu e a resposta se perdeu.')));
       }
     } else if (data.type === 'chunk') {
       if (pending && doPedido(data.id)) {
@@ -307,10 +308,13 @@ export function openVoiceConnection(
     catch { aoCair(); return; }
     ws = sock;
     sock.onopen = () => { if (ws === sock) aoAbrir(); };
-    sock.onmessage = (e) => { if (ws !== sock) return; ultimoSinal = Date.now(); tratarMensagem(e); };
+    sock.onmessage = (e) => { if (ws !== sock) return; ultimoSinal = Date.now(); marcarVivo(); tratarMensagem(e); };
     sock.onerror = (e) => {
       // Token recusado (401): tentar de novo não resolve e o PC bloquearia o IP. Encerra.
-      if (/\b401\b/.test(String((e as { message?: string })?.message ?? ''))) {
+      // 26/10: e 429 (o PC pausou este IP) também para, avisando o estado da conexão.
+      const recusa = recusaDoErro(String((e as { message?: string })?.message ?? ''));
+      if (recusa) marcarRecusa(recusa);
+      if (recusa) {
         settlePending((x) => x.reject(new AuthError('token inválido ou expirado')));
         rejeitarReady?.(new AuthError('token inválido ou expirado'));
         encerrada = true;

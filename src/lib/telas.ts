@@ -52,7 +52,7 @@ export function telaDoFrame(f: FrameUi, agora = Date.now()): TelaDaMensagem | nu
 export type MensagemDaTela =
   | { tipo: 'pronta' }
   | { tipo: 'altura'; px: number }
-  | { tipo: 'acao'; acao: 'perguntar' | 'abrirLink' | 'copiar'; valor: string }
+  | { tipo: 'acao'; acao: 'perguntar' | 'abrirLink' | 'copiar' | 'haptica'; valor: string }
   | { tipo: 'estado'; vars: Record<string, unknown> }
   | { tipo: 'pedido'; id: number; rota: 'fotos' | 'rota'; params: Record<string, string> }
   | { tipo: 'erro'; mensagem: string }
@@ -73,7 +73,8 @@ export function mensagemDaTela(bruto: unknown): MensagemDaTela | null {
     case 'pronta': return { tipo: 'pronta' };
     case 'altura': return Number.isInteger(x.px) && (x.px as number) >= 0 && (x.px as number) <= 20000 ? { tipo: 'altura', px: x.px as number } : null;
     case 'acao':
-      return (x.acao === 'perguntar' || x.acao === 'abrirLink' || x.acao === 'copiar') && ehTexto(x.valor, 4000) ? { tipo: 'acao', acao: x.acao, valor: x.valor } : null;
+      // 26/10: 'haptica' — a tela pede uma vibração curta (leve, sucesso ou erro; acerto no quiz).
+      return (x.acao === 'perguntar' || x.acao === 'abrirLink' || x.acao === 'copiar' || x.acao === 'haptica') && ehTexto(x.valor, 4000) ? { tipo: 'acao', acao: x.acao, valor: x.valor } : null;
     case 'estado': {
       if (!x.vars || typeof x.vars !== 'object' || Array.isArray(x.vars)) return null;
       const json = JSON.stringify(x.vars);
