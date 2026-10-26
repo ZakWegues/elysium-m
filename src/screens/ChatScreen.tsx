@@ -1,3 +1,4 @@
+import { limiaresDaGravacao } from '../lib/silencio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
@@ -863,8 +864,6 @@ export default function ChatScreen({
   // Nível em dBFS do expo-audio: fala perto do celular fica entre −30 e −10; um quarto
   // silencioso, abaixo de −50. Os dois limiares com folga entre si evitam que um ruído no
   // meio do caminho fique alternando "falou"/"calou".
-  const LIMIAR_FALA_DB = -38;
-  const LIMIAR_SILENCIO_DB = -46;
   const SILENCIO_PARA_FECHAR_MS = 1300;
   // Depois do "Ely" a pessoa já está falando; 8 s sem voz é desistência, não pausa.
   const ESPERA_SEM_FALA_MS = 8_000;
@@ -926,8 +925,10 @@ export default function ChatScreen({
         const nivel = recorder.getStatus().metering ?? -160;
         niveis.push(nivel);
         const agora = Date.now();
-        if (nivel > LIMIAR_FALA_DB) { if (!falou) primeiraFalaEm = agora; falou = true; ultimaVoz = agora; }
-        else if (falou && nivel > LIMIAR_SILENCIO_DB) ultimaVoz = agora;
+        // 26/10: limiares pelo ruído do ambiente (silencio.ts); os fixos eram o mínimo e nunca fechavam com ruído.
+        const lim = limiaresDaGravacao(niveis);
+        if (nivel > lim.fala) { if (!falou) primeiraFalaEm = agora; falou = true; ultimaVoz = agora; }
+        else if (falou && nivel > lim.silencio) ultimaVoz = agora;
         if (falou && agora - ultimaVoz > SILENCIO_PARA_FECHAR_MS) { motivo = 'silencio'; break; }
         // No modo live, espera até um minuto pela fala (fase 21).
         if (!falou && agora - inicio > (liveRef.current ? SILENCIO_LIVE_MS : ESPERA_SEM_FALA_MS)) { motivo = 'sem_fala'; break; }
