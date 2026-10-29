@@ -33,12 +33,9 @@ import type { ModoDaLista } from '../lib/rpc';
  * Agora a pergunta é a mesma que o desktop faz, com o mesmo vocabulário.
  */
 const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeof Feather.glyphMap; nota: string }[] = [
-  { value: 'stark', label: ROTULO_FAMILIA.stark, icon: 'cpu', nota: 'HUD escuro, azul de reator — o padrão da Ely' },
-  { value: 'lg', label: ROTULO_FAMILIA.lg, icon: 'droplet', nota: 'Vidro translúcido, fundo claro' },
-  { value: 'ely', label: ROTULO_FAMILIA.ely, icon: 'moon', nota: 'Noite azul com luz dourada e feixes de luz' },
-  { value: 'renascenca', label: ROTULO_FAMILIA.renascenca, icon: 'feather', nota: 'Ouro, molduras ornamentadas e arte de estudo ao fundo' },
-  { value: 'minimal', label: 'Minimal', icon: 'square', nota: 'Sem efeitos: claro ou escuro como o aparelho, um acento só' },
-  { value: 'auto', label: 'Seguir o aparelho', icon: 'smartphone', nota: 'Vidro no modo claro, ELYSIUM no escuro' },
+  { value: 'dark', label: ROTULO_FAMILIA.dark, icon: 'moon', nota: 'Preto puro, superfícies chapadas e um acento frio' },
+  { value: 'glass', label: ROTULO_FAMILIA.glass, icon: 'droplet', nota: 'Vidro líquido flutuando sobre orbes coloridas' },
+  { value: 'stark', label: ROTULO_FAMILIA.stark, icon: 'cpu', nota: 'HUD escuro, em três cores de reator' },
 ];
 
 /**
@@ -56,10 +53,9 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
   const modo = useModo();
   useEffect(() => { notificacoesAtivas().then(setAvisos); }, [secao]);
 
-  // O Minimal monta a paleta na hora (modo do aparelho), então o resumo usa a que está valendo.
-  const cor = palette.minimal ? palette : getPalette(name, familiaResolvida);
+  const cor = getPalette(name, familiaResolvida);
   const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
-    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.minimal || cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
+    { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: 'Voz neural do PC' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
     { id: 'modos', titulo: 'Modos', icone: 'layers', resumo: modo ? `Ligado: ${modo.nome}` : 'Matemática, inglês… e os seus' },
@@ -435,7 +431,7 @@ function SecaoAparencia() {
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Estilo</Text>
         <Text variant="caption" color={palette.textMuted}>
-          As duas famílias visuais do ELYSIUM desktop.
+          Dark, Glass ou Stark.
         </Text>
         {FAMILIA_OPTIONS.map((opt) => {
           const selected = opt.value === familia;
@@ -469,11 +465,11 @@ function SecaoAparencia() {
         })}
       </View>
 
+      {familiaResolvida === 'stark' && (
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Cor</Text>
         <Text variant="caption" color={palette.textMuted}>
-          Três variações dentro da família {ROTULO_FAMILIA[familiaResolvida]}. São
-          exatamente as seis do desktop: cada cor tem um nome próprio em cada família.
+          Três variações do Stark.
         </Text>
         <View style={styles.swatchRow}>
           {(Object.keys(palettes) as ThemeName[]).map((key) => {
@@ -510,6 +506,7 @@ function SecaoAparencia() {
           })}
         </View>
       </View>
+      )}
 
     </View>
   );

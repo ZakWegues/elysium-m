@@ -155,12 +155,10 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
   // Vazia: um pouco acima do meio (o campo de texto ocupa o rodapé). Com conversa: no meio.
   const topo = caixa.h * (vazio ? 0.42 : 0.5) - tamanho / 2;
 
-  // Tema Minimal (20/10): sem a esfera; a saudação sobe para o lugar dela.
-  const semEsfera = !!palette.minimal;
 
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.caixa]} onLayout={aoMedir}>
-      {caixa.h > 0 && !semEsfera && (
+      {caixa.h > 0 && (
         <View style={{ position: 'absolute', top: topo, left: (caixa.w - tamanho) / 2, width: tamanho, height: tamanho }}>
           <Svg width={tamanho} height={tamanho}>
             <Defs>
@@ -180,7 +178,7 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
       )}
       {/* Fase 23.1: como no PC — a saudação e uma dica curta embaixo da esfera, só com o chat vazio. */}
       {caixa.h > 0 && vazio && titulo ? (
-        <Animated.View entering={FadeIn.duration(500)} style={{ position: 'absolute', left: 24, right: 24, top: semEsfera ? caixa.h * 0.36 : topo + tamanho * 0.94, alignItems: 'center', gap: 6 }}>
+        <Animated.View entering={FadeIn.duration(500)} style={{ position: 'absolute', left: 24, right: 24, top: topo + tamanho * 0.94, alignItems: 'center', gap: 6 }}>
           <Text variant="heading" style={{ textAlign: 'center' }}>{titulo}</Text>
           {dica ? <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center' }}>{dica}</Text> : null}
         </Animated.View>

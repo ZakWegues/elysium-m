@@ -15,7 +15,7 @@ const c = (s: string) => s as ColorProp;
 /** Painel: fundo da família, borda com o fio do acento na Stark. */
 export function painel(p: Palette) {
   const stark = p.familia === 'stark';
-  const noite = p.familia !== 'lg';
+  const noite = true; // 29/10: as três famílias são escuras.
   return {
     backgroundColor: c(noite ? `${p.background.length === 7 ? p.background : '#05080f'}F0` : '#FFFFFFE8'),
     borderColor: c(stark ? `${p.primary}66` : noite ? '#FFFFFF10' : '#FFFFFFB0'),

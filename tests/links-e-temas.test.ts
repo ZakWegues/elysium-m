@@ -35,35 +35,39 @@ describe("compartilhamento do Android", () => {
   });
 });
 
-describe("temas", () => {
-  it("a chave antiga do disco continua valendo (light=vidro, dark=noite)", () => {
-    expect(resolverFamiliaEscolhida("light")).toBe("lg");
-    expect(resolverFamiliaEscolhida("dark")).toBe("ely");
-    expect(resolverFamiliaEscolhida("system")).toBe("auto");
+describe("temas (design de 29/10)", () => {
+  it("famílias que saíram caem no Dark; dark, glass e stark continuam", () => {
+    for (const velho of ["light", "lg", "ely", "renascenca", "minimal", "auto", "system"]) expect(resolverFamiliaEscolhida(velho)).toBe("dark");
+    expect(resolverFamiliaEscolhida("dark")).toBe("dark");
+    expect(resolverFamiliaEscolhida("glass")).toBe("glass");
+    expect(resolverFamiliaEscolhida("stark")).toBe("stark");
     expect(resolverFamiliaEscolhida("qualquer")).toBeNull();
   });
 
   it("tema aposentado aponta para um tema vivo", () => {
-    for (const alvo of Object.values(TEMAS_APOSENTADOS)) expect(getPalette(alvo, "lg").name).toBe(alvo);
+    for (const alvo of Object.values(TEMAS_APOSENTADOS)) expect(getPalette(alvo, "stark").name).toBe(alvo);
   });
 
-  it("a noite é quase sólida e o dia é vidro (bloco 70)", () => {
-    const alfa = (rgba: string) => Number(rgba.match(/,\s*([\d.]+)\)$/)![1]);
-    expect(alfa(getPalette("crepusculo", "ely").glassSurface)).toBeGreaterThanOrEqual(0.6);
-    expect(alfa(getPalette("crepusculo", "lg").glassSurface)).toBeLessThanOrEqual(0.35);
+  it("Dark é o preto OLED do dark.css e Glass a cena do glass.css", () => {
+    const d = getPalette("mare", "dark");
+    expect(d.background).toBe("#000000");
+    expect(d.primary).toBe("#9fb0ff");
+    expect(d.fontes?.texto[500]).toBe("Manrope_500Medium");
+    const g = getPalette("mare", "glass");
+    expect(g.background).toBe("#05041a");
+    expect(g.fontes?.titulo[700]).toBe("Outfit_700Bold");
+    // As duas usadas com comAlfa precisam ser hex.
+    for (const p of [d, g]) for (const c of [p.surface, p.primary]) expect(c).toMatch(/^#[0-9a-f]{6}$/i);
   });
 });
 
 describe('família Stark (fase 16)', async () => {
-  const { getPalette, familiaEscura, resolverFamiliaEscolhida } = await import('../src/theme/palettes');
+  const { getPalette } = await import('../src/theme/palettes');
   it('Reator é o azul do reator, escuro, com rótulo próprio', () => {
     const p = getPalette('mare', 'stark');
     expect(p.primary).toBe('#3cc8f0');
     expect(p.rotulo).toBe('Stark — Reator');
     expect(p.blurTint).toBe('dark');
-    expect(familiaEscura('stark')).toBe(true);
-    expect(familiaEscura('lg')).toBe(false);
-    expect(resolverFamiliaEscolhida('stark')).toBe('stark');
   });
 });
 
@@ -81,8 +85,6 @@ describe("compartilhar do Android (fase 23)", () => {
 describe("fundo igual ao do PC (fase 23.1)", () => {
   it("as manchas usam as cores `blobs` do THEMES do desktop", () => {
     expect(getPalette("mare", "stark").blobs).toEqual(["#0f3a52", "#123047", "#3a2a12"]);
-    expect(getPalette("elisio", "ely").blobs).toEqual(["#8a6a2e", "#2f5d57", "#4a3f6b"]);
-    expect(getPalette("crepusculo", "lg").blobs).toEqual(["#cbb9ff", "#b8ecf3", "#ded7ff"]);
-    expect(getPalette("elisio", "renascenca").blobs).toEqual(["#5a3a14", "#5a1c22", "#3a2814"]);
+    expect(getPalette("elisio", "glass").blobs).toEqual(["#705cff", "#19d3c5", "#ff4fa3"]);
   });
 });

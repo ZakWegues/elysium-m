@@ -19,7 +19,7 @@ import { loadFavorites, saveCache, loadCache, toggleFavorite as toggleFavoriteSt
 import { callRpc } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
-import { comAlfa, useTheme } from '../theme';
+import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
@@ -413,7 +413,7 @@ export default function MailboxScreen({
         renderItem={({ item }) => {
           const mine = item.from === 'mobile';
           // Fase 23.1: mesma bolha do chat da Ely e do PC — translúcida, não um bloco sólido.
-          const bg = mine ? comAlfa(palette.familia === 'renascenca' ? palette.accent : palette.primary, 0.18) : (palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)');
+          const bg = mine ? palette.bolhaMinha : palette.bolhaEla;
           const color = palette.text;
           const isImage = item.attachment?.mimeType.startsWith('image/') ?? false;
           return (
@@ -432,7 +432,7 @@ export default function MailboxScreen({
                     padding: isImage ? tokens.spacing.xs : tokens.spacing.md,
                     backgroundColor: bg,
                     borderWidth: 1,
-                    borderColor: mine ? comAlfa(palette.familia === 'renascenca' ? palette.accent : palette.primary, 0.35) : palette.border,
+                    borderColor: mine ? palette.bolhaMinhaBorda : palette.bolhaElaBorda,
                   },
                 ]}
               >

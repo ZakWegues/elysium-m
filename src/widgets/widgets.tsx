@@ -28,7 +28,7 @@ export type EstadoPc = {
 
 /** Um retângulo de vidro (tinta do tema, borda fina, cantos redondos). */
 function fundo(p: Palette) {
-  const noite = p.familia !== 'lg';
+  const noite = true; // 29/10: as três famílias são escuras.
   return {
     backgroundColor: noite ? '#111624F0' : '#FFFFFFE8',
     // Bloco 128: na noite, sem aresta de vidro — só um contorno quase invisível.

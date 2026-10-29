@@ -28,7 +28,7 @@ export function CartaoErro({
   return (
     <Animated.View
       entering={FadeInDown.withInitialValues({ transform: [{ translateY: 6 }] }).duration(MOV.base).reduceMotion(ReduceMotion.System)}
-      style={[styles.cartao, { borderRadius: tokens.radii.lg, borderColor: palette.border, backgroundColor: palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)' }]}
+      style={[styles.cartao, { borderRadius: tokens.radii.lg, borderColor: palette.border, backgroundColor: palette.bolhaEla }]}
     >
       <View style={styles.topo}>
         <View style={[styles.placa, { backgroundColor: fila ? palette.primarySoft : palette.errorSoft }]}>

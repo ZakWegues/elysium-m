@@ -1,30 +1,25 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import {
-  getPalette, paletaMinimal, resolverNomeDeTema, resolverFamiliaEscolhida,
+  getPalette, resolverNomeDeTema, resolverFamiliaEscolhida,
   Familia, FamiliaEscolha, Palette, ThemeName,
 } from './palettes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { spacing, radii, fontSize, fontWeight, shadow } from './tokens';
-import { destaqueDoSistema } from '../lib/corDoSistema';
+import { useFontes } from './fontes';
 
 const STORAGE_KEY = 'elysium_theme';
 /**
- * ⚠️ A chave continua com o nome antigo de propósito.
- *
- * O que ela guarda não mudou de significado — `light` sempre foi o vidro e `dark` sempre
- * foi a noite; o que mudou foi o nome disso na tela. Renomear a chave só criaria a chance
- * de um aparelho atualizado por OTA acordar sem preferência, que é exatamente o tipo de
- * falha silenciosa que o handoff manda evitar.
+ * ⚠️ A chave continua com o nome antigo de propósito: renomear criaria a chance de um
+ * aparelho atualizado por OTA acordar sem preferência.
  */
 const FAMILIA_KEY = 'elysium_color_scheme';
 
 type ThemeContextValue = {
   name: ThemeName;
   palette: Palette;
-  /** O que o usuário escolheu, incluindo `auto`. */
+  /** O que o usuário escolheu. */
   familia: FamiliaEscolha;
-  /** O que está valendo de fato, depois de resolver `auto`. */
+  /** Igual a `familia` desde que o `auto` saiu (29/10); fica pelo nome que as telas usam. */
   familiaResolvida: Familia;
   tokens: { spacing: typeof spacing; radii: typeof radii; fontSize: typeof fontSize; fontWeight: typeof fontWeight; shadow: typeof shadow };
   setTheme: (name: ThemeName) => void;
@@ -32,18 +27,18 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-const CHAVE_STARK = 'elysium_tema_stark_aplicado_v1';
+/** 29/10: o design novo vira o padrão UMA vez (Dark); escolher outro depois é respeitado. */
+const CHAVE_DESIGN = 'elysium_tema_design_2910_aplicado';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [name, setName] = useState<ThemeName>('elisio');
-  const [familia, setFamiliaState] = useState<FamiliaEscolha>('auto');
-  const systemScheme = useColorScheme();
+  const [name, setName] = useState<ThemeName>('mare');
+  const [familia, setFamiliaState] = useState<FamiliaEscolha>('dark');
+  const fontesProntas = useFontes();
 
   useEffect(() => {
-    AsyncStorage.multiGet([STORAGE_KEY, FAMILIA_KEY])
-      .then(([[, storedTheme], [, storedFamilia]]) => {
-        // Traduz tema aposentado em vez de ignorar: quem escolheu "ocean" um dia tem o
-        // equivalente novo, e o disco para de carregar um id que não existe mais.
+    AsyncStorage.multiGet([STORAGE_KEY, FAMILIA_KEY, CHAVE_DESIGN])
+      .then(([[, storedTheme], [, storedFamilia], [, designFeito]]) => {
+        // Traduz tema aposentado em vez de ignorar: o disco para de carregar um id que não existe mais.
         const resolvido = resolverNomeDeTema(storedTheme);
         if (resolvido) {
           setName(resolvido);
@@ -51,16 +46,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             AsyncStorage.setItem(STORAGE_KEY, resolvido).catch(() => { /* best-effort */ });
           }
         }
+        if (!designFeito) {
+          AsyncStorage.multiSet([[FAMILIA_KEY, 'dark'], [CHAVE_DESIGN, '1']]).catch(() => { /* tenta de novo na próxima */ });
+          return;
+        }
         const fam = resolverFamiliaEscolhida(storedFamilia);
         if (fam) setFamiliaState(fam);
-        // Fase 16: o tema Stark vira o padrão UMA vez (o Zak pediu o visual "Jarvis
-        // feminino"); escolher outro depois é respeitado.
-        AsyncStorage.getItem(CHAVE_STARK).then((feito) => {
-          if (feito) return;
-          setName('mare');
-          setFamiliaState('stark');
-          AsyncStorage.multiSet([[STORAGE_KEY, 'mare'], [FAMILIA_KEY, 'stark'], [CHAVE_STARK, '1']]).catch(() => { /* tenta de novo na próxima */ });
-        }).catch(() => { /* fica como está */ });
+        if (fam && fam !== storedFamilia) AsyncStorage.setItem(FAMILIA_KEY, fam).catch(() => { /* best-effort */ });
       })
       .catch((err) => console.error('[theme] falha lendo preferências salvas', err));
   }, []);
@@ -79,17 +71,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  // `useColorScheme` devolve null enquanto o sistema não responde; o vidro é o padrão
-  // seguro, e o valor real chega logo em seguida sem piscar de forma perceptível.
-  // O Minimal (20/10) também acompanha o modo do aparelho: claro = base do vidro, escuro = da noite.
-  const familiaResolvida: Familia =
-    familia === 'auto' || familia === 'minimal' ? (systemScheme === 'dark' ? 'ely' : 'lg') : familia;
+  // Sem as fontes carregadas, o texto fica na do sistema (nome de fonte desconhecido avisa no iOS).
+  const palette = useMemo(() => {
+    const p = getPalette(name, familia);
+    return fontesProntas ? p : { ...p, fontes: null };
+  }, [name, familia, fontesProntas]);
 
   const value: ThemeContextValue = {
     name,
-    palette: familia === 'minimal' ? paletaMinimal(systemScheme === 'dark', destaqueDoSistema(), name) : getPalette(name, familiaResolvida),
+    palette,
     familia,
-    familiaResolvida,
+    familiaResolvida: familia,
     tokens: { spacing, radii, fontSize, fontWeight, shadow },
     setTheme,
     setFamilia,

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
-import { CURVA_UI, MOV, tempo } from '../lib/motion';
+import { CURVA_UI, MOV, reduzirUI, tempo } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
@@ -98,6 +99,17 @@ export function TabBar({
 }) {
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
+  // 29/10: Dark = barra chapada com a linha de 2 px deslizando no topo (`.dk-tabbar`);
+  // Glass = pílula de vidro flutuante com a lente que estica ao toque (`.lg-nav`).
+  const dark = palette.familia === 'dark';
+  const vidro = palette.familia === 'glass';
+  /** Folga do indicador para cada lado, dentro da largura da aba. */
+  const folga = dark ? 12 : vidro ? 5 : 8;
+  /** A lente da Glass estica ao apertar: 0 solto, 1 apertado (mola de amortecimento 11). */
+  const aperto = useSharedValue(0);
+  const apertar = useCallback((v: 0 | 1) => {
+    aperto.value = withSpring(v, { damping: 11, stiffness: 190, mass: 0.9 });
+  }, [aperto]);
 
   // -1 quando a tela aberta não é aba nenhuma (Conversas, por exemplo). Aí o indicador
   // some em vez de apontar para uma aba que não é a que está na frente.
@@ -116,7 +128,10 @@ export function TabBar({
     visivel.value = tempo(indiceAtivo < 0 ? 0 : 1, MOV.micro, CURVA_UI);
     if (indiceAtivo >= 0) {
       ativoVivo.value = indiceAtivo;
-      progresso.value = tempo(indiceAtivo, MOV.base);
+      // A lente da Glass anda de mola, como no design; as outras, na curva de sempre.
+      progresso.value = vidro && !reduzirUI.value
+        ? withSpring(indiceAtivo, { damping: 15, stiffness: 190, mass: 0.9 })
+        : tempo(indiceAtivo, MOV.base);
     }
   }, [indiceAtivo]);
 
@@ -135,6 +150,10 @@ export function TabBar({
         .failOffsetY([-24, 24])
         .onBegin(() => {
           inicio.value = progresso.value;
+          aperto.value = withSpring(1, { damping: 11, stiffness: 190, mass: 0.9 });
+        })
+        .onFinalize(() => {
+          aperto.value = withSpring(0, { damping: 11, stiffness: 190, mass: 0.9 });
         })
         .onUpdate((e) => {
           if (larguraTab.value <= 0) return;
@@ -163,58 +182,84 @@ export function TabBar({
     larguraTab.value = e.nativeEvent.layout.width / TABS.length;
   }
 
+  // Só a lente da Glass estica; a linha do Dark e o contorno do Stark não.
+  const estica = vidro ? 1 : 0;
   const estiloIndicador = useAnimatedStyle(() => ({
-    width: Math.max(0, larguraTab.value - 16),
+    width: Math.max(0, larguraTab.value - folga * 2),
     opacity: visivel.value,
-    transform: [{ translateX: progresso.value * larguraTab.value + 8 }],
+    transform: [
+      { translateX: progresso.value * larguraTab.value + folga },
+      { scaleX: 1 + 0.16 * aperto.value * estica },
+      { scaleY: 1 + 0.24 * aperto.value * estica },
+    ],
   }));
+
+  const linha = (
+    <View
+      onLayout={medir}
+      style={[
+        styles.row,
+        vidro
+          ? styles.rowVidro
+          : {
+              paddingBottom: Math.max(insets.bottom, tokens.spacing.sm),
+              borderTopColor: dark ? palette.border : palette.glassBorder,
+            },
+      ]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.indicador,
+          dark
+            ? [styles.indicadorDark, { backgroundColor: palette.primary }]
+            : vidro
+              ? styles.lente
+              // Fase 23.1: no Stark a aba ativa é um contorno fino na cor do reator, como no PC.
+              : { backgroundColor: 'rgba(0,0,0,0)', borderWidth: 1, borderColor: palette.primary, borderRadius: tokens.radii.md },
+          estiloIndicador,
+        ]}
+      >
+        {vidro && (
+          <LinearGradient colors={['rgba(255,255,255,0.36)', 'rgba(255,255,255,0.12)']} style={StyleSheet.absoluteFill} />
+        )}
+      </Animated.View>
+      {TABS.map((tab, i) => (
+        <Aba
+          key={tab.screen}
+          tab={tab}
+          indice={i}
+          progresso={progresso}
+          badge={badges?.[tab.screen] ?? 0}
+          ativo={tab.screen === active}
+          onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
+          onPressIn={vidro ? () => apertar(1) : undefined}
+          onPressOut={vidro ? () => apertar(0) : undefined}
+        />
+      ))}
+    </View>
+  );
+
+  if (vidro) {
+    return (
+      <GestureDetector gesture={pan}>
+        <View style={[styles.flutua, { paddingBottom: Math.max(insets.bottom, tokens.spacing.sm) + 10 }]}>
+          <View style={[styles.pilula, { borderColor: palette.glassBorder }]}>
+            <GlassFill intensity={60} />
+            {linha}
+          </View>
+        </View>
+      </GestureDetector>
+    );
+  }
 
   return (
     <GestureDetector gesture={pan}>
       <View style={{ overflow: 'hidden' }}>
-        {/* O outro desfoque REAL do app (o primeiro é o ScreenHeader). Mesma moderação:
-            os rótulos das abas já liam bem antes. */}
-        <GlassFill intensity={45} strong edge={false} />
-        <View
-          onLayout={medir}
-          style={[
-            styles.row,
-            {
-              paddingBottom: Math.max(insets.bottom, tokens.spacing.sm),
-              borderTopColor: palette.glassBorder,
-            },
-          ]}
-        >
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.indicador,
-              palette.familia === 'renascenca'
-                ? { backgroundColor: 'transparent', borderBottomWidth: 1.5, borderBottomColor: palette.primary, borderRadius: 0 }
-                // Fase 23.1: no Stark a aba ativa é um contorno fino na cor do reator, como no PC.
-                : palette.familia === 'stark'
-                  ? { backgroundColor: 'rgba(0,0,0,0)', borderWidth: 1, borderColor: palette.primary, borderRadius: tokens.radii.md }
-                  : { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md },
-              estiloIndicador,
-            ]}
-          >
-            {/* Fase 22: o fleurão da aba ativa, como no PC. */}
-            {palette.familia === 'renascenca' && (
-              <Text variant="caption" color={palette.primary} style={styles.fleurao}>❦</Text>
-            )}
-          </Animated.View>
-          {TABS.map((tab, i) => (
-            <Aba
-              key={tab.screen}
-              tab={tab}
-              indice={i}
-              progresso={progresso}
-              badge={badges?.[tab.screen] ?? 0}
-              ativo={tab.screen === active}
-              onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
-            />
-          ))}
-        </View>
+        {/* O outro desfoque REAL do app (o primeiro é o ScreenHeader). No Dark é a barra
+            chapada quase opaca do design. */}
+        <GlassFill intensity={45} strong edge={false} tintColor={dark ? 'rgba(8,9,12,0.96)' : undefined} />
+        {linha}
       </View>
     </GestureDetector>
   );
@@ -231,7 +276,7 @@ export function TabBar({
  */
 function Aba({
   tab, indice, progresso, badge,
-  ativo, onPress,
+  ativo, onPress, onPressIn, onPressOut,
 }: {
   tab: (typeof TABS)[number];
   indice: number;
@@ -240,6 +285,8 @@ function Aba({
   /** Fase 18: para o leitor de tela anunciar "selecionada". */
   ativo?: boolean;
   onPress: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   const { palette } = useTheme();
 
@@ -250,8 +297,10 @@ function Aba({
 
   return (
     <Pressable
-      style={styles.tab}
+      style={({ pressed }) => [styles.tab, pressed && styles.tabApertada]}
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       accessibilityRole="tab"
       accessibilityState={{ selected: !!ativo }}
       accessibilityLabel={`${tab.label}${badge > 0 ? `, ${badge} não lido${badge === 1 ? '' : 's'}` : ''}`}
@@ -319,7 +368,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
   },
-  fleurao: { position: 'absolute', bottom: -9, alignSelf: 'center', fontSize: 11, lineHeight: 12 },
+  tabApertada: { transform: [{ scale: 0.94 }] },
+  // Dark: a linha de 2 px no topo da barra (`.dk-tab-line`).
+  indicadorDark: { top: 0, height: 2, borderRadius: 2 },
+  // Glass: a pílula flutuante (16 px dos lados, 74 de altura) e a lente dentro dela.
+  flutua: { paddingHorizontal: 16, paddingTop: 6 },
+  pilula: { height: 74, borderRadius: 37, borderWidth: 1, overflow: 'hidden' },
+  rowVidro: { borderTopWidth: 0, paddingTop: 0, height: 74, alignItems: 'center' },
+  lente: {
+    top: 7, height: 58, borderRadius: 29, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
+  },
   badge: {
     position: 'absolute',
     top: -4,

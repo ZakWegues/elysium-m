@@ -15,7 +15,6 @@ import {
 } from '../lib/trackpad';
 import { useTheme } from '../theme';
 import { Text } from '../components/ui';
-import { CantosOrnamentados } from '../components/ui/Ornamentos';
 import { BarraMidia } from '../components/BarraMidia';
 
 /**
@@ -79,7 +78,6 @@ export default function TrackpadFullscreen({
   const { palette, tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboard();
-  const renascenca = palette.familia === 'renascenca';
 
   const [modo, setModo] = useState<ModoCanal>('conectando');
   const [aba, setAba] = useState<AbaRodape>('teclado');
@@ -274,13 +272,12 @@ export default function TrackpadFullscreen({
                 styles.pad,
                 {
                   marginHorizontal: tokens.spacing.lg,
-                  borderRadius: renascenca ? 5 : tokens.radii.lg,
+                  borderRadius: tokens.radii.lg,
                   backgroundColor: palette.primarySoft,
-                  borderColor: renascenca ? palette.primary : palette.border,
+                  borderColor: palette.border,
                 },
               ]}
             >
-              {renascenca && <CantosOrnamentados cor={palette.primary} />}
               {altPad > 140 && (
                 <View pointerEvents="none" style={styles.dica}>
                   <Feather name="move" size={22} color={palette.primary} style={{ opacity: 0.5 }} />

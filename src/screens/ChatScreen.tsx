@@ -35,9 +35,8 @@ import { haptica } from '../lib/haptica';
 import CameraAsk from './CameraAsk';
 import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV } from '../lib/motion';
-import { comAlfa, useTheme } from '../theme';
+import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text } from '../components/ui';
-import { CantosOrnamentados } from '../components/ui/Ornamentos';
 import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
@@ -1149,10 +1148,12 @@ export default function ChatScreen({
                 }} />
             );
           }
-          const ren = palette.familia === 'renascenca';
-          const tinta = ren ? palette.accent : palette.primary;
-          const bg = item.from === 'me' ? comAlfa(tinta, ren ? 0.16 : 0.18) : item.from === 'error' ? palette.errorSoft : (palette.familia === 'lg' ? palette.surfaceRaised : 'rgba(255,255,255,0.05)');
+          const minha = item.from === 'me';
+          const bg = minha ? palette.bolhaMinha : item.from === 'error' ? palette.errorSoft : palette.bolhaEla;
           const color = item.from === 'error' ? palette.error : palette.text;
+          // 29/10: o rabinho das bolhas do design — canto de baixo menor do lado de quem fala.
+          const raio = palette.familia === 'glass' ? 26 : palette.familia === 'dark' ? 20 : tokens.radii.lg;
+          const ponta = palette.familia === 'glass' ? 8 : palette.familia === 'dark' ? 6 : tokens.radii.lg;
           return (
             <>
             <BolhaEntrando
@@ -1160,21 +1161,21 @@ export default function ChatScreen({
                 styles.bubble,
                 {
                   alignSelf: item.from === 'me' ? 'flex-end' : 'flex-start',
-                  borderRadius: ren ? 4 : tokens.radii.lg,
-                  padding: tokens.spacing.md,
-                  ...(ren && item.from === 'reply' ? { paddingHorizontal: tokens.spacing.lg } : {}),
+                  borderRadius: raio,
+                  ...(minha ? { borderBottomRightRadius: ponta } : { borderBottomLeftRadius: ponta }),
+                  paddingVertical: 12,
+                  paddingHorizontal: 15,
                   backgroundColor: bg,
                   borderWidth: item.from === 'error' ? 0 : 1,
-                  borderColor: item.from === 'me' ? comAlfa(tinta, ren ? 0.55 : 0.35) : palette.border,
+                  borderColor: minha ? palette.bolhaMinhaBorda : palette.bolhaElaBorda,
                 },
               ]}
             >
               {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações.
                   Fase 22: deslizar a bolha da Ely para a esquerda = ouvir de novo; toque duplo = copiar. */}
               <Pressable onLongPress={() => acoesDaBolha(item)} delayLongPress={350}>
-                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : <TextoComLinks texto={item.text} cor={color} style={ren && item.from === 'me' ? { fontStyle: 'italic' } : undefined} />}
+                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : <TextoComLinks texto={item.text} cor={color} />}
               </Pressable>
-              {ren && item.from === 'reply' ? <CantosOrnamentados cor={palette.primary} tamanho={16} /> : null}
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
                 <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">reserva</Text>

@@ -1,70 +1,58 @@
 /**
- * Temas do ELYSIUM-M — os MESMOS do desktop, e de propósito.
+ * Temas do ELYSIUM-M — 29/10: o design novo do Zak (`dark.css` e `glass.css`).
  *
- * São três cores, cada uma com uma cara clara (vidro) e uma escura (noite). O desktop
- * chama as seis combinações por nomes próprios (`lg`, `lg-tide`, `lg-amber`, `ely`,
- * `ely-dusk`, `ely-ether`); aqui elas aparecem como três temas mais o seletor de modo que
- * o app já tinha, para "seguir o sistema" continuar fazendo sentido — um aparelho no modo
- * noturno precisa poder escolher a versão escura sozinho.
+ * Três famílias, e só elas:
  *
- * | tema       | claro (vidro)     | escuro (noite)          |
- * |------------|-------------------|-------------------------|
- * | Elísio     | Vidro — Âmbar     | Campos Elísios (ouro)   |
- * | Maré       | Vidro — Maré      | Éter (prata-ciano)      |
- * | Crepúsculo | Vidro Líquido     | Crepúsculo (âmbar/rosa) |
+ * | família | cara                                                                  |
+ * |---------|-----------------------------------------------------------------------|
+ * | Dark    | preto OLED, superfícies chapadas, fios finos, um acento frio (padrão) |
+ * | Glass   | cena índigo com orbes coloridas e vidro líquido flutuando por cima    |
+ * | Stark   | HUD escuro com três cores (Reator, Mark, Noite)                       |
  *
- * Nenhuma cor foi inventada: são exatamente as do `THEMES` do `dashboard.html`.
+ * Vidro Líquido (`lg`), ELYSIUM (`ely`), Renascença e Minimal saíram. Quem tinha um deles
+ * gravado cai no Dark (ver `resolverFamiliaEscolhida`), sem tela quebrada.
+ *
+ * As três "cores" (`ThemeName`) continuam existindo, mas só a Stark varia por elas: Dark e
+ * Glass têm uma paleta só, a do arquivo de design.
  */
 
 export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
 
-/**
- * As duas FAMÍLIAS visuais, iguais às do desktop.
- *
- * 🔴 POR QUE ISTO SUBSTITUIU "claro/escuro": as seis combinações sempre foram os seis
- * temas do `dashboard.html`, mas o app as apresentava como "três cores + um interruptor
- * de claro/escuro". O nome escondia o que a escolha realmente faz — `lg` e `ely` não são
- * o mesmo desenho com o brilho trocado, são duas linguagens visuais diferentes: o Vidro
- * Líquido é translúcido e claro, o ELYSIUM é noite azul com luz dourada e feixes de luz
- * no fundo. É a mesma pergunta que o desktop faz, e agora com o mesmo vocabulário.
- *
- * A correspondência com os ids do desktop:
- *
- * | cor        | família `lg`      | família `ely`     |
- * |------------|-------------------|-------------------|
- * | crepusculo | `lg` Vidro Líquido | `ely-dusk` Crepúsculo |
- * | mare       | `lg-tide` Maré     | `ely-ether` Éter      |
- * | elisio     | `lg-amber` Âmbar   | `ely` Campos Elísios  |
- */
-export type Familia = 'lg' | 'ely' | 'stark' | 'renascenca';
+export type Familia = 'dark' | 'glass' | 'stark';
 
-/** O que o usuário escolheu. `auto` acompanha o modo do aparelho. */
-export type FamiliaEscolha = 'auto' | 'lg' | 'ely' | 'stark' | 'renascenca' | 'minimal';
+/** O que o usuário escolheu. Era maior quando havia `auto` e Minimal; hoje é a família. */
+export type FamiliaEscolha = Familia;
 
 /** Nome de cada família na tela. */
 export const ROTULO_FAMILIA: Record<Familia, string> = {
-  lg: 'Vidro Líquido',
-  ely: 'ELYSIUM',
+  dark: 'Dark',
+  glass: 'Glass',
   stark: 'Stark',
-  renascenca: 'Renascença',
 };
 
-/**
- * As famílias escuras (fase 16). A Stark é a noite do ELYSIUM com outra paleta (azul de
- * reator, vermelho e dourado, noite fria) e o acabamento HUD por cima — o pedido do Zak
- * por um "Jarvis feminino, bem Tony Stark". Tudo o que perguntava "é a noite?" passa a
- * perguntar isto, para a Stark herdar o vidro escuro sem duplicar regra.
- */
-export function familiaEscura(f: Familia): boolean {
-  return f !== 'lg';
+/** As três famílias são escuras. Fica como função para quem perguntava "é a noite?". */
+export function familiaEscura(_f: Familia): boolean {
+  return true;
 }
+
+/**
+ * Nomes das fontes carregadas por `useFontes` (ver `fontes.ts`). No Android o peso não
+ * escolhe arquivo dentro de uma família, então cada peso é um nome próprio.
+ */
+export type Fontes = {
+  /** Texto corrido, por peso. */
+  texto: { 400: string; 500: string; 600: string; 700: string; 800: string };
+  /** Títulos (display/heading). */
+  titulo: { 600: string; 700: string; 800: string };
+  /** Números e rótulos técnicos. */
+  mono: { 500: string; 600: string };
+};
 
 export type Palette = {
   name: ThemeName;
   label: string;
-  /** Qual das duas linguagens visuais está valendo. */
   familia: Familia;
-  /** O nome que o desktop dá a esta combinação exata de cor e família. */
+  /** O nome desta combinação na tela de Ajustes. */
   rotulo: string;
   primary: string;
   primarySoft: string;
@@ -72,178 +60,128 @@ export type Palette = {
   background: string;
   surface: string;
   surfaceRaised: string;
+  /** 29/10: o terceiro degrau de superfície (`--s3` do Dark). */
+  surface3: string;
   border: string;
   text: string;
   textMuted: string;
+  /** 29/10: o texto mais apagado (`--tx3` / `--ink3`), para rótulos. */
+  textFaint: string;
   onPrimary: string;
   error: string;
   errorSoft: string;
   success: string;
-  // Vidro (estilo iOS "liquid glass") — translúcidos usados sobre BlurView.
+  /** 29/10: as bolhas do chat de cada lado. */
+  bolhaMinha: string;
+  bolhaMinhaBorda: string;
+  bolhaEla: string;
+  bolhaElaBorda: string;
+  // Vidro — translúcidos usados sobre BlurView.
   glassSurface: string;
   glassSurfaceStrong: string;
   glassBorder: string;
   glassBackdrop: string;
-  /**
-   * Brilho da aresta de cima do vidro, em duas paradas (opaca → transparente).
-   *
-   * Existe como token porque era literal: um branco fixo de 55% desenhado sobre a
-   * superfície INTEIRA de todo card e botão de vidro. No claro passava despercebido; no
-   * escuro cobria o app de uma névoa leitosa. Agora a intensidade vem do modo.
-   */
+  /** Brilho da aresta de cima do vidro, em duas paradas (opaca → transparente). */
   glassSheen: readonly [string, string];
-  /**
-   * Tinta dos PAINÉIS que precisam ser lidos: predefinições, notificações, qualquer
-   * caixa flutuante com texto dentro.
-   *
-   * 🔴 DIREÇÃO NOVA — HyperOS / One UI, não iOS. O painel do One UI não mostra as
-   * formas do fundo: mostra COR e luz difusa, e o texto lê perfeitamente. Isso é alfa
-   * ALTO com raio ALTO, que é o oposto do "leitoso": leitoso era alfa alto de BRANCO
-   * PURO com raio baixo, e é por isso que a tinta daqui vem da paleta do tema, não do
-   * branco. Nenhum painel de texto abaixo deste alfa — legibilidade vem antes de vidro.
-   */
+  /** Tinta dos painéis que precisam ser lidos (popover, avisos). Alfa alto. */
   glassPanel: string;
-  /** Tinta da gaveta de Ajustes. Mesma regra do `glassPanel`: cor do tema, alfa alto. */
+  /** Tinta da gaveta de Ajustes. */
   glassSheet: string;
-  /** Tinta da BlurView: precisa acompanhar o modo, senão o vidro clareia o escuro. */
   blurTint: 'light' | 'dark';
-  /** Fase 23.1: cores das manchas do fundo (iguais às do desktop). */
+  /** Cores das manchas/orbes do fundo. A Glass usa as quatro do `glass.css`. */
   blobs: readonly [string, string, string];
-  /** 20/10: tema Minimal — sem vidro, fundo, esfera nem brilho (ver `paletaMinimal`). */
-  minimal?: boolean;
+  /** Fontes da família; `null` fica com a do sistema (Stark). */
+  fontes: Fontes | null;
 };
 
-/** Neutros da família Vidro Líquido, comuns às três cores. */
-const neutrosClaro = {
-  familia: 'lg' as const,
-  border: '#E4E7EC',
-  text: '#14161A',
-  textMuted: '#6B7280',
-  onPrimary: '#FFFFFF',
-  error: '#C0392B',
-  errorSoft: '#F8D7DA',
-  success: '#2E8B47',
-  glassBorder: 'rgba(255,255,255,0.45)',
-  glassBackdrop: 'rgba(18,20,24,0.28)',
-  // O brilho da aresta continua baixo: ELE é o que fazia o app leitoso, e subir alfa de
-  // painel não é motivo para trazer de volta um véu de branco puro por cima de tudo.
-  glassSheen: ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0)'] as const,
-  blurTint: 'light' as const,
+const MANROPE: Fontes = {
+  texto: { 400: 'Manrope_500Medium', 500: 'Manrope_500Medium', 600: 'Manrope_600SemiBold', 700: 'Manrope_700Bold', 800: 'Manrope_800ExtraBold' },
+  titulo: { 600: 'Manrope_700Bold', 700: 'Manrope_800ExtraBold', 800: 'Manrope_800ExtraBold' },
+  mono: { 500: 'JetBrainsMono_500Medium', 600: 'JetBrainsMono_600SemiBold' },
 };
 
-/**
- * Neutros do modo escuro.
- *
- * Não é o claro invertido: o fundo é um azulado bem escuro em vez de preto puro, para o
- * vidro ter o que desfocar, e as bordas são brancos translúcidos em vez de cinza sólido,
- * senão viram linhas duras sobre superfície escura.
- */
-const neutrosEscuro = {
-  familia: 'ely' as Familia,
-  border: 'rgba(255,255,255,0.10)',
-  text: '#EEF1F6',
-  textMuted: '#9AA3B2',
-  onPrimary: '#FFFFFF',
-  error: '#FF6B6B',
-  errorSoft: 'rgba(255,107,107,0.16)',
-  success: '#4ADE80',
-  // Bloco 128: sem borda de vidro na noite — a mesma linha discreta do `border`.
-  glassBorder: 'rgba(255,255,255,0.10)',
-  glassBackdrop: 'rgba(0,0,0,0.55)',
-  // Um quinto do brilho do modo claro. Branco forte sobre superfície escura não lê como
-  // reflexo, lê como sujeira.
-  // Bloco 128: sem reflexo na noite (o modal e o popover desenham este gradiente).
+const OUTFIT_FIGTREE: Fontes = {
+  texto: { 400: 'Figtree_400Regular', 500: 'Figtree_500Medium', 600: 'Figtree_600SemiBold', 700: 'Figtree_700Bold', 800: 'Figtree_700Bold' },
+  titulo: { 600: 'Outfit_600SemiBold', 700: 'Outfit_700Bold', 800: 'Outfit_700Bold' },
+  mono: { 500: 'JetBrainsMono_500Medium', 600: 'JetBrainsMono_600SemiBold' },
+};
+
+/** `dark.css`: preto OLED, s1–s3, fio `--line`, acento `--ac`. */
+const DARK: Omit<Palette, 'name'> = {
+  label: 'Dark', familia: 'dark', rotulo: 'Dark',
+  primary: '#9fb0ff', primarySoft: '#1b2142', accent: '#58d7a2',
+  background: '#000000', surface: '#0d0e12', surfaceRaised: '#14161c', surface3: '#1c1f27',
+  border: '#242832',
+  text: '#eceef4', textMuted: '#a4aab8', textFaint: '#7d8493',
+  onPrimary: '#0b0d1a',
+  error: '#ff7a7a', errorSoft: 'rgba(255,122,122,0.14)', success: '#58d7a2',
+  bolhaMinha: '#1b2142', bolhaMinhaBorda: '#2c3566', bolhaEla: '#14161c', bolhaElaBorda: '#242832',
+  // Sem vidro: as superfícies do Dark são chapadas.
+  glassSurface: '#0d0e12', glassSurfaceStrong: '#14161c', glassBorder: '#242832',
+  glassBackdrop: 'rgba(0,0,0,0.6)',
   glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
-  blurTint: 'dark' as const,
+  glassPanel: '#0d0e12', glassSheet: '#0d0e12',
+  blurTint: 'dark',
+  blobs: ['#000000', '#000000', '#000000'],
+  fontes: MANROPE,
 };
 
-type Face = {
+/** `glass.css`: cena #0b0930 → #05041a, tinta branca translúcida, aro de luz. */
+const GLASS: Omit<Palette, 'name'> = {
+  label: 'Glass', familia: 'glass', rotulo: 'Glass',
+  primary: '#8fb4ff', primarySoft: 'rgba(127,182,255,0.22)', accent: '#b79bff',
+  // `surface` fica sólida (hex): telas cheias e `comAlfa` precisam dela opaca. Os cards
+  // da Glass desenham o vidro por cima (ver `Card`).
+  background: '#05041a', surface: '#15123a', surfaceRaised: '#1c1947', surface3: '#252157',
+  border: 'rgba(255,255,255,0.14)',
+  text: '#f5f7ff', textMuted: '#c4c7da', textFaint: '#9497ad',
+  onPrimary: '#0b0930',
+  error: '#ff8a9a', errorSoft: 'rgba(255,138,154,0.16)', success: '#5af0b0',
+  bolhaMinha: 'rgba(127,170,255,0.26)', bolhaMinhaBorda: 'rgba(190,210,255,0.42)',
+  bolhaEla: 'rgba(255,255,255,0.10)', bolhaElaBorda: 'rgba(255,255,255,0.26)',
+  glassSurface: 'rgba(255,255,255,0.10)', glassSurfaceStrong: 'rgba(255,255,255,0.15)',
+  glassBorder: 'rgba(255,255,255,0.34)',
+  glassBackdrop: 'rgba(3,2,25,0.55)',
+  glassSheen: ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0)'] as const,
+  glassPanel: 'rgba(20,17,58,0.92)', glassSheet: 'rgba(16,13,48,0.94)',
+  blurTint: 'dark',
+  blobs: ['#705cff', '#19d3c5', '#ff4fa3'],
+  fontes: OUTFIT_FIGTREE,
+};
+
+type FaceStark = {
   primary: string;
   accent: string;
-  /** Fundo e superfícies mudam por tema: cada noite tem a sua, cada vidro tem o seu. */
   background: string;
   surface: string;
   surfaceRaised: string;
-  /** Pastel sólido no claro; translúcido no escuro, senão vira um bloco leitoso. */
   primarySoft: string;
-  /** Fase 23.1: as três cores das manchas do fundo — as MESMAS do `blobs` do THEMES do desktop. */
   blobs: readonly [string, string, string];
 };
 
-const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: Face; renascenca: Face }> = {
+const STARK: Record<ThemeName, { label: string; rotulo: string; face: FaceStark }> = {
   elisio: {
-    label: 'Elísio',
-    light: {
-      blobs: ['#f7d4b3', '#f2e2b0', '#f6e3d2'],
-      primary: '#c2602c', accent: '#c9971f', primarySoft: '#F7E7D6',
-      background: '#f8f3ec', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
-    },
-    dark: {
-      blobs: ['#8a6a2e', '#2f5d57', '#4a3f6b'],
-      primary: '#d9b168', accent: '#9fd8cf', primarySoft: 'rgba(217,177,104,0.20)',
-      background: '#0a0c14', surface: '#131726', surfaceRaised: '#0e1220',
-    },
-    // "Stark — Mark": o vermelho e o dourado da armadura.
-    stark: {
+    label: 'Elísio', rotulo: 'Stark — Mark',
+    face: {
       blobs: ['#5a1414', '#5a4214', '#2a1010'],
       primary: '#ff5a4e', accent: '#ffc857', primarySoft: 'rgba(255,90,78,0.18)',
       background: '#0b0607', surface: '#170c0e', surfaceRaised: '#120909',
     },
-    // 13/10 — "Renascença — Florença": folha de ouro sobre nogueira, com carmim.
-    renascenca: {
-      blobs: ['#5a3a14', '#5a1c22', '#3a2814'],
-      primary: '#c9a14a', accent: '#b23a48', primarySoft: 'rgba(201,161,74,0.20)',
-      background: '#120c07', surface: '#1f150d', surfaceRaised: '#180f09',
-    },
   },
   mare: {
-    label: 'Maré',
-    light: {
-      blobs: ['#b6d8f7', '#b3ecdf', '#cfe6f5'],
-      primary: '#1e7fd4', accent: '#17b8a6', primarySoft: '#DCEBF9',
-      background: '#eef4f9', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
-    },
-    dark: {
-      blobs: ['#33506b', '#2b5f59', '#3a4560'],
-      primary: '#a8c4d8', accent: '#7fd4c8', primarySoft: 'rgba(168,196,216,0.20)',
-      background: '#080b12', surface: '#111624', surfaceRaised: '#0c101c',
-    },
-    // "Stark — Reator": o azul do reator com detalhes âmbar. É o padrão da fase 16.
-    stark: {
+    label: 'Maré', rotulo: 'Stark — Reator',
+    face: {
       blobs: ['#0f3a52', '#123047', '#3a2a12'],
       primary: '#3cc8f0', accent: '#ffb547', primarySoft: 'rgba(60,200,240,0.18)',
       background: '#05080f', surface: '#0b1220', surfaceRaised: '#08101b',
     },
-    // "Renascença — Veneza": ouro e ultramar.
-    renascenca: {
-      blobs: ['#1c2c5a', '#5a4214', '#22204a'],
-      primary: '#d4ae5c', accent: '#3d6fd1', primarySoft: 'rgba(212,174,92,0.20)',
-      background: '#0b0d18', surface: '#151a2c', surfaceRaised: '#101423',
-    },
   },
   crepusculo: {
-    label: 'Crepúsculo',
-    light: {
-      blobs: ['#cbb9ff', '#b8ecf3', '#ded7ff'],
-      primary: '#6d4aff', accent: '#22b8cf', primarySoft: '#E6E0FF',
-      background: '#f2f1f7', surface: '#FFFFFF', surfaceRaised: '#FFFFFF',
-    },
-    dark: {
-      blobs: ['#7a4520', '#6b2f47', '#3b2a6b'],
-      primary: '#f0a850', accent: '#e07a9b', primarySoft: 'rgba(240,168,80,0.20)',
-      background: '#0b0818', surface: '#171232', surfaceRaised: '#110d26',
-    },
-    // "Stark — Noite": azul frio e verde de terminal, para pouca luz.
-    stark: {
+    label: 'Crepúsculo', rotulo: 'Stark — Noite',
+    face: {
       blobs: ['#1a2a3a', '#123a35', '#20283a'],
       primary: '#7fb8d8', accent: '#64ffda', primarySoft: 'rgba(127,184,216,0.18)',
       background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12',
-    },
-    // "Renascença — Roma": ouro e verdete.
-    renascenca: {
-      blobs: ['#3a4a24', '#5a4214', '#2a2416'],
-      primary: '#c7a35a', accent: '#6f9a5b', primarySoft: 'rgba(199,163,90,0.20)',
-      background: '#0f0d09', surface: '#1c1810', surfaceRaised: '#16130c',
     },
   },
 };
@@ -252,8 +190,7 @@ const temas: Record<ThemeName, { label: string; light: Face; dark: Face; stark: 
  * 🔴 Temas antigos, ainda gravados no `AsyncStorage` de quem já escolheu um.
  *
  * Sem esta tabela, um `elysium_theme` valendo `ocean` faria `palettes[name]` devolver
- * `undefined` e o app abrir sem paleta — tela quebrada, sem erro que explique. É a mesma
- * falha silenciosa que o desktop tratou ao aposentar os quatro temas dele.
+ * `undefined` e o app abrir sem paleta — tela quebrada, sem erro que explique.
  */
 export const TEMAS_APOSENTADOS: Record<string, ThemeName> = {
   default: 'crepusculo',
@@ -265,22 +202,9 @@ export const TEMAS_APOSENTADOS: Record<string, ThemeName> = {
 /** Traduz o que veio do disco. Devolve `null` quando o valor não serve para nada. */
 export function resolverNomeDeTema(bruto: string | null | undefined): ThemeName | null {
   if (!bruto) return null;
-  if (bruto in temas) return bruto as ThemeName;
+  if (bruto in STARK) return bruto as ThemeName;
   return TEMAS_APOSENTADOS[bruto] ?? null;
 }
-
-/**
- * O nome que o desktop dá a cada combinação.
- *
- * Fica numa tabela e não junto da cor porque a mesma cor tem nome diferente em cada
- * família — "Elísio" é "Vidro — Âmbar" no vidro e "Campos Elísios" na noite. Guardar o
- * par junto da face duplicaria a cor em dois lugares para acrescentar só um texto.
- */
-const ROTULOS: Record<ThemeName, Record<Familia, string>> = {
-  elisio:     { lg: 'Vidro — Âmbar', ely: 'Campos Elísios', stark: 'Stark — Mark',   renascenca: 'Renascença — Florença' },
-  mare:       { lg: 'Vidro — Maré',  ely: 'Éter',           stark: 'Stark — Reator', renascenca: 'Renascença — Veneza' },
-  crepusculo: { lg: 'Vidro Líquido', ely: 'Crepúsculo',     stark: 'Stark — Noite',  renascenca: 'Renascença — Roma' },
-};
 
 /** `#rrggbb` → [r, g, b]. Só aceita hex de 6 dígitos, que é o que as faces usam. */
 function canais(hex: string): [number, number, number] {
@@ -301,159 +225,65 @@ export function comAlfa(hex: string, alfa: number): string {
   return `rgba(${r},${g},${b},${alfa})`;
 }
 
-/**
- * 🔴 A TINTA DO VIDRO VEM DA PALETA, NÃO DO BRANCO.
- *
- * Branco puro em alfa alto é literalmente a definição de "leitoso" — foi o que o véu do
- * `GlassSurface` fazia, e é o que se vê quando um painel translúcido some no fundo claro.
- * Aqui a base é a cor da superfície do tema puxada um pouco na direção da primária: no
- * vidro, branco com 10% de primária; na noite, a `surface` com 14%. O painel passa a
- * mostrar COR e luz difusa em vez de formas do fundo, que é o desenho do One UI.
- *
- * Os alfas sobem em escada conforme a superfície precise ser LIDA:
- * card < barra < gaveta < painel de texto.
- */
-function vidro(face: Face, familia: Familia) {
-  const noite = familiaEscura(familia);
-  // Fase 23.1: na noite a base é a superfície do tema com só 4% da primária (era 14%): no PC
-  // o card é a `--surface` quase pura, e a tinta forte deixava o celular "colorido demais".
-  const base = noite ? misturar(face.surface, face.primary, 0.04) : misturar('#FFFFFF', face.primary, 0.10);
-  // 🔴 Bloco 70: a noite quase não tem desfoque (GlassFill limita a 10), então a tinta é
-  // o que segura a leitura — subiu de 0,26/0,42 para 0,62/0,74. O dia baixou um pouco
-  // (0,34 → 0,30) porque ganhou aresta especular e lente, que já dão presença ao card.
+function buildStark(name: ThemeName): Palette {
+  const { label, rotulo, face } = STARK[name];
+  // Painel quase sólido: a superfície do tema com 4% da primária.
+  const base = misturar(face.surface, face.primary, 0.04);
   return {
-    // Bloco 128: a noite virou painel quase sólido (era 0,62/0,74) — sem vidro, só o véu do blur leve.
-    glassSurface: comAlfa(base, noite ? 0.9 : 0.30),
-    glassSurfaceStrong: comAlfa(base, noite ? 0.90 : 0.48),
-    // Gaveta e painel são quase opacos de propósito: o critério de aceite é texto legível
-    // sobre QUALQUER fundo, inclusive sobre uma mancha clara passando por baixo.
-    glassSheet: comAlfa(base, noite ? 0.94 : 0.88),
-    glassPanel: comAlfa(base, noite ? 0.96 : 0.92),
+    name, label, rotulo, familia: 'stark', ...face,
+    surface3: misturar(face.surface, '#ffffff', 0.06),
+    // Bordas com um fio da cor do reator, como as linhas de um HUD.
+    border: comAlfa(face.primary, 0.18),
+    text: '#EEF1F6', textMuted: '#9AA3B2', textFaint: '#6f7889',
+    onPrimary: '#FFFFFF',
+    error: '#FF6B6B', errorSoft: 'rgba(255,107,107,0.16)', success: '#4ADE80',
+    bolhaMinha: comAlfa(face.primary, 0.18), bolhaMinhaBorda: comAlfa(face.primary, 0.35),
+    bolhaEla: 'rgba(255,255,255,0.05)', bolhaElaBorda: comAlfa(face.primary, 0.18),
+    glassSurface: comAlfa(base, 0.9), glassSurfaceStrong: comAlfa(base, 0.9),
+    glassBorder: comAlfa(face.primary, 0.22),
+    glassBackdrop: 'rgba(0,0,0,0.55)',
+    glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
+    glassSheet: comAlfa(base, 0.94), glassPanel: comAlfa(base, 0.96),
+    blurTint: 'dark',
+    fontes: null,
   };
 }
 
-function build(name: ThemeName, familia: Familia): Palette {
-  const tema = temas[name];
-  const face = familia === 'stark' ? tema.stark : familia === 'renascenca' ? tema.renascenca : familia === 'ely' ? tema.dark : tema.light;
-  const neutros = familiaEscura(familia) ? { ...neutrosEscuro, familia } : neutrosClaro;
-  return {
-    name, label: tema.label, rotulo: ROTULOS[name][familia],
-    ...neutros, ...face, ...vidro(face, familia),
-    // Stark: bordas com um fio da cor do reator, como as linhas de um HUD.
-    ...(familia === 'stark' ? { border: comAlfa(face.primary, 0.18), glassBorder: comAlfa(face.primary, 0.22) } : {}),
-    // Renascença: filete de ouro e tinta de pergaminho.
-    ...(familia === 'renascenca' ? { border: comAlfa(face.primary, 0.32), glassBorder: comAlfa(face.primary, 0.45), text: '#EFE4C8', textMuted: '#A08F6C', onPrimary: '#2A1A08' } : {}),
-  };
-}
-
-/**
- * A ordem em que as três cores aparecem na tela — a MESMA do `THEMES` do
- * `dashboard.html`, que lista Vidro Líquido, Maré e Âmbar nessa sequência. Estava
- * invertida, e as duas telas do mesmo ecossistema mostravam a mesma lista em ordens
- * diferentes.
- */
+/** A ordem em que as cores aparecem na tela — a mesma do `THEMES` do desktop. */
 const names: ThemeName[] = ['crepusculo', 'mare', 'elisio'];
 
-/** Família Vidro Líquido — os três `lg` do desktop. */
+/** As três cores da Stark (é a única família que varia por cor). */
 export const palettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, build(n, 'lg')]),
-) as Record<ThemeName, Palette>;
-
-/** Família ELYSIUM — os três `ely` do desktop. */
-export const darkPalettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, build(n, 'ely')]),
-) as Record<ThemeName, Palette>;
-
-/** Família Stark (fase 16). */
-export const starkPalettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, build(n, 'stark')]),
-) as Record<ThemeName, Palette>;
-
-/** Família Renascença (13/10): ouro, molduras e arte de estudo. */
-export const renascencaPalettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, build(n, 'renascenca')]),
+  names.map(n => [n, buildStark(n)]),
 ) as Record<ThemeName, Palette>;
 
 export function getPalette(name: ThemeName, familia: Familia): Palette {
-  return familia === 'stark' ? starkPalettes[name] : familia === 'renascenca' ? renascencaPalettes[name] : familia === 'ely' ? darkPalettes[name] : palettes[name];
+  if (familia === 'dark') return { ...DARK, name };
+  if (familia === 'glass') return { ...GLASS, name };
+  return palettes[name];
 }
 
 /**
- * Traduz a escolha de família guardada no disco.
+ * Traduz a família guardada no disco (chave `elysium_color_scheme`).
  *
- * ⚠️ A chave gravada continua sendo `elysium_color_scheme`, com os valores antigos
- * `light`/`dark`/`system`. Renomear a chave só traria o risco de despareamento silencioso
- * que o handoff descreve, e não traria nada: o que mudou foi o vocabulário na tela, não o
- * significado do valor. `light` sempre quis dizer vidro e `dark` sempre quis dizer noite.
+ * Os valores das famílias que saíram (`lg`/`light`, `ely`, `renascenca`, `minimal`,
+ * `auto`/`system`) caem no Dark. `dark` sempre quis dizer "a noite", e continua.
  */
 export function resolverFamiliaEscolhida(bruto: string | null | undefined): FamiliaEscolha | null {
   switch (bruto) {
+    case 'dark':
+    case 'glass':
+    case 'stark':
+      return bruto;
     case 'lg':
-    case 'light':  return 'lg';
+    case 'light':
     case 'ely':
-    case 'dark':   return 'ely';
-    case 'stark':  return 'stark';
-    case 'renascenca': return 'renascenca';
-    case 'minimal': return 'minimal';
+    case 'renascenca':
+    case 'minimal':
     case 'auto':
-    case 'system': return 'auto';
-    default:       return null;
+    case 'system':
+      return 'dark';
+    default:
+      return null;
   }
-}
-
-// ── Tema Minimal (20/10) ──────────────────────────────────────────────────────
-// Pedido do Zak: "um tema 100% minimalista, seguindo a cor padrão do dispositivo". Claro ou
-// escuro como o aparelho, superfícies neutras e um acento só — a cor de destaque do sistema
-// quando o app consegue ler (Android 12+, módulo nativo do APK 2.4); sem ela, um cinza neutro.
-// A mesma conta do PC (`elysium/src/services/paletaMinimal.ts`).
-
-function luminancia(hex: string): number {
-  const [r, g, b] = canais(hex).map((v) => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** Contraste WCAG entre dois hex. */
-export function contraste(a: string, b: string): number {
-  const [l1, l2] = [luminancia(a), luminancia(b)].sort((x, y) => y - x);
-  return (l1 + 0.05) / (l2 + 0.05);
-}
-
-/** A paleta do Minimal. `destaque` = `#rrggbb` do sistema, ou null para o acento neutro. */
-export function paletaMinimal(escuro: boolean, destaque: string | null, name: ThemeName = 'mare'): Palette {
-  const background = escuro ? '#101012' : '#FFFFFF';
-  const surface = escuro ? '#18181B' : '#F6F6F7';
-  const valido = destaque && /^#[0-9a-f]{6}$/i.test(destaque) ? destaque : null;
-  let primary = valido ?? (escuro ? '#E4E4E7' : '#18181B');
-  // Um destaque que some no fundo (amarelo no branco, marinho no preto) é empurrado até ler.
-  for (let i = 0; i < 10 && contraste(primary, background) < 3; i++) primary = misturar(primary, escuro ? '#FFFFFF' : '#000000', 0.15);
-  const border = escuro ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
-  return {
-    name, label: 'Minimal', rotulo: 'Minimal — do sistema',
-    familia: escuro ? 'ely' : 'lg',
-    minimal: true,
-    primary,
-    primarySoft: comAlfa(primary, escuro ? 0.16 : 0.10),
-    accent: escuro ? '#A1A1AA' : '#52525B',
-    background, surface, surfaceRaised: escuro ? '#141416' : '#EFEFF1',
-    border,
-    text: escuro ? '#F4F4F5' : '#18181B',
-    textMuted: escuro ? '#A1A1AA' : '#6B6B73',
-    onPrimary: contraste('#FFFFFF', primary) >= 3 ? '#FFFFFF' : '#18181B',
-    error: escuro ? '#FF6B6B' : '#C0392B',
-    errorSoft: escuro ? 'rgba(255,107,107,0.16)' : '#F8D7DA',
-    success: escuro ? '#4ADE80' : '#2E8B47',
-    // Sem vidro: tudo sólido, sem brilho.
-    glassSurface: surface,
-    glassSurfaceStrong: surface,
-    glassBorder: border,
-    glassBackdrop: escuro ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.3)',
-    glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
-    glassPanel: background,
-    glassSheet: background,
-    blurTint: escuro ? 'dark' : 'light',
-    blobs: [background, background, background],
-  };
 }

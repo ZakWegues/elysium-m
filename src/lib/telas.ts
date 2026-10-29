@@ -125,7 +125,10 @@ function cor(v: string | undefined, reserva: string): string {
 }
 
 /** O tema da tela a partir da paleta do app: as mesmas cores da bolha. Pura. */
-export function temaDaPaleta(p: Pick<Palette, 'background' | 'surface' | 'text' | 'textMuted' | 'primary'>, reduzirMovimento = false) {
+export function temaDaPaleta(
+  p: Pick<Palette, 'background' | 'surface' | 'text' | 'textMuted' | 'primary'> & Partial<Pick<Palette, 'familia' | 'surfaceRaised' | 'border' | 'textFaint' | 'accent' | 'success'>>,
+  reduzirMovimento = false,
+) {
   const escuro = luminancia(p.background) < 0.5;
   const destaque = cor(p.primary, '#8b7cf6');
   return {
@@ -134,13 +137,54 @@ export function temaDaPaleta(p: Pick<Palette, 'background' | 'surface' | 'text' 
       '--iui-canvas': cor(p.surface, escuro ? '#131726' : '#ffffff'),
       '--iui-ink': cor(p.text, escuro ? '#eef1f6' : '#14161a'),
       '--iui-muted': cor(p.textMuted, escuro ? '#9aa4b5' : '#5b6574'),
-      '--iui-faint': cor(p.textMuted, escuro ? '#9aa4b5' : '#5b6574'),
+      '--iui-faint': cor(p.textFaint ?? p.textMuted, escuro ? '#9aa4b5' : '#5b6574'),
       '--iui-on-ink': cor(p.background, escuro ? '#0a0c14' : '#ffffff'),
       '--iui-accent': destaque,
       '--iui-on-accent': luminancia(destaque) > 0.5 ? '#111118' : '#ffffff',
+      ...(p.familia ? varsDaFamilia(p as Palette) : {}),
     },
     reduzirMovimento,
   } as const;
+}
+
+/**
+ * 29/10: as telas geradas no visual do tema — superfícies, fios, raios e a paleta dos
+ * gráficos do Dark (`dark.css`) ou da Glass (`glass.css`). A Stark fica com o padrão.
+ */
+function varsDaFamilia(p: Palette): Record<string, string> {
+  if (p.familia === 'dark') {
+    return {
+      '--iui-surface': cor(p.surfaceRaised, '#14161c'),
+      '--iui-surface-strong': '#1c1f27',
+      '--iui-border': cor(p.border, '#242832'),
+      '--iui-border-strong': '#2c3140',
+      '--iui-radius-lg': '18px',
+      '--iui-radius-xl': '22px',
+      '--iui-success': cor(p.success, '#58d7a2'),
+      '--iui-chart-2': '#58d7a2',
+      '--iui-chart-3': '#ffb86b',
+      '--iui-chart-4': '#ff7aa8',
+      '--iui-font': 'Manrope, system-ui, sans-serif',
+      '--iui-mono': '"JetBrains Mono", ui-monospace, monospace',
+    };
+  }
+  if (p.familia === 'glass') {
+    return {
+      '--iui-surface': 'rgba(255,255,255,0.08)',
+      '--iui-surface-strong': 'rgba(255,255,255,0.14)',
+      '--iui-border': 'rgba(255,255,255,0.16)',
+      '--iui-border-strong': 'rgba(255,255,255,0.30)',
+      '--iui-radius-lg': '20px',
+      '--iui-radius-xl': '26px',
+      '--iui-success': cor(p.success, '#5af0b0'),
+      '--iui-chart-2': cor(p.accent, '#b79bff'),
+      '--iui-chart-3': '#19d3c5',
+      '--iui-chart-4': '#ff4fa3',
+      '--iui-chart-5': '#ffb86b',
+      '--iui-font': 'Figtree, system-ui, sans-serif',
+    };
+  }
+  return {};
 }
 
 /** O que a WebView recebe: chama a ponte do renderer (window.__elyHost). Pura. */

@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useBlurTarget } from './BlurTarget';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -58,6 +59,14 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  */
 const BLUR_NOITE = 6;
 
+/**
+ * 29/10 — o design novo do Zak (`dark.css` / `glass.css`):
+ *
+ * · **Dark**: superfície chapada, sem desfoque nem brilho (o `.dk-card`).
+ * · **Glass**: o vidro líquido do `glass.css` — desfoque, gradiente de 160°, a luz
+ *   radial no canto de cima e o aro claro no topo. Tudo View/gradiente, nada por quadro.
+ * · **Stark**: como antes — painel quase sólido com um véu de desfoque mínimo.
+ */
 export function GlassFill({
   intensity = 40,
   strong = false,
@@ -73,25 +82,20 @@ export function GlassFill({
   /** Sobrepõe a tinta da paleta. Usado pela gaveta, que é a exceção de alfa alto. */
   tintColor?: string;
 }) {
-  const { palette, familiaResolvida } = useTheme();
+  const { palette } = useTheme();
   const blurTarget = useBlurTarget();
-  const noite = familiaResolvida !== 'lg';
-  // Minimal (20/10): superfície sólida, sem desfoque nem brilho.
-  const liso = !!palette.minimal;
-  // Noite: blur "extremamente levinho". Dia: um pouco mais que antes, para o vidro
-  // parecer espesso (o desfoque é o que dá a sensação de material).
-  const forca = noite ? BLUR_NOITE : Math.min(100, Math.round(intensity * 1.25));
+  const vidro = palette.familia === 'glass';
+  const chapado = palette.familia === 'dark';
+  const forca = vidro ? Math.min(100, Math.round(intensity * 1.1)) : BLUR_NOITE;
 
   return (
     <>
-      {blur && forca > 0 && !liso && (
+      {blur && !chapado && (
       <BlurView
         intensity={forca}
-        // Tinta clara sobre fundo escuro deixaria o vidro leitoso e clarearia a tela
-        // inteira; a paleta diz qual usar.
-        tint={palette.blurTint}
+        // Na Glass o vidro é claro sobre a cena índigo; na Stark, tinta escura.
+        tint={vidro ? 'default' : palette.blurTint}
         // Sem alvo, o método do Android avisa no console e cai pro 'none' sozinho.
-        // Pedir 'none' direto dá o mesmo resultado visual, sem o aviso.
         blurMethod={blurTarget ? 'dimezisBlurViewSdk31Plus' : 'none'}
         blurTarget={blurTarget}
         style={StyleSheet.absoluteFill}
@@ -103,55 +107,54 @@ export function GlassFill({
           { backgroundColor: tintColor ?? (strong ? palette.glassSurfaceStrong : palette.glassSurface) },
         ]}
       />
-      {edge && !noite && !liso && (
-        <>
-          {/* Brilho difuso na aresta de cima — o que sempre existiu, agora só no dia. */}
-          <LinearGradient colors={palette.glassSheen} locations={[0, 1]} pointerEvents="none" style={styles.sheen} />
-          {/* A lente: luz refratando na curva do canto de onde ela vem. */}
-          <View pointerEvents="none" style={styles.lente} />
-          {/* Sombra interna no pé: o vidro é mais denso embaixo. */}
-          <LinearGradient
-            colors={['rgba(20,24,40,0)', 'rgba(20,24,40,0.07)']}
-            locations={[0, 1]}
-            pointerEvents="none"
-            style={styles.pe}
-          />
-        </>
-      )}
-      {edge && !noite && !liso && (
-        // Aresta especular: um fio de luz no topo e à esquerda — só no dia (bloco 128).
-        <>
-          <LinearGradient
-            colors={noite ? ['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.02)'] : ['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.15)']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            pointerEvents="none"
-            style={styles.fioTopo}
-          />
-          <LinearGradient
-            colors={noite ? ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0)'] : ['rgba(255,255,255,0.8)', 'rgba(255,255,255,0)']}
-            start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-            pointerEvents="none"
-            style={styles.fioEsq}
-          />
-        </>
-      )}
+      {vidro && edge && <BrilhoDeVidro />}
+    </>
+  );
+}
+
+/**
+ * O material do `.lg` do `glass.css`: gradiente de 160° (0,15 → 0,04 → 0,10), a luz
+ * radial no canto de cima à esquerda (0,30 até a metade) e o aro de luz no topo — o
+ * `inset 0 1px` mais o gradiente da borda, que é mais forte em cima e nas pontas.
+ */
+export function BrilhoDeVidro() {
+  return (
+    <>
+      <LinearGradient
+        colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.10)']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0.33, y: 0 }} end={{ x: 0.67, y: 1 }}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
+      <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+        <Defs>
+          <RadialGradient id="luzDoVidro" cx="10%" cy="0%" rx="130%" ry="90%" fx="10%" fy="0%">
+            <Stop offset="0" stopColor="#ffffff" stopOpacity={0.3} />
+            <Stop offset="0.52" stopColor="#ffffff" stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#luzDoVidro)" />
+      </Svg>
+      <LinearGradient
+        colors={['rgba(255,255,255,0.80)', 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.48)']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        pointerEvents="none"
+        style={styles.fioTopo}
+      />
+      <LinearGradient
+        colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+        pointerEvents="none"
+        style={styles.fioEsq}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  // Altura fixa e não proporcional: o brilho é um reflexo na aresta, e reflexo não cresce
-  // junto com o card. Num card alto, uma fração da altura viraria de novo um véu.
-  sheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 44 },
-  fioTopo: { position: 'absolute', top: 0, left: 0, right: 0, height: 1.5 },
-  fioEsq: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 1.5 },
-  // Um círculo branco grande e quase transparente, meio para fora do canto: a parte que
-  // fica dentro é a "lente". Sem blur nativo, a suavidade vem do raio e do alfa baixo.
-  lente: {
-    position: 'absolute', top: -70, left: -60, width: 180, height: 140, borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  pe: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 40 },
+  fioTopo: { position: 'absolute', top: 0, left: 0, right: 0, height: 1.2 },
+  fioEsq: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 1 },
 });
 
 /**
@@ -229,8 +232,8 @@ export function GlassCircle({
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
-          borderWidth: palette.familia === 'renascenca' ? 1 : StyleSheet.hairlineWidth,
-          borderColor: palette.familia === 'ely' ? 'transparent' : palette.familia === 'renascenca' ? palette.primary : palette.glassBorder,
+          borderWidth: palette.familia === 'glass' ? 1 : StyleSheet.hairlineWidth,
+          borderColor: palette.familia === 'dark' ? palette.border : palette.glassBorder,
           opacity: disabled ? 0.45 : 1,
         },
         style,
@@ -239,10 +242,6 @@ export function GlassCircle({
     >
       {/* Meio-termo: o botão tem ícone, não texto corrido, e sobe menos que os painéis. */}
       <GlassFill intensity={45} edge={false} tintColor={ativo ? palette.primarySoft : undefined} />
-      {/* Fase 22: moeda da Renascença — um filete de ouro por dentro da borda. */}
-      {palette.familia === 'renascenca' && (
-        <View pointerEvents="none" style={{ position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderRadius: size / 2, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.primary, opacity: 0.6 }} />
-      )}
       {children}
     </AnimatedPressable>
   );

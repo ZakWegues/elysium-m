@@ -1,37 +1,38 @@
 import { StyleSheet, View, ViewProps } from 'react-native';
 import { useTheme } from '../../theme';
 import { GlassFill } from './GlassSurface';
-import { CantosHud, CantosOrnamentados } from './Ornamentos';
+import { CantosHud } from './Ornamentos';
 
 /**
  * `glass` dá a tinta e a borda de vidro; `blur` — desligado por padrão — é que liga o
  * desfoque real. Ver o comentário de `GlassFill`: seis cards de vidro na mesma tela eram
  * seis recapturas por quadro de rolagem, e é isso que fazia a Início engasgar.
+ *
+ * 29/10: na Glass todo card é vidro (o `.lg` do design); no Dark é o `.dk-card` chapado.
  */
 export function Card({ glass = false, blur = false, style, children, ...rest }: ViewProps & { glass?: boolean; blur?: boolean }) {
   const { palette, tokens } = useTheme();
-  // 13/10: na Renascença o card vira moldura dourada, de canto quase reto e volutas.
-  const renascenca = palette.familia === 'renascenca';
+  const vidro = glass || palette.familia === 'glass';
+  const stark = palette.familia === 'stark';
 
   return (
     <View
       style={[
         {
           // Stark: canto mais reto, senão o arredondado engole as cantoneiras HUD.
-          borderRadius: renascenca ? 5 : palette.familia === 'stark' ? 14 : tokens.radii.lg,
-          borderWidth: glass ? 1 : StyleSheet.hairlineWidth,
-          borderColor: glass ? palette.glassBorder : palette.border,
+          borderRadius: stark ? 14 : 22,
+          borderWidth: stark ? StyleSheet.hairlineWidth : 1,
+          borderColor: vidro ? palette.glassBorder : palette.border,
           padding: tokens.spacing.lg,
           overflow: 'hidden',
         },
-        !glass && { backgroundColor: palette.surface },
+        !vidro && { backgroundColor: palette.surface },
         style,
       ]}
       {...rest}
     >
-      {glass && <GlassFill intensity={45} blur={blur} />}
-      {renascenca && <CantosOrnamentados cor={palette.primary} />}
-      {palette.familia === 'stark' && <CantosHud cor={palette.primary} />}
+      {vidro && <GlassFill intensity={45} blur={blur} />}
+      {stark && <CantosHud cor={palette.primary} />}
       {children}
     </View>
   );
