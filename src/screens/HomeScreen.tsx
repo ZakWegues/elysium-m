@@ -1,3 +1,4 @@
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { lembrado, lembrar } from '../lib/conexao/cache';
 import { AtualizadoHa } from '../components/ui/AtualizadoHa';
@@ -71,6 +72,7 @@ export default function HomeScreen({
   pedidoBusca?: number;
 }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
   const aoRolar = useRolagemDaBarra();
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -479,7 +481,7 @@ export default function HomeScreen({
       <ScrollView
         onScroll={aoRolar}
         scrollEventThrottle={32}
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={puxando} onRefresh={async () => { setPuxando(true); try { await carregar(); } finally { setPuxando(false); } }} tintColor={palette.primary} colors={[palette.primary]} />}
         // Só para de rolar enquanto um arrasto está REALMENTE em curso. Antes isto era

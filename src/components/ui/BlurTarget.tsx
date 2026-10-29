@@ -36,3 +36,26 @@ export function BlurTargetProvider({ children }: { children: ReactNode }) {
     </BlurTargetContext.Provider>
   );
 }
+
+/**
+ * 31/10: o alvo da BARRA DE ABAS. Ela flutua por cima das telas e precisa desfocar o que
+ * passa por baixo dela (cards, texto), não só o fundo — então o alvo dela envolve fundo E
+ * telas. Fica separado do alvo dos cards: um card dentro das telas não pode desfocar uma
+ * árvore que contém ele mesmo.
+ */
+const BarraBlurContext = createContext<React.RefObject<View | null> | null>(null);
+
+export function useBlurDaBarra(): React.RefObject<View | null> | undefined {
+  return useContext(BarraBlurContext) ?? undefined;
+}
+
+export function BarraBlurProvider({ children }: { children: ReactNode }) {
+  const ref = useRef<View | null>(null);
+  return (
+    <BarraBlurContext.Provider value={ref}>
+      <BlurTargetView ref={ref} style={{ flex: 1 }} collapsable={false}>
+        {children}
+      </BlurTargetView>
+    </BarraBlurContext.Provider>
+  );
+}

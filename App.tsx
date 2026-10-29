@@ -20,8 +20,9 @@ import { clearPairing, idDoPc, loadPairing, savePairing, trocarPc, Pairing } fro
 import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
-import { TabBar, Screen } from './src/components/TabBar';
-import { AjustesProvider, AppBackground, BlurTargetProvider, GlassModal, SobreposicaoContext } from './src/components/ui';
+import { FOLGA_DA_BARRA, TabBar, Screen } from './src/components/TabBar';
+import { FolgaDaBarraContext } from './src/lib/folgaBarra';
+import { AjustesProvider, AppBackground, BarraBlurProvider, BlurTargetProvider, GlassModal, SobreposicaoContext } from './src/components/ui';
 import { CamadaEstouros, registrarToque } from './src/components/Estouros';
 import { IndicadorConexao } from './src/components/conexao/IndicadorConexao';
 import { useConnection } from './src/lib/useConnection';
@@ -198,7 +199,11 @@ function AppInner() {
   const [abrindo, setAbrindo] = useState(true);
   const { status, estado: estadoConexao, ultimoContato, bloqueadoAte, recheck, scanning, scanProgress, runScan, hasTunnel } =
     useConnection(pairing, handlePairingUpdate);
-  const keyboard = useKeyboard();
+  // 31/10: a raiz mede onde o teclado começa de verdade (ver useKeyboard).
+  const raizRef = useRef<View>(null);
+  const keyboard = useKeyboard(raizRef);
+  // A barra de abas sai de cena com o teclado aberto ou com uma gaveta por cima.
+  const barraNaTela = !keyboard.visible && sobreposicoes === 0;
   const insets = useSafeAreaInsets();
 
   const refreshQueueCount = useCallback(async () => {
@@ -476,10 +481,14 @@ function AppInner() {
     // de abas porque gaveta não é destino de navegação.
     <AjustesProvider abrir={() => setSettingsModalVisible(true)}>
     <SobreposicaoContext.Provider value={sobreposicao}>
-    <View style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}
+    <View ref={raizRef} collapsable={false} style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}
       onTouchStart={(e) => registrarToque(e.nativeEvent.pageX, e.nativeEvent.pageY)}>
-      {/* Só o fundo entra no alvo de desfoque. Incluir as telas faria cada card de
-          vidro tentar desfocar uma árvore que o contém. */}
+      {/* 31/10: o alvo da barra de abas envolve fundo E telas — ela flutua por cima e
+          desfoca o que passa por baixo. A folga diz às telas quanto sobrar no fim. */}
+      <FolgaDaBarraContext.Provider value={barraNaTela ? insets.bottom + FOLGA_DA_BARRA : 0}>
+      <BarraBlurProvider>
+      {/* Só o fundo entra no alvo de desfoque dos cards. Incluir as telas faria cada card
+          de vidro tentar desfocar uma árvore que o contém. */}
       <BlurTargetProvider>
         <AppBackground />
       </BlurTargetProvider>
@@ -538,6 +547,10 @@ function AppInner() {
           </AbaViva>
         )}
       </TelaAnimada>
+      </BarraBlurProvider>
+      </FolgaDaBarraContext.Provider>
+      {/* A barra e os avisos flutuam numa camada por cima das telas. */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: keyboard.height }}>
       {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area
           que cada ScreenHeader já aplica. */}
       {/* Sem a barra de abas (gaveta aberta), os avisos ficavam debaixo da barra de gestos do
@@ -560,9 +573,10 @@ function AppInner() {
       </View>
       {/* Sai de cena enquanto o usuário digita: com o teclado aberto sobra pouca
           altura, e a barra empurraria a caixa de texto pra fora da vista. */}
-      {!keyboard.visible && sobreposicoes === 0 && (
+      {barraNaTela && (
         <TabBar active={screen} onNavigate={setScreen} badges={{ chat: mailboxUnread }} />
       )}
+      </View>
       {/* Fase 22: no Chat a esfera já mostra a fala — a pílula só aparece nas outras abas. */}
       {screen !== 'chat' && <FalaFlutuante />}
       <StatusBar style="auto" />

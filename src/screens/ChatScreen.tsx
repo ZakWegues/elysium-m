@@ -1,3 +1,4 @@
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { CartaoErro, textoDoErro } from '../components/chat/CartaoErro';
 import { limiaresDaGravacao } from '../lib/silencio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,7 +37,7 @@ import CameraAsk from './CameraAsk';
 import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text, VIDRO_BOTAO } from '../components/ui';
 import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
@@ -91,6 +92,7 @@ export default function ChatScreen({
   semCabecalho?: boolean;
 }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   // 22.1: começa vazia — a esfera é a tela de boas-vindas (a bolha de texto era ruído).
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   // Fase 23.1: o nome que a Início guardou, para a saudação sob a esfera.
@@ -1225,13 +1227,13 @@ export default function ChatScreen({
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
           {(modosLista ?? []).filter(m => `modo ${m.nome}`.toLowerCase().includes(barra.trim())).map(m => (
             <Pressable key={`modo-${m.id}`} onPress={() => escolherModo(m.id)} accessibilityLabel={`Ligar o modo ${m.nome}`}
-              style={[styles.sugestao, { borderColor: modo?.id === m.id ? palette.primary : palette.glassBorder, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}>
+              style={[styles.sugestao, VIDRO_BOTAO, { borderRadius: tokens.radii.lg }, modo?.id === m.id && { borderColor: palette.primary }]}>
               <Text variant="caption" color={palette.text}>{m.icone} Modo {m.nome}</Text>
             </Pressable>
           ))}
           {(comandosIa ?? []).filter(c => c.nome.toLowerCase().includes(barra.trim())).map(c => (
             <Pressable key={c.id} onPress={() => setDraft(`/${c.nome} `)}
-              style={[styles.sugestao, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.lg }]}>
+              style={[styles.sugestao, VIDRO_BOTAO, { borderRadius: tokens.radii.lg }]}>
               <Text variant="caption" color={palette.text}>{c.nome}</Text>
             </Pressable>
           ))}
@@ -1242,7 +1244,7 @@ export default function ChatScreen({
       {/* Fase 20: o modo ligado. O ✕ sai; tocar no nome abre a lista pelo "/". */}
       {modo && faixas.includes('modo') && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
-          <View style={[styles.chipModo, { borderColor: palette.primary, backgroundColor: palette.primarySoft, borderRadius: tokens.radii.full }]}>
+          <View style={[styles.chipModo, VIDRO_BOTAO, { borderColor: palette.primary, borderRadius: tokens.radii.full }]}>
             <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel={`Modo ${modo.nome} ligado. Toque para trocar`}>
               <Text variant="caption" color={palette.text}>{modo.icone}  Modo {modo.nome}</Text>
             </Pressable>
@@ -1286,7 +1288,8 @@ export default function ChatScreen({
       {/* A barra em si é tinta chapada: ela acompanha a lista, e desfocar uma faixa
           inteira por quadro é o custo que este bloco foi tirar da rolagem. Os BOTÕES é
           que viram vidro de verdade — são três regiões de 44 px, fixas. */}
-      <View style={{ overflow: 'hidden' }}>
+      {/* 31/10: a faixa vai até o fim da tela; a barra de abas flutua por cima da folga. */}
+      <View style={{ overflow: 'hidden', paddingBottom: folgaDaBarra }}>
         <GlassFill intensity={40} strong edge={false} blur={false} />
         <View
           style={[

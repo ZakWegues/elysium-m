@@ -1,3 +1,4 @@
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
@@ -48,6 +49,7 @@ export default function MailboxScreen({
   sessionId?: string | null;
 }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   const [messages, setMessages] = useState<MailboxMessage[]>([]);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -481,7 +483,7 @@ export default function MailboxScreen({
       />
 
       {/* Mesmo desenho do lado da IA: barra em tinta chapada, botões em vidro real. */}
-      <View style={{ overflow: 'hidden' }}>
+      <View style={{ overflow: 'hidden', paddingBottom: folgaDaBarra }}>
         <GlassFill intensity={40} strong edge={false} blur={false} />
         <View
           style={[

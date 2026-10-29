@@ -59,6 +59,17 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const BLUR_NOITE = 6;
 
 /**
+ * 31/10: o vidro líquido dos botões pequenos (topo das telas, atalhos, chips): tinta escura
+ * translúcida com borda clara fina — a mesma da barra de abas. Sem desfoque real: são muitos
+ * e o fundo colorido atrás já dá o efeito.
+ */
+export const VIDRO_BOTAO = {
+  backgroundColor: 'rgba(22,22,26,0.42)',
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: 'rgba(255,255,255,0.16)',
+} as const;
+
+/**
  * 30/10 — o vidro sem véu branco (o Zak: "leitoso, parece tinta branca por cima"):
  *
  * · **Dark** e **Stark**: painel quase sólido da cor do tema, com um desfoque mínimo (a
@@ -72,6 +83,7 @@ export function GlassFill({
   edge = true,
   blur = true,
   tintColor,
+  alvo,
 }: {
   intensity?: number;
   strong?: boolean;
@@ -80,11 +92,14 @@ export function GlassFill({
   blur?: boolean;
   /** Sobrepõe a tinta da paleta. Usado pela gaveta, que é a exceção de alfa alto. */
   tintColor?: string;
+  /** Outro alvo de desfoque (a barra de abas desfoca as telas, não só o fundo). */
+  alvo?: React.RefObject<View | null>;
 }) {
   const { palette } = useTheme();
-  const blurTarget = useBlurTarget();
+  const alvoPadrao = useBlurTarget();
+  const blurTarget = alvo ?? alvoPadrao;
   const vidro = palette.familia === 'glass';
-  const forca = vidro ? Math.min(90, Math.round(intensity * 1.2)) : BLUR_NOITE;
+  const forca = vidro || alvo ? Math.min(90, Math.round(intensity * 1.2)) : BLUR_NOITE;
 
   return (
     <>
@@ -201,6 +216,7 @@ export function GlassCircle({
           height: size,
           // 30/10: quadrado de canto suave, não bolha (o Zak achou as bolinhas estranhas).
           borderRadius: Math.round(size * 0.3),
+          ...VIDRO_BOTAO,
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
@@ -210,7 +226,7 @@ export function GlassCircle({
         estiloAnimado,
       ]}
     >
-      {/* Sem vidro nem borda: só o ícone. Aceso, ganha a tinta da cor do tema. */}
+      {/* Vidro dos botões; aceso, ganha a tinta da cor do tema. */}
       {ativo && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.primarySoft }]} />}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.09)' }, estiloRealce]} />
       {children}

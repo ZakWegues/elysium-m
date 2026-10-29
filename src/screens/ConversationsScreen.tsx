@@ -1,3 +1,4 @@
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View, Alert } from 'react-native';
 import { conversaEmMarkdown } from '../lib/exportarConversa';
@@ -38,6 +39,7 @@ export default function ConversationsScreen({
   onBack: () => void;
 }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -129,7 +131,7 @@ export default function ConversationsScreen({
           </View>
         }
       />
-      <Animated.ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}>
+      <Animated.ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
         <Button title="+ Nova conversa" onPress={onNew} />
 
         <View style={[styles.busca, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>

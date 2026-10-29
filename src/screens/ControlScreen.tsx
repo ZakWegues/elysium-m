@@ -1,3 +1,4 @@
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -93,6 +94,7 @@ export default function ControlScreen({
   pedidoTrackpad?: number;
 }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
   const aoRolar = useRolagemDaBarra();
   const [trackpadOpen, setTrackpadOpen] = useState(false);
@@ -117,7 +119,7 @@ export default function ControlScreen({
     <View style={{ flex: 1 }}>
       <ScreenHeader title="PC" />
 
-      <ScrollView onScroll={aoRolar} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
+      <ScrollView onScroll={aoRolar} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
         <MirrorPanel pairing={pairing} onError={handleError} />
 
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}

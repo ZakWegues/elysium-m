@@ -6,7 +6,7 @@ import { Pairing } from '../lib/pairing';
 import { getActiveSessionId, setActiveSessionId } from '../lib/mailboxStore';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassCircle, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, ScreenHeader, Text, VIDRO_BOTAO } from '../components/ui';
 import ChatScreen from './ChatScreen';
 import MailboxScreen from './MailboxScreen';
 import MailboxHistorico from './MailboxHistorico';
@@ -192,13 +192,13 @@ function SwitchModo({
   return (
     <View
       onLayout={e => setLargura(e.nativeEvent.layout.width)}
-      style={[styles.switch, { borderRadius: tokens.radii.full, borderColor: palette.glassBorder, backgroundColor: palette.primarySoft }]}
+      style={[styles.switch, VIDRO_BOTAO, { borderRadius: tokens.radii.full }]}
     >
       {/* O polegar é um irmão atrás dos dois botões: o texto ativo não precisa de fundo
           próprio, e a troca é um único translate. */}
       <Animated.View
         pointerEvents="none"
-        style={[styles.polegar, { borderRadius: tokens.radii.full, backgroundColor: palette.surfaceRaised }, polegarStyle]}
+        style={[styles.polegar, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.bolhaMinhaBorda }, polegarStyle]}
       />
       {(['ia', 'pc'] as const).map(m => (
         <Pressable

@@ -11,7 +11,7 @@ import { errMessage } from '../../lib/errors';
 import { falar, pararDeFalar, useFala } from '../../lib/falar';
 import { useTheme } from '../../theme';
 import { SpotifyBar } from '../SpotifyPlayer';
-import { MetricBar, Text } from '../../components/ui';
+import { MetricBar, Text, VIDRO_BOTAO } from '../../components/ui';
 import type { DefCard } from './tipos';
 
 /**
@@ -547,7 +547,7 @@ function Atalhos({
         <Pressable
           key={i.chave}
           onPress={i.acao}
-          style={[styles.ladrilho, { borderRadius: tokens.radii.lg, backgroundColor: palette.primarySoft }]}
+          style={({ pressed }) => [styles.ladrilho, VIDRO_BOTAO, { borderRadius: tokens.radii.lg, opacity: pressed ? 0.75 : 1 }]}
         >
           <Feather name={i.icone} size={20} color={palette.primary} />
           <Text variant="label" color={palette.primary}>{i.label}</Text>

@@ -11,7 +11,10 @@ import { reduzirUI } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { mostrarRotulos, rotulos } from '../lib/barraRolagem';
 import { comAlfa, useTheme } from '../theme';
-import { GlassFill, Text } from './ui';
+import { GlassFill, Text, useBlurDaBarra } from './ui';
+
+/** Altura da barra aberta (pílula de 64 + 6 de folga em cima + 8 embaixo), sem a área segura. */
+export const FOLGA_DA_BARRA = 78;
 
 /** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
 export type Screen = 'home' | 'chat' | 'hoje' | 'control' | 'conversations';
@@ -61,6 +64,7 @@ export function TabBar({
 }) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
+  const alvoDoDesfoque = useBlurDaBarra();
 
   // -1 quando a tela aberta não é aba nenhuma (Conversas): o seletor some.
   const indiceAtivo = TABS.findIndex((t) => t.screen === active);
@@ -162,7 +166,8 @@ export function TabBar({
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.fora, { paddingBottom: insets.bottom + 8 }, estiloFolga]}>
         <Animated.View style={[styles.pilula, estiloPilula]}>
-          <GlassFill intensity={50} edge={false} tintColor="rgba(28,28,30,0.72)" />
+          {/* Desfoca as telas que passam por baixo (alvo da barra), com tinta escura translúcida. */}
+          <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />
           <View style={styles.linha} onLayout={medir}>
             <Animated.View
               pointerEvents="none"
@@ -252,9 +257,12 @@ function Aba({
 const styles = StyleSheet.create({
   // Por fora não há fundo: só a folga do rodapé. A altura reservada é a da pílula aberta,
   // para o conteúdo não pular quando os nomes somem.
-  fora: { alignItems: 'center', justifyContent: 'flex-end', paddingTop: 6, minHeight: 70 },
+  // Por fora não há fundo nenhum: a barra flutua por cima das telas (App.tsx a põe numa
+  // camada absoluta), e as telas ganham folga no fim (`FOLGA_DA_BARRA`).
+  fora: { alignItems: 'center', justifyContent: 'flex-end', paddingTop: 6 },
   pilula: {
     maxWidth: 400, width: '100%', borderRadius: 999, overflow: 'hidden', justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)',
   },
   linha: { flexDirection: 'row', alignItems: 'stretch', flex: 1, paddingHorizontal: 6, paddingVertical: 6 },
   seletor: {

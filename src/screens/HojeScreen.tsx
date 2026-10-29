@@ -1,3 +1,4 @@
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
@@ -48,6 +49,7 @@ function restante(ms: number) {
 
 export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, onAbrirRotinas }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void; onAbrirRotinas?: () => void }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
   const aoRolar = useRolagemDaBarra();
   const { width: largura, height: altura } = useWindowDimensions();
@@ -320,7 +322,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
         onScroll={aoRolar}
         scrollEventThrottle={32}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: Math.max(120, tokens.spacing.lg + folgaDaBarra) }}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={puxar} tintColor={palette.primary} colors={[palette.primary]} />}
       >
         {!painel && !erro && <ActivityIndicator color={palette.primary} />}
