@@ -8,7 +8,7 @@ import { CantosHud } from './Ornamentos';
  * desfoque real. Ver o comentário de `GlassFill`: seis cards de vidro na mesma tela eram
  * seis recapturas por quadro de rolagem, e é isso que fazia a Início engasgar.
  *
- * 29/10: na Glass todo card é vidro (o `.lg` do design); no Dark é o `.dk-card` chapado.
+ * 30/10: na Glass todo card é vidro; cantos de 16 (o Zak não quer arredondamento demais).
  */
 export function Card({ glass = false, blur = false, style, children, ...rest }: ViewProps & { glass?: boolean; blur?: boolean }) {
   const { palette, tokens } = useTheme();
@@ -20,7 +20,7 @@ export function Card({ glass = false, blur = false, style, children, ...rest }: 
       style={[
         {
           // Stark: canto mais reto, senão o arredondado engole as cantoneiras HUD.
-          borderRadius: stark ? 14 : 22,
+          borderRadius: stark ? 14 : 16,
           borderWidth: stark ? StyleSheet.hairlineWidth : 1,
           borderColor: vidro ? palette.glassBorder : palette.border,
           padding: tokens.spacing.lg,

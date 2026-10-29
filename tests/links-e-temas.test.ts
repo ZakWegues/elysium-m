@@ -48,16 +48,20 @@ describe("temas (design de 29/10)", () => {
     for (const alvo of Object.values(TEMAS_APOSENTADOS)) expect(getPalette(alvo, "stark").name).toBe(alvo);
   });
 
-  it("Dark é o preto OLED do dark.css e Glass a cena do glass.css", () => {
-    const d = getPalette("mare", "dark");
-    expect(d.background).toBe("#000000");
-    expect(d.primary).toBe("#9fb0ff");
+  it("três famílias em três cores: Dark é a noite de antes, Glass tem vidro escuro (sem véu branco)", () => {
+    const d = getPalette("elisio", "dark");
+    expect(d.primary).toBe("#d9b168");
+    expect(d.rotulo).toBe("Dark — Campos Elísios");
     expect(d.fontes?.texto[500]).toBe("Manrope_500Medium");
-    const g = getPalette("mare", "glass");
-    expect(g.background).toBe("#05041a");
-    expect(g.fontes?.titulo[700]).toBe("Outfit_700Bold");
-    // As duas usadas com comAlfa precisam ser hex.
-    for (const p of [d, g]) for (const c of [p.surface, p.primary]) expect(c).toMatch(/^#[0-9a-f]{6}$/i);
+    const g = getPalette("crepusculo", "glass");
+    expect(g.rotulo).toBe("Glass — Crepúsculo");
+    // A tinta do vidro é escura: nenhum canal acima de 128.
+    const [r, gg, bb] = g.glassSurface.match(/\d+/g)!.map(Number);
+    expect(Math.max(r, gg, bb)).toBeLessThan(128);
+    for (const fam of ["dark", "glass", "stark"] as const) for (const n of ["crepusculo", "mare", "elisio"] as const) {
+      const p = getPalette(n, fam);
+      for (const c of [p.surface, p.primary, p.background]) expect(c).toMatch(/^#[0-9a-f]{6}$/i);
+    }
   });
 });
 
@@ -85,6 +89,23 @@ describe("compartilhar do Android (fase 23)", () => {
 describe("fundo igual ao do PC (fase 23.1)", () => {
   it("as manchas usam as cores `blobs` do THEMES do desktop", () => {
     expect(getPalette("mare", "stark").blobs).toEqual(["#0f3a52", "#123047", "#3a2a12"]);
-    expect(getPalette("elisio", "glass").blobs).toEqual(["#705cff", "#19d3c5", "#ff4fa3"]);
+    expect(getPalette("elisio", "dark").blobs).toEqual(["#8a6a2e", "#2f5d57", "#4a3f6b"]);
+  });
+});
+
+describe("fundo e barra (30/10)", async () => {
+  const { lerFundo } = await import("../src/theme/fundo");
+  const { proximoEstado } = await import("../src/lib/barraRolagemLimiar");
+  it("fundo gravado: papel válido, imagem só file:, o resto vira animado", () => {
+    expect(lerFundo(JSON.stringify({ tipo: "papel", id: "oceano" }))).toEqual({ tipo: "papel", id: "oceano" });
+    expect(lerFundo(JSON.stringify({ tipo: "papel", id: "xx" }))).toEqual({ tipo: "animado" });
+    expect(lerFundo(JSON.stringify({ tipo: "imagem", uri: "https://x/y.jpg" }))).toEqual({ tipo: "animado" });
+    expect(lerFundo(JSON.stringify({ tipo: "imagem", uri: "file:///a/fundo.jpg" })).tipo).toBe("imagem");
+    expect(lerFundo("lixo")).toEqual({ tipo: "animado" });
+  });
+  it("nomes da barra: somem depois de 60 px para baixo e voltam com 60 px para cima", () => {
+    expect(proximoEstado(30, true)).toEqual({ aberto: true, acumulado: 30 });
+    expect(proximoEstado(61, true)).toEqual({ aberto: false, acumulado: 0 });
+    expect(proximoEstado(-61, false)).toEqual({ aberto: true, acumulado: 0 });
   });
 });

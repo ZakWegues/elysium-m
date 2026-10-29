@@ -1,3 +1,4 @@
+import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
@@ -47,6 +48,8 @@ function restante(ms: number) {
 
 export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, onAbrirRotinas }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void; onAbrirRotinas?: () => void }) {
   const { palette, tokens } = useTheme();
+  // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
+  const aoRolar = useRolagemDaBarra();
   const { width: largura, height: altura } = useWindowDimensions();
   const [painel, setPainel] = useState<PainelHoje | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -314,6 +317,8 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     <View style={{ flex: 1 }}>
       <ScreenHeader title="Hoje" />
       <ScrollView
+        onScroll={aoRolar}
+        scrollEventThrottle={32}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={puxar} tintColor={palette.primary} colors={[palette.primary]} />}

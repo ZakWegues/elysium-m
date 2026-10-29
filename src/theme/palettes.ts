@@ -1,19 +1,7 @@
 /**
- * Temas do ELYSIUM-M — 29/10: o design novo do Zak (`dark.css` e `glass.css`).
- *
- * Três famílias, e só elas:
- *
- * | família | cara                                                                  |
- * |---------|-----------------------------------------------------------------------|
- * | Dark    | preto OLED, superfícies chapadas, fios finos, um acento frio (padrão) |
- * | Glass   | cena índigo com orbes coloridas e vidro líquido flutuando por cima    |
- * | Stark   | HUD escuro com três cores (Reator, Mark, Noite)                       |
- *
- * Vidro Líquido (`lg`), ELYSIUM (`ely`), Renascença e Minimal saíram. Quem tinha um deles
- * gravado cai no Dark (ver `resolverFamiliaEscolhida`), sem tela quebrada.
- *
- * As três "cores" (`ThemeName`) continuam existindo, mas só a Stark varia por elas: Dark e
- * Glass têm uma paleta só, a do arquivo de design.
+ * Temas do ELYSIUM-M — 30/10: três famílias (Dark, Glass, Stark) em três cores cada
+ * (Crepúsculo, Maré, Elísio). Vidro Líquido, ELYSIUM, Renascença e Minimal saíram; quem
+ * tinha um deles gravado cai no Dark (ver `resolverFamiliaEscolhida`).
  */
 
 export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
@@ -106,50 +94,8 @@ const OUTFIT_FIGTREE: Fontes = {
   mono: { 500: 'JetBrainsMono_500Medium', 600: 'JetBrainsMono_600SemiBold' },
 };
 
-/** `dark.css`: preto OLED, s1–s3, fio `--line`, acento `--ac`. */
-const DARK: Omit<Palette, 'name'> = {
-  label: 'Dark', familia: 'dark', rotulo: 'Dark',
-  primary: '#9fb0ff', primarySoft: '#1b2142', accent: '#58d7a2',
-  background: '#000000', surface: '#0d0e12', surfaceRaised: '#14161c', surface3: '#1c1f27',
-  border: '#242832',
-  text: '#eceef4', textMuted: '#a4aab8', textFaint: '#7d8493',
-  onPrimary: '#0b0d1a',
-  error: '#ff7a7a', errorSoft: 'rgba(255,122,122,0.14)', success: '#58d7a2',
-  bolhaMinha: '#1b2142', bolhaMinhaBorda: '#2c3566', bolhaEla: '#14161c', bolhaElaBorda: '#242832',
-  // Sem vidro: as superfícies do Dark são chapadas.
-  glassSurface: '#0d0e12', glassSurfaceStrong: '#14161c', glassBorder: '#242832',
-  glassBackdrop: 'rgba(0,0,0,0.6)',
-  glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
-  glassPanel: '#0d0e12', glassSheet: '#0d0e12',
-  blurTint: 'dark',
-  blobs: ['#000000', '#000000', '#000000'],
-  fontes: MANROPE,
-};
-
-/** `glass.css`: cena #0b0930 → #05041a, tinta branca translúcida, aro de luz. */
-const GLASS: Omit<Palette, 'name'> = {
-  label: 'Glass', familia: 'glass', rotulo: 'Glass',
-  primary: '#8fb4ff', primarySoft: 'rgba(127,182,255,0.22)', accent: '#b79bff',
-  // `surface` fica sólida (hex): telas cheias e `comAlfa` precisam dela opaca. Os cards
-  // da Glass desenham o vidro por cima (ver `Card`).
-  background: '#05041a', surface: '#15123a', surfaceRaised: '#1c1947', surface3: '#252157',
-  border: 'rgba(255,255,255,0.14)',
-  text: '#f5f7ff', textMuted: '#c4c7da', textFaint: '#9497ad',
-  onPrimary: '#0b0930',
-  error: '#ff8a9a', errorSoft: 'rgba(255,138,154,0.16)', success: '#5af0b0',
-  bolhaMinha: 'rgba(127,170,255,0.26)', bolhaMinhaBorda: 'rgba(190,210,255,0.42)',
-  bolhaEla: 'rgba(255,255,255,0.10)', bolhaElaBorda: 'rgba(255,255,255,0.26)',
-  glassSurface: 'rgba(255,255,255,0.10)', glassSurfaceStrong: 'rgba(255,255,255,0.15)',
-  glassBorder: 'rgba(255,255,255,0.34)',
-  glassBackdrop: 'rgba(3,2,25,0.55)',
-  glassSheen: ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0)'] as const,
-  glassPanel: 'rgba(20,17,58,0.92)', glassSheet: 'rgba(16,13,48,0.94)',
-  blurTint: 'dark',
-  blobs: ['#705cff', '#19d3c5', '#ff4fa3'],
-  fontes: OUTFIT_FIGTREE,
-};
-
-type FaceStark = {
+/** Uma cor de uma família: acento, detalhe, fundo, superfícies e as manchas do fundo. */
+type Face = {
   primary: string;
   accent: string;
   background: string;
@@ -159,30 +105,59 @@ type FaceStark = {
   blobs: readonly [string, string, string];
 };
 
-const STARK: Record<ThemeName, { label: string; rotulo: string; face: FaceStark }> = {
-  elisio: {
-    label: 'Elísio', rotulo: 'Stark — Mark',
-    face: {
+type Cor = { label: string; rotulo: string; face: Face };
+
+/**
+ * 30/10: as três cores voltam em todas as famílias — o Zak não quis as cores do exemplo.
+ *
+ * · Dark: a noite do ELYSIUM de antes (Campos Elísios, Éter, Crepúsculo), com aurora,
+ *   manchas, feixes, traços e poeira no fundo.
+ * · Glass: cena escura bem colorida (manchas fortes) para o vidro ter o que mostrar; o
+ *   vidro é tinta ESCURA da cor do tema, nunca branca — o branco era o "leitoso".
+ * · Stark: o HUD de sempre.
+ */
+const CORES: Record<Familia, Record<ThemeName, Cor>> = {
+  dark: {
+    elisio: { label: 'Elísio', rotulo: 'Dark — Campos Elísios', face: {
+      blobs: ['#8a6a2e', '#2f5d57', '#4a3f6b'],
+      primary: '#d9b168', accent: '#9fd8cf', primarySoft: 'rgba(217,177,104,0.20)',
+      background: '#0a0c14', surface: '#131726', surfaceRaised: '#0e1220' } },
+    mare: { label: 'Maré', rotulo: 'Dark — Éter', face: {
+      blobs: ['#33506b', '#2b5f59', '#3a4560'],
+      primary: '#a8c4d8', accent: '#7fd4c8', primarySoft: 'rgba(168,196,216,0.20)',
+      background: '#080b12', surface: '#111624', surfaceRaised: '#0c101c' } },
+    crepusculo: { label: 'Crepúsculo', rotulo: 'Dark — Crepúsculo', face: {
+      blobs: ['#7a4520', '#6b2f47', '#3b2a6b'],
+      primary: '#f0a850', accent: '#e07a9b', primarySoft: 'rgba(240,168,80,0.20)',
+      background: '#0b0818', surface: '#171232', surfaceRaised: '#110d26' } },
+  },
+  glass: {
+    elisio: { label: 'Elísio', rotulo: 'Glass — Âmbar', face: {
+      blobs: ['#d2692e', '#c9971f', '#a8326e'],
+      primary: '#f0a060', accent: '#f2c14e', primarySoft: 'rgba(240,160,96,0.22)',
+      background: '#120905', surface: '#22140c', surfaceRaised: '#1a0f09' } },
+    mare: { label: 'Maré', rotulo: 'Glass — Maré', face: {
+      blobs: ['#1e7fd4', '#17b8a6', '#4b4bd8'],
+      primary: '#6cb6ff', accent: '#3fe0c8', primarySoft: 'rgba(108,182,255,0.22)',
+      background: '#040d1a', surface: '#0c1a2e', surfaceRaised: '#081424' } },
+    crepusculo: { label: 'Crepúsculo', rotulo: 'Glass — Crepúsculo', face: {
+      blobs: ['#6d4aff', '#22b8cf', '#c04bd8'],
+      primary: '#a58cff', accent: '#4fd6e8', primarySoft: 'rgba(165,140,255,0.22)',
+      background: '#0a0720', surface: '#171236', surfaceRaised: '#110d2a' } },
+  },
+  stark: {
+    elisio: { label: 'Elísio', rotulo: 'Stark — Mark', face: {
       blobs: ['#5a1414', '#5a4214', '#2a1010'],
       primary: '#ff5a4e', accent: '#ffc857', primarySoft: 'rgba(255,90,78,0.18)',
-      background: '#0b0607', surface: '#170c0e', surfaceRaised: '#120909',
-    },
-  },
-  mare: {
-    label: 'Maré', rotulo: 'Stark — Reator',
-    face: {
+      background: '#0b0607', surface: '#170c0e', surfaceRaised: '#120909' } },
+    mare: { label: 'Maré', rotulo: 'Stark — Reator', face: {
       blobs: ['#0f3a52', '#123047', '#3a2a12'],
       primary: '#3cc8f0', accent: '#ffb547', primarySoft: 'rgba(60,200,240,0.18)',
-      background: '#05080f', surface: '#0b1220', surfaceRaised: '#08101b',
-    },
-  },
-  crepusculo: {
-    label: 'Crepúsculo', rotulo: 'Stark — Noite',
-    face: {
+      background: '#05080f', surface: '#0b1220', surfaceRaised: '#08101b' } },
+    crepusculo: { label: 'Crepúsculo', rotulo: 'Stark — Noite', face: {
       blobs: ['#1a2a3a', '#123a35', '#20283a'],
       primary: '#7fb8d8', accent: '#64ffda', primarySoft: 'rgba(127,184,216,0.18)',
-      background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12',
-    },
+      background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12' } },
   },
 };
 
@@ -202,7 +177,7 @@ export const TEMAS_APOSENTADOS: Record<string, ThemeName> = {
 /** Traduz o que veio do disco. Devolve `null` quando o valor não serve para nada. */
 export function resolverNomeDeTema(bruto: string | null | undefined): ThemeName | null {
   if (!bruto) return null;
-  if (bruto in STARK) return bruto as ThemeName;
+  if (bruto in CORES.dark) return bruto as ThemeName;
   return TEMAS_APOSENTADOS[bruto] ?? null;
 }
 
@@ -225,42 +200,48 @@ export function comAlfa(hex: string, alfa: number): string {
   return `rgba(${r},${g},${b},${alfa})`;
 }
 
-function buildStark(name: ThemeName): Palette {
-  const { label, rotulo, face } = STARK[name];
-  // Painel quase sólido: a superfície do tema com 4% da primária.
-  const base = misturar(face.surface, face.primary, 0.04);
+function build(name: ThemeName, familia: Familia): Palette {
+  const { label, rotulo, face } = CORES[familia][name];
+  const vidro = familia === 'glass';
+  const stark = familia === 'stark';
+  // Painel: a superfície do tema com um pouco da primária. Na Glass a tinta é translúcida e
+  // ESCURA (é o desfoque da cena colorida que dá o vidro); nas outras, quase sólida.
+  const base = misturar(face.surface, face.primary, vidro ? 0.1 : 0.04);
   return {
-    name, label, rotulo, familia: 'stark', ...face,
+    name, label, rotulo, familia, ...face,
     surface3: misturar(face.surface, '#ffffff', 0.06),
-    // Bordas com um fio da cor do reator, como as linhas de um HUD.
-    border: comAlfa(face.primary, 0.18),
+    border: stark ? comAlfa(face.primary, 0.18) : 'rgba(255,255,255,0.10)',
     text: '#EEF1F6', textMuted: '#9AA3B2', textFaint: '#6f7889',
-    onPrimary: '#FFFFFF',
+    onPrimary: stark ? '#FFFFFF' : '#0b0d14',
     error: '#FF6B6B', errorSoft: 'rgba(255,107,107,0.16)', success: '#4ADE80',
-    bolhaMinha: comAlfa(face.primary, 0.18), bolhaMinhaBorda: comAlfa(face.primary, 0.35),
-    bolhaEla: 'rgba(255,255,255,0.05)', bolhaElaBorda: comAlfa(face.primary, 0.18),
-    glassSurface: comAlfa(base, 0.9), glassSurfaceStrong: comAlfa(base, 0.9),
-    glassBorder: comAlfa(face.primary, 0.22),
+    bolhaMinha: comAlfa(face.primary, vidro ? 0.24 : 0.18), bolhaMinhaBorda: comAlfa(face.primary, 0.35),
+    bolhaEla: vidro ? comAlfa(base, 0.5) : 'rgba(255,255,255,0.05)',
+    bolhaElaBorda: stark ? comAlfa(face.primary, 0.18) : 'rgba(255,255,255,0.10)',
+    glassSurface: comAlfa(base, vidro ? 0.42 : 0.9),
+    glassSurfaceStrong: comAlfa(base, vidro ? 0.6 : 0.9),
+    glassBorder: stark ? comAlfa(face.primary, 0.22) : vidro ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.10)',
     glassBackdrop: 'rgba(0,0,0,0.55)',
     glassSheen: ['rgba(255,255,255,0)', 'rgba(255,255,255,0)'] as const,
     glassSheet: comAlfa(base, 0.94), glassPanel: comAlfa(base, 0.96),
     blurTint: 'dark',
-    fontes: null,
+    fontes: familia === 'dark' ? MANROPE : vidro ? OUTFIT_FIGTREE : null,
   };
 }
 
 /** A ordem em que as cores aparecem na tela — a mesma do `THEMES` do desktop. */
 const names: ThemeName[] = ['crepusculo', 'mare', 'elisio'];
 
-/** As três cores da Stark (é a única família que varia por cor). */
-export const palettes: Record<ThemeName, Palette> = Object.fromEntries(
-  names.map(n => [n, buildStark(n)]),
-) as Record<ThemeName, Palette>;
+const TODAS: Record<Familia, Record<ThemeName, Palette>> = {
+  dark: Object.fromEntries(names.map(n => [n, build(n, 'dark')])) as Record<ThemeName, Palette>,
+  glass: Object.fromEntries(names.map(n => [n, build(n, 'glass')])) as Record<ThemeName, Palette>,
+  stark: Object.fromEntries(names.map(n => [n, build(n, 'stark')])) as Record<ThemeName, Palette>,
+};
+
+/** As três cores (do Dark), para quem só precisa da lista. */
+export const palettes: Record<ThemeName, Palette> = TODAS.dark;
 
 export function getPalette(name: ThemeName, familia: Familia): Palette {
-  if (familia === 'dark') return { ...DARK, name };
-  if (familia === 'glass') return { ...GLASS, name };
-  return palettes[name];
+  return TODAS[familia][name];
 }
 
 /**

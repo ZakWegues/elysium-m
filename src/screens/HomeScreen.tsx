@@ -1,3 +1,4 @@
+import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { lembrado, lembrar } from '../lib/conexao/cache';
 import { AtualizadoHa } from '../components/ui/AtualizadoHa';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -70,6 +71,8 @@ export default function HomeScreen({
   pedidoBusca?: number;
 }) {
   const { palette, tokens } = useTheme();
+  // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
+  const aoRolar = useRolagemDaBarra();
   const [buscaAberta, setBuscaAberta] = useState(false);
   useEffect(() => { if (pedidoBusca) setBuscaAberta(true); }, [pedidoBusca]);
   const [telemetria, setTelemetria] = useState<TelemetryFrame | null>(null);
@@ -474,6 +477,8 @@ export default function HomeScreen({
       />
 
       <ScrollView
+        onScroll={aoRolar}
+        scrollEventThrottle={32}
         contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={puxando} onRefresh={async () => { setPuxando(true); try { await carregar(); } finally { setPuxando(false); } }} tintColor={palette.primary} colors={[palette.primary]} />}

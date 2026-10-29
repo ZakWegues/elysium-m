@@ -17,6 +17,8 @@ import { callRpc, EstadoHermes, Perfil, PushCategory, PushPrefs } from '../lib/r
 import { pushAvailability, registerForPush } from '../lib/pushNotifications';
 import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
+import { PAPEIS, type PapelId } from '../theme/fundo';
+import { escolherImagemDeFundo } from '../theme/fundoGaleria';
 import { Button, Card, Text, Toque } from '../components/ui';
 import { PainelMemoria } from './ControlScreen';
 import { falaAntecipadaLigada, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas } from '../lib/falar';
@@ -465,11 +467,10 @@ function SecaoAparencia() {
         })}
       </View>
 
-      {familiaResolvida === 'stark' && (
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Cor</Text>
         <Text variant="caption" color={palette.textMuted}>
-          Três variações do Stark.
+          Três cores dentro do estilo {ROTULO_FAMILIA[familiaResolvida]}.
         </Text>
         <View style={styles.swatchRow}>
           {(Object.keys(palettes) as ThemeName[]).map((key) => {
@@ -506,8 +507,63 @@ function SecaoAparencia() {
           })}
         </View>
       </View>
-      )}
 
+      <SecaoFundo />
+
+    </View>
+  );
+}
+
+/**
+ * 30/10: o fundo do app — o animado do tema, um papel de parede colorido (bom para o vidro da
+ * Glass) ou uma imagem da galeria.
+ */
+function SecaoFundo() {
+  const { palette, tokens, fundo, setFundo } = useTheme();
+  const opcoes: { chave: string; rotulo: string; amostra: readonly string[]; ativo: boolean; escolher: () => void }[] = [
+    { chave: 'animado', rotulo: 'Animado do tema', amostra: palette.blobs, ativo: fundo.tipo === 'animado', escolher: () => setFundo({ tipo: 'animado' }) },
+    ...(Object.keys(PAPEIS) as PapelId[]).map((id) => ({
+      chave: id, rotulo: PAPEIS[id].nome, amostra: PAPEIS[id].cores.slice(0, 3),
+      ativo: fundo.tipo === 'papel' && fundo.id === id, escolher: () => setFundo({ tipo: 'papel', id }),
+    })),
+  ];
+  async function daGaleria() {
+    try {
+      const novo = await escolherImagemDeFundo(fundo);
+      if (novo) setFundo(novo);
+    } catch (e) {
+      Alert.alert('Não consegui usar essa imagem', errMessage(e));
+    }
+  }
+  return (
+    <View style={{ gap: tokens.spacing.sm }}>
+      <Text variant="subheading">Fundo</Text>
+      <Text variant="caption" color={palette.textMuted}>
+        Papéis coloridos deixam o vidro da Glass mais vivo. Ou use uma imagem sua.
+      </Text>
+      <View style={styles.swatchRow}>
+        {opcoes.map((o) => (
+          <Pressable
+            key={o.chave}
+            onPress={o.escolher}
+            style={[styles.swatch, { borderRadius: tokens.radii.md, borderWidth: o.ativo ? 2 : StyleSheet.hairlineWidth, borderColor: o.ativo ? palette.primary : palette.border, backgroundColor: palette.surface }]}
+          >
+            <View style={styles.swatchDots}>
+              {o.amostra.map((c) => <View key={c} style={[styles.dot, { backgroundColor: c }]} />)}
+            </View>
+            <Text variant="label">{o.rotulo}</Text>
+            {o.ativo && <Feather name="check" size={16} color={palette.primary} />}
+          </Pressable>
+        ))}
+        <Pressable
+          onPress={() => { void daGaleria(); }}
+          style={[styles.swatch, { borderRadius: tokens.radii.md, borderWidth: fundo.tipo === 'imagem' ? 2 : StyleSheet.hairlineWidth, borderColor: fundo.tipo === 'imagem' ? palette.primary : palette.border, backgroundColor: palette.surface }]}
+        >
+          <Feather name="image" size={18} color={palette.primary} />
+          <Text variant="label">{fundo.tipo === 'imagem' ? 'Trocar imagem' : 'Da galeria'}</Text>
+          {fundo.tipo === 'imagem' && <Feather name="check" size={16} color={palette.primary} />}
+        </Pressable>
+      </View>
     </View>
   );
 }

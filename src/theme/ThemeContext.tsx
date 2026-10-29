@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { spacing, radii, fontSize, fontWeight, shadow } from './tokens';
 import { useFontes } from './fontes';
+import { FUNDO_PADRAO, lerFundo, type Fundo } from './fundo';
 
 const STORAGE_KEY = 'elysium_theme';
 /**
@@ -13,6 +14,8 @@ const STORAGE_KEY = 'elysium_theme';
  * aparelho atualizado por OTA acordar sem preferência.
  */
 const FAMILIA_KEY = 'elysium_color_scheme';
+/** 30/10: o fundo escolhido (animado, papel de parede ou imagem da galeria), em JSON. */
+const FUNDO_KEY = 'elysium_fundo';
 
 type ThemeContextValue = {
   name: ThemeName;
@@ -24,6 +27,8 @@ type ThemeContextValue = {
   tokens: { spacing: typeof spacing; radii: typeof radii; fontSize: typeof fontSize; fontWeight: typeof fontWeight; shadow: typeof shadow };
   setTheme: (name: ThemeName) => void;
   setFamilia: (familia: FamiliaEscolha) => void;
+  fundo: Fundo;
+  setFundo: (fundo: Fundo) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -33,11 +38,13 @@ const CHAVE_DESIGN = 'elysium_tema_design_2910_aplicado';
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [name, setName] = useState<ThemeName>('mare');
   const [familia, setFamiliaState] = useState<FamiliaEscolha>('dark');
+  const [fundo, setFundoState] = useState<Fundo>(FUNDO_PADRAO);
   const fontesProntas = useFontes();
 
   useEffect(() => {
-    AsyncStorage.multiGet([STORAGE_KEY, FAMILIA_KEY, CHAVE_DESIGN])
-      .then(([[, storedTheme], [, storedFamilia], [, designFeito]]) => {
+    AsyncStorage.multiGet([STORAGE_KEY, FAMILIA_KEY, CHAVE_DESIGN, FUNDO_KEY])
+      .then(([[, storedTheme], [, storedFamilia], [, designFeito], [, storedFundo]]) => {
+        setFundoState(lerFundo(storedFundo));
         // Traduz tema aposentado em vez de ignorar: o disco para de carregar um id que não existe mais.
         const resolvido = resolverNomeDeTema(storedTheme);
         if (resolvido) {
@@ -71,6 +78,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  function setFundo(next: Fundo) {
+    setFundoState(next);
+    AsyncStorage.setItem(FUNDO_KEY, JSON.stringify(next)).catch((err) =>
+      console.error('[theme] falha salvando o fundo', err)
+    );
+  }
+
   // Sem as fontes carregadas, o texto fica na do sistema (nome de fonte desconhecido avisa no iOS).
   const palette = useMemo(() => {
     const p = getPalette(name, familia);
@@ -85,6 +99,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     tokens: { spacing, radii, fontSize, fontWeight, shadow },
     setTheme,
     setFamilia,
+    fundo,
+    setFundo,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

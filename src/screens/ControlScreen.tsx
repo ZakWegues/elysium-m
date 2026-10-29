@@ -1,3 +1,4 @@
+import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Switch, TextInput, View,
@@ -92,6 +93,8 @@ export default function ControlScreen({
   pedidoTrackpad?: number;
 }) {
   const { palette, tokens } = useTheme();
+  // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
+  const aoRolar = useRolagemDaBarra();
   const [trackpadOpen, setTrackpadOpen] = useState(false);
   useEffect(() => { if (pedidoTrackpad) setTrackpadOpen(true); }, [pedidoTrackpad]);
   const [playerOpen, setPlayerOpen] = useState(false);
@@ -114,7 +117,7 @@ export default function ControlScreen({
     <View style={{ flex: 1 }}>
       <ScreenHeader title="PC" />
 
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
+      <ScrollView onScroll={aoRolar} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md }}>
         <MirrorPanel pairing={pairing} onError={handleError} />
 
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}

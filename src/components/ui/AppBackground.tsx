@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme';
+import { PAPEIS, type PapelId } from '../../theme/fundo';
 import { useFala } from '../../lib/falar';
 import { estadoDaBolota, useFaseDaBolota } from '../../lib/bolota';
 
@@ -24,8 +25,8 @@ import { estadoDaBolota, useFaseDaBolota } from '../../lib/bolota';
  *   · feixes de luz (só ELYSIUM): três faixas diagonais pulsando;
  *   · traços finos (três linhas de 1 px) e poeira (oito pontos);
  *   · Stark: sem manchas — grade técnica de 46 px com a varredura descendo (11 s);
- *   · 29/10, design novo: Dark é o preto OLED puro, sem nada; Glass é a cena índigo do
- *     `glass.css` com quatro orbes derivando devagar (19–31 s);
+ *   · 30/10: Glass usa as mesmas camadas com manchas mais fortes; e o fundo pode ser um
+ *     papel de parede colorido ou uma imagem da galeria (`fundo` do tema);
  *   · "vivo" (ouvindo/pensando/falando): a aurora acende, como o `body.vivo` do PC.
  *
  * Os tamanhos do PC são para uma janela de ~1024 px; aqui escalam pela largura da tela.
@@ -78,6 +79,20 @@ function Mancha({ id, cor, lado, pos, opac, deriva, respira }: {
   );
 }
 
+/** As cinco manchas do `fundo.css`, nas posições e ritmos de lá (escala `k` pela largura). */
+function Manchas({ blobs, k, forca = 1 }: { blobs: readonly [string, string, string]; k: number; forca?: number }) {
+  const o = (a: number, b: number): [number, number] => [Math.min(1, a * forca), Math.min(1, b * forca)];
+  return (
+    <>
+      <Mancha id="b1" cor={blobs[0]} lado={620 * k} pos={{ top: -230 * k, right: -170 * k }} opac={o(0.5, 0.66)} respira={11_000} deriva={{ dx: 120 * k, dy: 80 * k, escala: 1.14, ms: 16_000 }} />
+      <Mancha id="b2" cor={blobs[1]} lado={640 * k} pos={{ bottom: -280 * k, left: -190 * k }} opac={o(0.55, 0.38)} respira={13_000} deriva={{ dx: -110 * k, dy: -130 * k, escala: 1.1, ms: 20_000 }} />
+      <Mancha id="b3" cor={blobs[2]} lado={400 * k} pos={{ top: '46%', left: '48%' }} opac={o(0.4, 0.58)} respira={9_000} deriva={{ dx: -90 * k, dy: 110 * k, escala: 0.88, ms: 14_000 }} />
+      <Mancha id="b4" cor={blobs[1]} lado={300 * k} pos={{ top: '8%', left: '14%' }} opac={o(0.26, 0.42)} respira={15_000} deriva={{ dx: 150 * k, dy: -70 * k, escala: 1.2, ms: 24_000 }} />
+      <Mancha id="b5" cor={blobs[0]} lado={340 * k} pos={{ bottom: '6%', right: '18%' }} opac={o(0.22, 0.36)} respira={17_000} deriva={{ dx: -130 * k, dy: -90 * k, escala: 1.12, ms: 22_000 }} />
+    </>
+  );
+}
+
 /**
  * A aurora do PC: dois discos com faixas nas cores das manchas, girando em sentidos opostos.
  * O PC usa `conic-gradient` com `blur(60px)`; aqui faixas lineares bem suaves girando dão a
@@ -107,6 +122,33 @@ function Aurora({ cores, base, vivo, lado }: { cores: readonly [string, string, 
       <Animated.View pointerEvents="none" style={[disco, e1]}>{faixas}</Animated.View>
       <Animated.View pointerEvents="none" style={[disco, e2]}>{faixas}</Animated.View>
     </>
+  );
+}
+
+/** Um `.ely-shaft`: faixa diagonal de luz, deslizando e pulsando (0,06 ↔ 0,12). */
+function Feixe({ cor, left, largura, de, ate, ms, pulso, fraco, altura }: {
+  cor: string; left: `${number}%`; largura: `${number}%`; de: number; ate: number; ms: number; pulso: number; fraco?: boolean; altura: number;
+}) {
+  const d = useVaiVem(ms);
+  const p = useVaiVem(pulso, fraco ? 6000 : 0);
+  const [o0, o1] = fraco ? [0.04, 0.08] : [0.06, 0.12];
+  const estilo = useAnimatedStyle(() => ({
+    opacity: o0 + (o1 - o0) * p.value,
+    transform: [{ translateX: de + (ate - de) * d.value }, { rotate: '14deg' }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -altura * 0.3, height: altura * 1.6, left, width: largura }, estilo]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <RadialGradient id={`feixe${left.replace("%", "")}`} cx="50%" cy="50%" rx="50%" ry="50%">
+            <Stop offset="0" stopColor={cor} stopOpacity={1} />
+            <Stop offset="0.6" stopColor={cor} stopOpacity={0.45} />
+            <Stop offset="1" stopColor={cor} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#feixe${left.replace("%", "")})`} />
+      </Svg>
+    </Animated.View>
   );
 }
 
@@ -181,56 +223,81 @@ function GradeStark({ cor, fundo, largura, altura, vivo }: { cor: string; fundo:
   );
 }
 
-/**
- * A cena da Glass (`.lg-app` + `.lg-orb`): gradiente #0b0930 → #05041a e quatro orbes de
- * gradiente radial — violeta, turquesa, rosa e âmbar — no `lg-drift` (de −26,14 a 34,−38
- * com escala 1,14; 19, 24 e 31 s). O vidro precisa de cor atrás para parecer vidro.
- */
-function CenaGlass({ largura, vivo }: { largura: number; vivo: boolean }) {
-  const k = largura / 390;
-  const drift = (ms: number, inverso = false) => ({ dx: (inverso ? -60 : 60) * k, dy: (inverso ? 52 : -52) * k, escala: 1.14, ms });
-  const base: [number, number] = vivo ? [0.62, 0.8] : [0.5, 0.62];
-  return (
-    <>
-      <LinearGradient colors={['#0b0930', '#05041a']} style={StyleSheet.absoluteFill} />
-      <Mancha id="o1" cor="#705cff" lado={380 * k} pos={{ top: -60 * k, left: -150 * k }} opac={[base[0] * 0.8, base[1] * 0.8]} respira={13_000} deriva={drift(19_000)} />
-      <Mancha id="o2" cor="#19d3c5" lado={300 * k} pos={{ top: '30%', right: -120 * k }} opac={[base[0] * 0.8, base[1] * 0.8]} respira={15_000} deriva={drift(24_000, true)} />
-      <Mancha id="o3" cor="#ff4fa3" lado={320 * k} pos={{ bottom: '8%', left: -90 * k }} opac={[base[0] * 0.75, base[1] * 0.75]} respira={17_000} deriva={drift(31_000)} />
-      <Mancha id="o4" cor="#ffb86b" lado={220 * k} pos={{ bottom: -60 * k, right: -40 * k }} opac={[base[0] * 0.6, base[1] * 0.6]} respira={11_000} deriva={drift(24_000)} />
-    </>
-  );
-}
-
 /** A Ely está ouvindo, pensando ou falando — o `body.vivo` do PC. */
 function useVivo(): boolean {
   const fala = useFala();
   return estadoDaBolota(useFaseDaBolota(), fala.falando) !== 'dormindo';
 }
 
+/**
+ * 30/10: papéis de parede próprios, para quem quer cor atrás do vidro. Pedido do Zak: "mais
+ * informação e mais cores para quando eu passe a parte de liquid glass". São estáticos (um
+ * SVG só, nada por quadro): várias manchas de cor fortes se sobrepondo, como uma malha.
+ */
+
+/** Posição (fração da tela) e raio (fração da largura) de cada mancha do papel. */
+const MALHA = [
+  { x: 0.1, y: 0.08, r: 0.9 }, { x: 0.95, y: 0.22, r: 0.8 }, { x: 0.3, y: 0.52, r: 0.75 },
+  { x: 0.9, y: 0.7, r: 0.85 }, { x: 0.15, y: 0.92, r: 0.8 }, { x: 0.6, y: 0.35, r: 0.55 },
+] as const;
+
+export function PapelDeParede({ id, largura, altura }: { id: PapelId; largura: number; altura: number }) {
+  const p = PAPEIS[id];
+  return (
+    <Svg width={largura} height={altura} style={StyleSheet.absoluteFill}>
+      <Defs>
+        {MALHA.map((m, i) => (
+          <RadialGradient key={i} id={`papel${i}`} cx={m.x * largura} cy={m.y * altura} r={m.r * largura} gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor={p.cores[i]} stopOpacity={0.95} />
+            <Stop offset="0.55" stopColor={p.cores[i]} stopOpacity={0.4} />
+            <Stop offset="1" stopColor={p.cores[i]} stopOpacity={0} />
+          </RadialGradient>
+        ))}
+      </Defs>
+      <Rect width={largura} height={altura} fill={p.base} />
+      {MALHA.map((_, i) => <Rect key={i} width={largura} height={altura} fill={`url(#papel${i})`} />)}
+    </Svg>
+  );
+}
+
 export function AppBackground() {
-  const { palette, familiaResolvida } = useTheme();
+  const { palette, familiaResolvida, fundo } = useTheme();
   const { width, height } = useWindowDimensions();
   const vivo = useVivo();
+  // O PC desenha para uma janela de ~1024 px; aqui tudo escala pela largura da tela.
+  const k = Math.max(0.42, Math.min(1, width / 1024)) * 1.25;
   const lado = Math.max(width, height) * 1.4;
 
-  // Dark (29/10): preto OLED, sem nada por cima — superfícies chapadas fazem o resto.
-  if (familiaResolvida === 'dark') {
-    return <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} pointerEvents="none" />;
-  }
-
-  if (familiaResolvida === 'glass') {
+  // Fundo escolhido pelo Zak: papel colorido ou uma imagem da galeria, com um véu escuro leve
+  // para o texto continuar lendo. A poeira continua por cima.
+  if (fundo.tipo !== 'animado') {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background, overflow: 'hidden' }]} pointerEvents="none">
-        <CenaGlass largura={width} vivo={vivo} />
+        {fundo.tipo === 'papel'
+          ? <PapelDeParede id={fundo.id} largura={width} altura={height} />
+          : <Image source={{ uri: fundo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.22)' }]} />
+        <Poeira cor="#ffffff" />
       </View>
     );
   }
 
-  // Stark.
+  const stark = familiaResolvida === 'stark';
+  const vidro = familiaResolvida === 'glass';
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background, overflow: 'hidden' }]} pointerEvents="none">
-      <Aurora cores={palette.blobs} base={0.16} vivo={vivo} lado={lado} />
-      <GradeStark cor={palette.primary} fundo={palette.background} largura={width} altura={height} vivo={vivo} />
+      <Aurora cores={palette.blobs} base={vidro ? 0.18 : stark ? 0.16 : 0.1} vivo={vivo} lado={lado} />
+      {stark
+        ? <GradeStark cor={palette.primary} fundo={palette.background} largura={width} altura={height} vivo={vivo} />
+        // Glass: manchas mais fortes — o vidro precisa de cor atrás para parecer vidro.
+        : <Manchas blobs={palette.blobs} k={k} forca={vidro ? 1.5 : 1} />}
+      {familiaResolvida === 'dark' && (
+        <>
+          <Feixe cor={palette.primary} left="6%" largura="42%" de={-40 * k} ate={150 * k} ms={24_000} pulso={9_000} altura={height} />
+          <Feixe cor={palette.primary} left="56%" largura="42%" de={40 * k} ate={-170 * k} ms={30_000} pulso={12_000} altura={height} />
+          <Feixe cor={palette.primary} left="44%" largura="26%" de={90 * k} ate={-90 * k} ms={36_000} pulso={15_000} fraco altura={height} />
+        </>
+      )}
       <Tracos cor={palette.primary} cor2={palette.accent} altura={height} />
       <Poeira cor={palette.primary} />
     </View>

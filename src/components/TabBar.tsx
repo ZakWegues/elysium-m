@@ -1,70 +1,36 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
-import { CURVA_UI, MOV, reduzirUI, tempo } from '../lib/motion';
+import { reduzirUI } from '../lib/motion';
 import { haptica } from '../lib/haptica';
-import { useTheme } from '../theme';
+import { mostrarRotulos, rotulos } from '../lib/barraRolagem';
+import { comAlfa, useTheme } from '../theme';
 import { GlassFill, Text } from './ui';
 
 /** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
 export type Screen = 'home' | 'chat' | 'hoje' | 'control' | 'conversations';
 
-/**
- * Só destinos de verdade.
- *
- * 🔴 AJUSTES SAIU DAQUI. Ele ocupava um dos quatro lugares sem ser uma página: abre uma
- * gaveta por cima da tela, e sair dela não é navegar para lugar nenhum. Com ele fora, some
- * junto toda a maquinaria de "aba que não é aba" — a régua do indicador volta a ser a
- * lista inteira, sem buraco. O acionador foi para o canto superior direito do
- * `ScreenHeader`, como o desktop resolveu no bloco 36.
- */
+/** Só destinos de verdade. Quatro, como o Zak pediu: Início, Chat, PC e Hoje. */
 const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  // O app abria direto no chat, o que fazia sentido quando conversar era quase tudo
-  // que ele fazia. Com controle remoto, lembretes e player, chat virou uma aba entre
-  // outras — e nada mostrava de imediato se o PC estava de pé.
   { screen: 'home', label: 'Início', icon: 'home' },
-  // A Caixa deixou de ser destino: virou o lado direito do switch dentro do Chat, que é
-  // como o desktop sempre tratou os dois — um par de modos da mesma conversa, não duas
-  // telas. E os Presets viraram um popover ancorado no botão do topo.
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },
-  // Guia única de controle do PC: espelho da tela aparente ao entrar, e todo o resto
-  // (trackpad, monitor, processos, programas, energia, transferência, mídia) em
-  // gavetas. Antes eram duas abas separadas, Sistema e Remoto.
   { screen: 'control', label: 'PC', icon: 'monitor' },
-  // Fase 16: o briefing do dia, hábitos e metas — a mesma aba Hoje do desktop.
   { screen: 'hoje', label: 'Hoje', icon: 'sun' },
-  // Fase 22: Rotinas saiu da barra — virou gaveta dentro do Hoje (e do card de atalhos).
-  // Quatro destinos, como o Zak pediu: Início, Chat, PC e Hoje.
 ];
 
-const MAX_INDICE = TABS.length - 1;
-
 /**
- * Quanto do impulso do dedo conta na escolha do destino, em segundos de projeção. Com 0,12
- * um empurrão rápido passa para a aba seguinte mesmo soltando antes da metade do caminho —
- * que é o que a mão espera de um controle que responde ao arremesso, e não só à posição.
+ * Resistência elástica nas duas pontas: além da primeira e da última aba o seletor ainda
+ * anda, mas só 35% do que o dedo andou.
  */
-const PROJECAO = 0.12;
-// A amarra com o literal de dentro do worklet: mudar um sem o outro para de compilar.
-const conferenciaDaProjecao: 0.12 = PROJECAO;
-void conferenciaDaProjecao;
-
-/**
- * Resistência elástica nas duas pontas: além da primeira e da última aba o indicador ainda
- * anda, mas só 35% do que o dedo andou. Travar seco lê como app quebrado; deixar solto lê
- * como se houvesse uma aba a mais escondida ali.
- */
-const RESISTENCIA = 0.35;
-
 function comElastico(v: number, maximo: number): number {
   'worklet';
-  // O teto e a resistência ENTRAM COMO LITERAL/ARGUMENTO em vez de virem do módulo: worklet
-  // não enxerga escopo de módulo, só o que o Babel captura do corpo. Ver o comentário do
-  // `tempo()` em motion.ts — foi assim que o app morreu ao soltar o dedo aqui.
+  // Literal dentro do worklet: worklet não enxerga constante de módulo.
   const resistencia = 0.35;
   if (v < 0) return v * resistencia;
   if (v > maximo) return maximo + (v - maximo) * resistencia;
@@ -72,21 +38,17 @@ function comElastico(v: number, maximo: number): number {
 }
 
 /**
- * A barra inferior, com indicador contínuo e arrasto.
+ * 30/10 — a barra do Nuvio (lida no código dele, `FloatingNavigationBar`, e refeita aqui):
  *
- * ANTES: a aba ativa era só uma cor diferente, trocada de um quadro para o outro. Sem nada
- * ligando origem e destino, o olho não lê "mudou de lugar", lê "piscou" — e o app parecia
- * saltar de tela em vez de navegar.
+ * · pílula escura flutuante (#1C1C1E a 72% sobre desfoque), no máximo 400 de largura, com
+ *   28 de folga dos lados; 64 de altura com os nomes, 48 só com ícones;
+ * · o seletor é uma "gelatina": anda de mola até a aba, ESTICA na direção do movimento e
+ *   volta tremendo um pouco; segurar faz ele (e a barra) crescer, e arrastar leva ele junto
+ *   com o dedo — o destino é a aba mais perto ao soltar;
+ * · os nomes somem ao rolar para baixo e voltam ao rolar para cima (`barraRolagem.ts`);
+ * · a aba sob o dedo acende aos poucos (camada acesa por proximidade do seletor).
  *
- * AGORA a posição da barra é um número contínuo (`progresso`), não um índice. Um toque
- * anima esse número até a aba tocada; um arrasto amarra o número ao dedo, quadro a quadro,
- * e o destino só é decidido ao soltar, pelo mais próximo com projeção de velocidade.
- *
- * 🔴 ISTO PRECISA RODAR NA THREAD DE UI, e é o motivo de as duas dependências nativas terem
- * entrado. Com `PanResponder` + `Animated`, cada movimento do dedo dava uma volta pela
- * thread de JS — a mesma que está ocupada com RPC, telemetria por WebSocket e o re-sorteio
- * das bolhas da Início. O indicador andava a solavancos exatamente quando o app está mais
- * ocupado, que é quando se troca de aba.
+ * Tudo na thread de UI (Reanimated + Gesture Handler).
  */
 export function TabBar({
   active,
@@ -97,43 +59,46 @@ export function TabBar({
   onNavigate: (screen: Screen) => void;
   badges?: Partial<Record<Screen, number>>;
 }) {
-  const { palette, tokens } = useTheme();
+  const { palette } = useTheme();
   const insets = useSafeAreaInsets();
-  // 29/10: Dark = barra chapada com a linha de 2 px deslizando no topo (`.dk-tabbar`);
-  // Glass = pílula de vidro flutuante com a lente que estica ao toque (`.lg-nav`).
-  const dark = palette.familia === 'dark';
-  const vidro = palette.familia === 'glass';
-  /** Folga do indicador para cada lado, dentro da largura da aba. */
-  const folga = dark ? 12 : vidro ? 5 : 8;
-  /** A lente da Glass estica ao apertar: 0 solto, 1 apertado (mola de amortecimento 11). */
-  const aperto = useSharedValue(0);
-  const apertar = useCallback((v: 0 | 1) => {
-    aperto.value = withSpring(v, { damping: 11, stiffness: 190, mass: 0.9 });
-  }, [aperto]);
 
-  // -1 quando a tela aberta não é aba nenhuma (Conversas, por exemplo). Aí o indicador
-  // some em vez de apontar para uma aba que não é a que está na frente.
+  // -1 quando a tela aberta não é aba nenhuma (Conversas): o seletor some.
   const indiceAtivo = TABS.findIndex((t) => t.screen === active);
 
   const progresso = useSharedValue(Math.max(0, indiceAtivo));
   const larguraTab = useSharedValue(0);
   const inicio = useSharedValue(0);
   const visivel = useSharedValue(indiceAtivo < 0 ? 0 : 1);
-  /** A aba que está de fato na frente, legível de dentro do gesto. */
   const ativoVivo = useSharedValue(Math.max(0, indiceAtivo));
-  /** O teto da régua, num valor compartilhado — worklet não lê constante de módulo. */
-  const maximo = useSharedValue(MAX_INDICE);
+  const maximo = useSharedValue(TABS.length - 1);
+  /** 0 solto, 1 segurando: a barra e o seletor crescem. */
+  const aperto = useSharedValue(0);
+  /** O esticão da gelatina: 1 parado, maior quando o seletor anda rápido. */
+  const estica = useSharedValue(1);
+
+  const MOLA = { damping: 15, stiffness: 190, mass: 0.9 } as const;
 
   useEffect(() => {
-    visivel.value = tempo(indiceAtivo < 0 ? 0 : 1, MOV.micro, CURVA_UI);
+    visivel.value = withTiming(indiceAtivo < 0 ? 0 : 1, { duration: 160 });
     if (indiceAtivo >= 0) {
       ativoVivo.value = indiceAtivo;
-      // A lente da Glass anda de mola, como no design; as outras, na curva de sempre.
-      progresso.value = vidro && !reduzirUI.value
-        ? withSpring(indiceAtivo, { damping: 15, stiffness: 190, mass: 0.9 })
-        : tempo(indiceAtivo, MOV.base);
+      progresso.value = reduzirUI.value ? withTiming(indiceAtivo, { duration: 140 }) : withSpring(indiceAtivo, MOLA);
     }
+    mostrarRotulos();
   }, [indiceAtivo]);
+
+  // A gelatina: quanto mais o seletor andou neste quadro, mais ele estica; parado, volta
+  // com uma mola frouxa (o tremidinho do Nuvio).
+  useAnimatedReaction(
+    () => progresso.value,
+    (agora, antes) => {
+      if (antes == null || reduzirUI.value) return;
+      const alvo = 1 + Math.min(0.5, Math.abs(agora - antes) * 9);
+      if (alvo > estica.value) {
+        estica.value = withSequence(withTiming(alvo, { duration: 16 }), withSpring(1, { damping: 7, stiffness: 160, mass: 0.7 }));
+      }
+    },
+  );
 
   const navegar = useCallback((i: number) => {
     const alvo = TABS[i];
@@ -143,37 +108,31 @@ export function TabBar({
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        // Só assume o dedo depois de 8 px na horizontal: abaixo disso é toque, e o toque
-        // pertence ao `Pressable` de cada aba. E desiste em 24 px na vertical, senão um
-        // gesto de subir a tela seria capturado pela barra.
+        // Toque curto é da aba; acima de 8 px na horizontal é arrasto do seletor.
         .activeOffsetX([-8, 8])
         .failOffsetY([-24, 24])
         .onBegin(() => {
           inicio.value = progresso.value;
           aperto.value = withSpring(1, { damping: 11, stiffness: 190, mass: 0.9 });
         })
-        .onFinalize(() => {
-          aperto.value = withSpring(0, { damping: 11, stiffness: 190, mass: 0.9 });
-        })
         .onUpdate((e) => {
           if (larguraTab.value <= 0) return;
           progresso.value = comElastico(inicio.value + e.translationX / larguraTab.value, maximo.value);
         })
-        // O segundo argumento é falso quando o gesto foi CANCELADO — app indo para segundo
-        // plano, outro handler tomando o dedo. Cancelamento não escolhe destino nenhum: o
-        // indicador volta para a aba que está na frente, e nada navega.
         .onEnd((e, sucesso) => {
           if (larguraTab.value <= 0) return;
           if (!sucesso) {
-            progresso.value = tempo(ativoVivo.value);
+            progresso.value = withSpring(ativoVivo.value, { damping: 15, stiffness: 190, mass: 0.9 });
             return;
           }
-          // 0,12 s de projeção, literal pelo mesmo motivo do resto: constante de módulo não
-          // existe na thread de UI. O valor e o porquê estão em PROJECAO, logo acima.
+          // 0,12 s de projeção do impulso: um empurrão rápido passa para a aba seguinte.
           const projetado = progresso.value + (e.velocityX / larguraTab.value) * 0.12;
           const destino = Math.min(maximo.value, Math.max(0, Math.round(projetado)));
-          progresso.value = tempo(destino);
+          progresso.value = withSpring(destino, { damping: 15, stiffness: 190, mass: 0.9 });
           runOnJS(navegar)(destino);
+        })
+        .onFinalize(() => {
+          aperto.value = withSpring(0, { damping: 11, stiffness: 190, mass: 0.9 });
         }),
     [navegar],
   );
@@ -182,143 +141,103 @@ export function TabBar({
     larguraTab.value = e.nativeEvent.layout.width / TABS.length;
   }
 
-  // Só a lente da Glass estica; a linha do Dark e o contorno do Stark não.
-  const estica = vidro ? 1 : 0;
-  const estiloIndicador = useAnimatedStyle(() => ({
-    width: Math.max(0, larguraTab.value - folga * 2),
+  // A pílula encolhe dos lados e baixa a altura quando os nomes somem; segurar faz crescer.
+  const estiloFolga = useAnimatedStyle(() => ({ paddingHorizontal: 28 + 30 * (1 - rotulos.value) }));
+  const estiloPilula = useAnimatedStyle(() => ({
+    height: 48 + 16 * rotulos.value,
+    transform: [{ scale: 1 + 0.03 * aperto.value }],
+  }));
+
+  const estiloSeletor = useAnimatedStyle(() => ({
+    width: Math.max(0, larguraTab.value - 8),
     opacity: visivel.value,
     transform: [
-      { translateX: progresso.value * larguraTab.value + folga },
-      { scaleX: 1 + 0.16 * aperto.value * estica },
-      { scaleY: 1 + 0.24 * aperto.value * estica },
+      { translateX: progresso.value * larguraTab.value + 4 },
+      { scaleX: estica.value + 0.1 * aperto.value },
+      { scaleY: (1 + 0.14 * aperto.value) / Math.sqrt(estica.value) },
     ],
   }));
 
-  const linha = (
-    <View
-      onLayout={medir}
-      style={[
-        styles.row,
-        vidro
-          ? styles.rowVidro
-          : {
-              paddingBottom: Math.max(insets.bottom, tokens.spacing.sm),
-              borderTopColor: dark ? palette.border : palette.glassBorder,
-            },
-      ]}
-    >
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.indicador,
-          dark
-            ? [styles.indicadorDark, { backgroundColor: palette.primary }]
-            : vidro
-              ? styles.lente
-              // Fase 23.1: no Stark a aba ativa é um contorno fino na cor do reator, como no PC.
-              : { backgroundColor: 'rgba(0,0,0,0)', borderWidth: 1, borderColor: palette.primary, borderRadius: tokens.radii.md },
-          estiloIndicador,
-        ]}
-      >
-        {vidro && (
-          <LinearGradient colors={['rgba(255,255,255,0.36)', 'rgba(255,255,255,0.12)']} style={StyleSheet.absoluteFill} />
-        )}
-      </Animated.View>
-      {TABS.map((tab, i) => (
-        <Aba
-          key={tab.screen}
-          tab={tab}
-          indice={i}
-          progresso={progresso}
-          badge={badges?.[tab.screen] ?? 0}
-          ativo={tab.screen === active}
-          onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
-          onPressIn={vidro ? () => apertar(1) : undefined}
-          onPressOut={vidro ? () => apertar(0) : undefined}
-        />
-      ))}
-    </View>
-  );
-
-  if (vidro) {
-    return (
-      <GestureDetector gesture={pan}>
-        <View style={[styles.flutua, { paddingBottom: Math.max(insets.bottom, tokens.spacing.sm) + 10 }]}>
-          <View style={[styles.pilula, { borderColor: palette.glassBorder }]}>
-            <GlassFill intensity={60} />
-            {linha}
-          </View>
-        </View>
-      </GestureDetector>
-    );
-  }
-
   return (
     <GestureDetector gesture={pan}>
-      <View style={{ overflow: 'hidden' }}>
-        {/* O outro desfoque REAL do app (o primeiro é o ScreenHeader). No Dark é a barra
-            chapada quase opaca do design. */}
-        <GlassFill intensity={45} strong edge={false} tintColor={dark ? 'rgba(8,9,12,0.96)' : undefined} />
-        {linha}
-      </View>
+      <Animated.View style={[styles.fora, { paddingBottom: insets.bottom + 8 }, estiloFolga]}>
+        <Animated.View style={[styles.pilula, estiloPilula]}>
+          <GlassFill intensity={50} edge={false} tintColor="rgba(28,28,30,0.72)" />
+          <View style={styles.linha} onLayout={medir}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.seletor,
+                { backgroundColor: comAlfa(palette.primary, 0.18), borderColor: comAlfa(palette.primary, 0.32), shadowColor: palette.primary },
+                estiloSeletor,
+              ]}
+            />
+            {TABS.map((tab, i) => (
+              <Aba
+                key={tab.screen}
+                tab={tab}
+                indice={i}
+                progresso={progresso}
+                badge={badges?.[tab.screen] ?? 0}
+                ativo={tab.screen === active}
+                onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
+              />
+            ))}
+          </View>
+        </Animated.View>
+      </Animated.View>
     </GestureDetector>
   );
 }
 
 /**
- * Uma aba, em duas camadas sobrepostas: a apagada sempre visível por baixo, a acesa por
- * cima com a opacidade amarrada à distância até o indicador.
- *
- * POR QUE DUAS CAMADAS EM VEZ DE INTERPOLAR A COR. O `Feather` é um texto de fonte de
- * ícones, e a prop `color` dele não é animável pela thread de UI. Duas camadas trocando de
- * opacidade dão o mesmo resultado visual e rodam onde precisam rodar — que é o que faz a
- * aba acender aos poucos enquanto o dedo passa por cima dela, em vez de acender no fim.
+ * Uma aba, em duas camadas: a apagada por baixo e a acesa por cima, com a opacidade presa à
+ * distância até o seletor — a aba acende enquanto o seletor passa por ela. Apertar (ou o
+ * mouse por cima, na web) clareia o fundo dela de leve.
  */
 function Aba({
-  tab, indice, progresso, badge,
-  ativo, onPress, onPressIn, onPressOut,
+  tab, indice, progresso, badge, ativo, onPress,
 }: {
   tab: (typeof TABS)[number];
   indice: number;
   progresso: SharedValue<number>;
   badge: number;
-  /** Fase 18: para o leitor de tela anunciar "selecionada". */
   ativo?: boolean;
   onPress: () => void;
-  onPressIn?: () => void;
-  onPressOut?: () => void;
 }) {
   const { palette } = useTheme();
 
   const aceso = useAnimatedStyle(() => {
     const perto = Math.max(0, 1 - Math.abs(progresso.value - indice));
-    return { opacity: perto, transform: [{ scale: 0.96 + 0.04 * perto }] };
+    return { opacity: perto };
   });
+  const nome = useAnimatedStyle(() => ({ opacity: rotulos.value, height: 16 * rotulos.value, marginTop: 3 * rotulos.value }));
+
+  const conteudo = (cor: string, peso: '400' | '600') => (
+    <>
+      <Feather name={tab.icon} size={22} color={cor} />
+      <Animated.View style={[styles.nomeCaixa, nome]}>
+        <Text variant="caption" color={cor} style={[styles.label, { fontWeight: peso }]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
+          {tab.label}
+        </Text>
+      </Animated.View>
+    </>
+  );
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.tab, pressed && styles.tabApertada]}
+      style={(estado) => {
+        const { pressed } = estado;
+        const hovered = (estado as { hovered?: boolean }).hovered;
+        return [styles.tab, !ativo && (pressed || hovered) && styles.tabRealce];
+      }}
       onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
       accessibilityRole="tab"
       accessibilityState={{ selected: !!ativo }}
       accessibilityLabel={`${tab.label}${badge > 0 ? `, ${badge} não lido${badge === 1 ? '' : 's'}` : ''}`}
     >
-      <View style={styles.camadas}>
-        <View style={styles.camada}>
-          <Feather name={tab.icon} size={22} color={palette.textMuted} />
-          <Text variant="caption" color={palette.textMuted} style={[styles.label, palette.familia === 'stark' && styles.labelStark]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
-            {tab.label}
-          </Text>
-        </View>
-        <Animated.View style={[styles.camada, styles.camadaAcesa, aceso]}>
-          <Feather name={tab.icon} size={22} color={palette.primary} />
-          <Text variant="caption" color={palette.primary} style={[styles.label, palette.familia === 'stark' && styles.labelStark]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
-            {tab.label}
-          </Text>
-        </Animated.View>
-      </View>
+      <View style={styles.camada}>{conteudo(palette.textMuted, '400')}</View>
+      <Animated.View style={[styles.camada, styles.camadaAcesa, aceso]}>{conteudo(palette.primary, '600')}</Animated.View>
       {badge > 0 && (
         <View style={[styles.badge, { backgroundColor: palette.error }]}>
           <Text variant="caption" color="#fff" style={styles.badgeText}>
@@ -331,67 +250,26 @@ function Aba({
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingTop: 8,
+  // Por fora não há fundo: só a folga do rodapé. A altura reservada é a da pílula aberta,
+  // para o conteúdo não pular quando os nomes somem.
+  fora: { alignItems: 'center', justifyContent: 'flex-end', paddingTop: 6, minHeight: 70 },
+  pilula: {
+    maxWidth: 400, width: '100%', borderRadius: 999, overflow: 'hidden', justifyContent: 'center',
   },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
+  linha: { flexDirection: 'row', alignItems: 'stretch', flex: 1, paddingHorizontal: 6, paddingVertical: 6 },
+  seletor: {
+    position: 'absolute', left: 0, top: 6, bottom: 6, borderRadius: 999, borderWidth: 1,
+    shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
   },
-  camadas: {
-    alignItems: 'center',
-  },
-  camada: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  // A camada acesa fica exatamente sobre a apagada: mesma métrica, sem reflow ao acender.
-  camadaAcesa: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'flex-start',
-  },
-  // O polegar que desliza. Absoluto dentro da linha, e por isso não empurra nada quando
-  // anda — só `transform`, como manda a escala do bloco 24.
-  // Altura fixa em vez de `bottom`: a linha cresce com o inset da barra de gestos do
-  // Android, e um polegar preso ao rodapé escorregaria para dentro dessa faixa vazia.
-  // Fase 23.1: o rótulo técnico do Stark do PC (maiúsculas espaçadas).
-  labelStark: { textTransform: 'uppercase', letterSpacing: 1.2, fontSize: 10 },
-  indicador: {
-    position: 'absolute',
-    left: 0,
-    top: 4,
-    height: 44,
-  },
-  label: {
-    fontSize: 11,
-  },
-  tabApertada: { transform: [{ scale: 0.94 }] },
-  // Dark: a linha de 2 px no topo da barra (`.dk-tab-line`).
-  indicadorDark: { top: 0, height: 2, borderRadius: 2 },
-  // Glass: a pílula flutuante (16 px dos lados, 74 de altura) e a lente dentro dela.
-  flutua: { paddingHorizontal: 16, paddingTop: 6 },
-  pilula: { height: 74, borderRadius: 37, borderWidth: 1, overflow: 'hidden' },
-  rowVidro: { borderTopWidth: 0, paddingTop: 0, height: 74, alignItems: 'center' },
-  lente: {
-    top: 7, height: 58, borderRadius: 29, overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
-  },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  tabRealce: { backgroundColor: 'rgba(255,255,255,0.07)' },
+  camada: { alignItems: 'center', justifyContent: 'center' },
+  camadaAcesa: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  nomeCaixa: { overflow: 'hidden', justifyContent: 'center' },
+  label: { fontSize: 11, lineHeight: 14 },
   badge: {
-    position: 'absolute',
-    top: -4,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
+    position: 'absolute', top: 4, right: '22%', minWidth: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
   },
-  badgeText: {
-    fontSize: 10,
-    lineHeight: 12,
-  },
+  badgeText: { fontSize: 10, lineHeight: 12 },
 });

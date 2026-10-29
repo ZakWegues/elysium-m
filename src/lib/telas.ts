@@ -126,7 +126,7 @@ function cor(v: string | undefined, reserva: string): string {
 
 /** O tema da tela a partir da paleta do app: as mesmas cores da bolha. Pura. */
 export function temaDaPaleta(
-  p: Pick<Palette, 'background' | 'surface' | 'text' | 'textMuted' | 'primary'> & Partial<Pick<Palette, 'familia' | 'surfaceRaised' | 'border' | 'textFaint' | 'accent' | 'success'>>,
+  p: Pick<Palette, 'background' | 'surface' | 'text' | 'textMuted' | 'primary'> & Partial<Pick<Palette, 'familia' | 'surfaceRaised' | 'surface3' | 'border' | 'textFaint' | 'accent' | 'success' | 'blobs'>>,
   reduzirMovimento = false,
 ) {
   const escuro = luminancia(p.background) < 0.5;
@@ -148,43 +148,26 @@ export function temaDaPaleta(
 }
 
 /**
- * 29/10: as telas geradas no visual do tema — superfícies, fios, raios e a paleta dos
- * gráficos do Dark (`dark.css`) ou da Glass (`glass.css`). A Stark fica com o padrão.
+ * 30/10: as telas geradas no visual do tema — superfícies, fios, raios e as cores dos
+ * gráficos saem da própria paleta (acento, detalhe e manchas do fundo). A Stark fica com o
+ * padrão do renderer.
  */
 function varsDaFamilia(p: Palette): Record<string, string> {
-  if (p.familia === 'dark') {
-    return {
-      '--iui-surface': cor(p.surfaceRaised, '#14161c'),
-      '--iui-surface-strong': '#1c1f27',
-      '--iui-border': cor(p.border, '#242832'),
-      '--iui-border-strong': '#2c3140',
-      '--iui-radius-lg': '18px',
-      '--iui-radius-xl': '22px',
-      '--iui-success': cor(p.success, '#58d7a2'),
-      '--iui-chart-2': '#58d7a2',
-      '--iui-chart-3': '#ffb86b',
-      '--iui-chart-4': '#ff7aa8',
-      '--iui-font': 'Manrope, system-ui, sans-serif',
-      '--iui-mono': '"JetBrains Mono", ui-monospace, monospace',
-    };
-  }
-  if (p.familia === 'glass') {
-    return {
-      '--iui-surface': 'rgba(255,255,255,0.08)',
-      '--iui-surface-strong': 'rgba(255,255,255,0.14)',
-      '--iui-border': 'rgba(255,255,255,0.16)',
-      '--iui-border-strong': 'rgba(255,255,255,0.30)',
-      '--iui-radius-lg': '20px',
-      '--iui-radius-xl': '26px',
-      '--iui-success': cor(p.success, '#5af0b0'),
-      '--iui-chart-2': cor(p.accent, '#b79bff'),
-      '--iui-chart-3': '#19d3c5',
-      '--iui-chart-4': '#ff4fa3',
-      '--iui-chart-5': '#ffb86b',
-      '--iui-font': 'Figtree, system-ui, sans-serif',
-    };
-  }
-  return {};
+  if (p.familia === 'stark') return {};
+  const vidro = p.familia === 'glass';
+  return {
+    '--iui-surface': vidro ? 'rgba(255,255,255,0.06)' : cor(p.surfaceRaised, '#0e1220'),
+    '--iui-surface-strong': vidro ? 'rgba(255,255,255,0.10)' : cor(p.surface3, '#1c1f27'),
+    '--iui-border': cor(p.border, 'rgba(255,255,255,0.10)'),
+    '--iui-border-strong': vidro ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.16)',
+    '--iui-radius-lg': '14px',
+    '--iui-radius-xl': '16px',
+    '--iui-success': cor(p.success, '#4ade80'),
+    '--iui-chart-2': cor(p.accent, '#9fd8cf'),
+    '--iui-chart-3': cor(p.blobs[0], '#8a6a2e'),
+    '--iui-chart-4': cor(p.blobs[2], '#4a3f6b'),
+    '--iui-font': vidro ? 'Figtree, system-ui, sans-serif' : 'Manrope, system-ui, sans-serif',
+  };
 }
 
 /** O que a WebView recebe: chama a ponte do renderer (window.__elyHost). Pura. */

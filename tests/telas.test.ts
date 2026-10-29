@@ -74,8 +74,8 @@ describe("telas inteligentes no celular: protocolo (22/10)", () => {
   it("tema da paleta: Dark e Glass levam superfícies e gráficos do design, todos aceitos pelo protocolo", async () => {
     const { getPalette } = await import("../src/theme/palettes");
     const vars = (f: "dark" | "glass" | "stark"): Record<string, string> => temaDaPaleta(getPalette("mare", f)).vars;
-    expect(vars("glass")["--iui-chart-3"]).toBe("#19d3c5");
-    expect(vars("dark")["--iui-surface"]).toBe("#14161c");
+    expect(vars("glass")["--iui-chart-2"]).toBe("#3fe0c8");
+    expect(vars("dark")["--iui-surface"]).toBe("#0c101c");
     expect(vars("stark")["--iui-surface"]).toBeUndefined();
     for (const f of ["dark", "glass", "stark"] as const) {
       for (const [k, v] of Object.entries(temaDaPaleta(getPalette("mare", f)).vars)) {
