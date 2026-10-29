@@ -6,12 +6,16 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
 import { reduzirUI } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { mostrarRotulos, rotulos } from '../lib/barraRolagem';
 import { comAlfa, useTheme } from '../theme';
 import { GlassFill, Text, useBlurDaBarra } from './ui';
+
+/** Largura da pílula encolhida: só a aba ativa (ícone e nome). */
+const PILULA_ENCOLHIDA = 108;
 
 /** Altura da barra aberta (pílula de 64 + 6 de folga em cima + 8 embaixo), sem a área segura. */
 export const FOLGA_DA_BARRA = 78;
@@ -70,7 +74,10 @@ export function TabBar({
   const indiceAtivo = TABS.findIndex((t) => t.screen === active);
 
   const progresso = useSharedValue(Math.max(0, indiceAtivo));
+  /** Largura de uma aba com a barra aberta (fixa: não muda enquanto ela encolhe). */
   const larguraTab = useSharedValue(0);
+  /** Largura da pílula aberta (até 400) — a encolhida tem `PILULA_ENCOLHIDA`. */
+  const larguraPilula = useSharedValue(0);
   const inicio = useSharedValue(0);
   const visivel = useSharedValue(indiceAtivo < 0 ? 0 : 1);
   const ativoVivo = useSharedValue(Math.max(0, indiceAtivo));
@@ -116,6 +123,8 @@ export function TabBar({
         .activeOffsetX([-8, 8])
         .failOffsetY([-24, 24])
         .onBegin(() => {
+          // Encolhida, o primeiro toque só abre a barra de novo.
+          if (rotulos.value < 0.5) rotulos.value = withTiming(1, { duration: 260 });
           inicio.value = progresso.value;
           aperto.value = withSpring(1, { damping: 11, stiffness: 190, mass: 0.9 });
         })
@@ -141,22 +150,25 @@ export function TabBar({
     [navegar],
   );
 
+  // A largura de fora não muda quando a barra encolhe; é dela que saem as medidas.
   function medir(e: LayoutChangeEvent) {
-    larguraTab.value = e.nativeEvent.layout.width / TABS.length;
+    const pilula = Math.min(400, e.nativeEvent.layout.width - 56);
+    larguraPilula.value = pilula;
+    larguraTab.value = (pilula - 12) / TABS.length;
   }
 
-  // A pílula encolhe dos lados e baixa a altura quando os nomes somem; segurar faz crescer.
-  const estiloFolga = useAnimatedStyle(() => ({ paddingHorizontal: 28 + 30 * (1 - rotulos.value) }));
+  // 31/10 (ideia do Glass Nav): rolando para baixo, a pílula fecha de mola até caber só a aba
+  // ativa (`rotulos` 1 = aberta, 0 = encolhida); segurar faz crescer.
   const estiloPilula = useAnimatedStyle(() => ({
-    height: 48 + 16 * rotulos.value,
+    width: PILULA_ENCOLHIDA + (larguraPilula.value - PILULA_ENCOLHIDA) * rotulos.value,
     transform: [{ scale: 1 + 0.03 * aperto.value }],
   }));
 
   const estiloSeletor = useAnimatedStyle(() => ({
-    width: Math.max(0, larguraTab.value - 8),
+    width: Math.max(0, (larguraTab.value - 8) * rotulos.value + (PILULA_ENCOLHIDA - 20) * (1 - rotulos.value)),
     opacity: visivel.value,
     transform: [
-      { translateX: progresso.value * larguraTab.value + 4 },
+      { translateX: (progresso.value * larguraTab.value + 4) * rotulos.value + 4 * (1 - rotulos.value) },
       { scaleX: estica.value + 0.1 * aperto.value },
       { scaleY: (1 + 0.14 * aperto.value) / Math.sqrt(estica.value) },
     ],
@@ -164,11 +176,11 @@ export function TabBar({
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.fora, { paddingBottom: insets.bottom + 8 }, estiloFolga]}>
+      <View style={[styles.fora, { paddingBottom: insets.bottom + 8 }]} onLayout={medir}>
         <Animated.View style={[styles.pilula, estiloPilula]}>
           {/* Desfoca as telas que passam por baixo (alvo da barra), com tinta escura translúcida. */}
           <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />
-          <View style={styles.linha} onLayout={medir}>
+          <View style={styles.linha}>
             <Animated.View
               pointerEvents="none"
               style={[
@@ -176,21 +188,33 @@ export function TabBar({
                 { backgroundColor: comAlfa(palette.primary, 0.18), borderColor: comAlfa(palette.primary, 0.32), shadowColor: palette.primary },
                 estiloSeletor,
               ]}
-            />
+            >
+              {/* A lâmpada (ideia do Tubelight): filete de luz no topo e a luz caindo para dentro. */}
+              <View style={styles.luzCaixa}>
+                <LinearGradient colors={[comAlfa(palette.primary, 0.38), comAlfa(palette.primary, 0)]} style={styles.luz} />
+              </View>
+              <View style={[styles.lampada, { backgroundColor: palette.primary, shadowColor: palette.primary }]} />
+            </Animated.View>
             {TABS.map((tab, i) => (
               <Aba
                 key={tab.screen}
                 tab={tab}
                 indice={i}
                 progresso={progresso}
+                larguraTab={larguraTab}
                 badge={badges?.[tab.screen] ?? 0}
                 ativo={tab.screen === active}
-                onPress={() => { if (tab.screen !== active) haptica.tique(); onNavigate(tab.screen); }}
+                onPress={() => {
+                  // Encolhida, tocar abre a barra em vez de trocar de aba.
+                  if (rotulos.value < 0.5) { mostrarRotulos(); return; }
+                  if (tab.screen !== active) haptica.tique();
+                  onNavigate(tab.screen);
+                }}
               />
             ))}
           </View>
         </Animated.View>
-      </Animated.View>
+      </View>
     </GestureDetector>
   );
 }
@@ -201,11 +225,12 @@ export function TabBar({
  * mouse por cima, na web) clareia o fundo dela de leve.
  */
 function Aba({
-  tab, indice, progresso, badge, ativo, onPress,
+  tab, indice, progresso, larguraTab, badge, ativo, onPress,
 }: {
   tab: (typeof TABS)[number];
   indice: number;
   progresso: SharedValue<number>;
+  larguraTab: SharedValue<number>;
   badge: number;
   ativo?: boolean;
   onPress: () => void;
@@ -216,12 +241,22 @@ function Aba({
     const perto = Math.max(0, 1 - Math.abs(progresso.value - indice));
     return { opacity: perto };
   });
-  const nome = useAnimatedStyle(() => ({ opacity: rotulos.value, height: 16 * rotulos.value, marginTop: 3 * rotulos.value }));
+  // O ícone cresce quando o seletor chega nele (ideia do Glass Tab Bar).
+  const icone = useAnimatedStyle(() => {
+    const perto = Math.max(0, 1 - Math.abs(progresso.value - indice));
+    return { transform: [{ scale: 1 + 0.1 * perto }] };
+  });
+  // Encolhida: a aba ativa ocupa a pílula pequena; as outras fecham e somem.
+  const ativa = ativo ? 1 : 0;
+  const largura = useAnimatedStyle(() => ({
+    width: larguraTab.value * rotulos.value + (PILULA_ENCOLHIDA - 12) * (1 - rotulos.value) * ativa,
+    opacity: ativa + (1 - ativa) * rotulos.value,
+  }));
 
   const conteudo = (cor: string, peso: '400' | '600') => (
     <>
-      <Feather name={tab.icon} size={22} color={cor} />
-      <Animated.View style={[styles.nomeCaixa, nome]}>
+      <Animated.View style={icone}><Feather name={tab.icon} size={22} color={cor} /></Animated.View>
+      <Animated.View style={styles.nomeCaixa}>
         <Text variant="caption" color={cor} style={[styles.label, { fontWeight: peso }]} maxFontSizeMultiplier={1.2} numberOfLines={1}>
           {tab.label}
         </Text>
@@ -230,6 +265,7 @@ function Aba({
   );
 
   return (
+    <Animated.View style={[styles.tabCaixa, largura]}>
     <Pressable
       style={(estado) => {
         const { pressed } = estado;
@@ -251,6 +287,7 @@ function Aba({
         </View>
       )}
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -261,15 +298,22 @@ const styles = StyleSheet.create({
   // camada absoluta), e as telas ganham folga no fim (`FOLGA_DA_BARRA`).
   fora: { alignItems: 'center', justifyContent: 'flex-end', paddingTop: 6 },
   pilula: {
-    maxWidth: 400, width: '100%', borderRadius: 999, overflow: 'hidden', justifyContent: 'center',
+    height: 64, borderRadius: 999, overflow: 'hidden', justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)',
   },
-  linha: { flexDirection: 'row', alignItems: 'stretch', flex: 1, paddingHorizontal: 6, paddingVertical: 6 },
+  linha: { flexDirection: 'row', alignItems: 'stretch', flex: 1, paddingHorizontal: 6, paddingVertical: 6, overflow: 'hidden' },
   seletor: {
     position: 'absolute', left: 0, top: 6, bottom: 6, borderRadius: 999, borderWidth: 1,
     shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
   },
+  tabCaixa: { overflow: 'hidden' },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  lampada: {
+    position: 'absolute', top: -1, left: '30%', right: '30%', height: 3, borderRadius: 2,
+    shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4,
+  },
+  luzCaixa: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 999, overflow: 'hidden' },
+  luz: { position: 'absolute', top: 0, left: 0, right: 0, height: 26 },
   tabRealce: { backgroundColor: 'rgba(255,255,255,0.07)' },
   camada: { alignItems: 'center', justifyContent: 'center' },
   camadaAcesa: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },

@@ -3,6 +3,7 @@ import { Animated, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../../theme';
 import { Text } from './Text';
+import { useContagem } from '../../lib/contagem';
 
 export function MetricBar({
   icon,
@@ -18,6 +19,8 @@ export function MetricBar({
   const { palette, tokens } = useTheme();
   const clamped = Math.max(0, Math.min(100, percent));
   const width = useRef(new Animated.Value(0)).current;
+  // 31/10: o número conta até o valor novo, junto com a barra.
+  const contado = useContagem(clamped);
 
   useEffect(() => {
     Animated.timing(width, {
@@ -37,7 +40,7 @@ export function MetricBar({
           <Text variant="label">{label}</Text>
         </View>
         <Text variant="label" color={palette.textMuted}>
-          {detail ?? `${Math.round(clamped)}%`}
+          {detail ?? `${Math.round(contado)}%`}
         </Text>
       </View>
       <View style={[styles.track, { backgroundColor: palette.border, borderRadius: tokens.radii.full }]}>
