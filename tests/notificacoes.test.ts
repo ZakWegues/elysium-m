@@ -7,9 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const agendadas: Record<string, unknown>[] = [];
 const canceladas: string[] = [];
+const categorias: { id: string; acoes: { identifier: string; textInput?: unknown }[] }[] = [];
 vi.mock("expo-notifications", () => ({
   setNotificationHandler: () => {},
   setNotificationChannelAsync: async () => {},
+  setNotificationCategoryAsync: async (id: string, acoes: { identifier: string; textInput?: unknown }[]) => { categorias.push({ id, acoes }); },
   getPermissionsAsync: async () => ({ granted: true }),
   requestPermissionsAsync: async () => ({ granted: true }),
   scheduleNotificationAsync: async (n: Record<string, unknown>) => { agendadas.push(n); return "id"; },
@@ -81,5 +83,23 @@ describe("lembretes espelhados", () => {
     await n.espelharLembretes(pairing);
     expect(canceladas).toEqual(["lembrete-B"]);
     expect(agendadas.map(a => a.identifier)).toEqual(["lembrete-A", "lembrete-B"]);   // C passou, A já estava
+  });
+});
+
+describe("responder pela notificação (31/10)", () => {
+  it("as entregas do PC saem com a categoria que tem o campo de resposta", async () => {
+    const n = await carregar();
+    await n.mostrarEntrega({ id: "r1", tipo: "rotina", titulo: "Bom dia", corpo: "Abri o Spotify", em: 0 });
+    const ultima = agendadas[agendadas.length - 1] as { content: { categoryIdentifier?: string } };
+    expect(ultima.content.categoryIdentifier).toBe(n.CATEGORIA_RESPONDER);
+    const cat = categorias.find(c => c.id === n.CATEGORIA_RESPONDER);
+    expect(cat?.acoes[0].identifier).toBe(n.ACAO_RESPONDER);
+    expect(cat?.acoes[0].textInput).toBeTruthy();
+  });
+  it("o texto vira pergunta com o aviso de contexto; toque comum ou texto vazio não", async () => {
+    const n = await carregar();
+    expect(n.pedidoDaResposta(n.ACAO_RESPONDER, " adia 10 min ", "Lembrete: remédio", null)).toBe('adia 10 min\n\n(Respondendo ao aviso: "Lembrete: remédio")');
+    expect(n.pedidoDaResposta(n.ACAO_RESPONDER, "   ", "x", "y")).toBeNull();
+    expect(n.pedidoDaResposta("expo.modules.notifications.actions.DEFAULT", "oi", "x", "y")).toBeNull();
   });
 });

@@ -33,7 +33,7 @@ import { useCompartilharDoAndroid, useShareIntent } from './src/lib/shareIntent'
 import { FolhaCompartilhar } from './src/components/FolhaCompartilhar';
 import { pedirSobreImagem } from './src/lib/imagemParaEly';
 import { MOV, tempo } from './src/lib/motion';
-import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedirPermissao } from './src/lib/notificacoes';
+import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedidoDaResposta, pedirPermissao } from './src/lib/notificacoes';
 import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/estadoPc';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
@@ -90,6 +90,8 @@ function AppInner() {
   const [screen, setScreen] = useState<Screen>('home');
   // 21/10: a aba sobrevive se o Android fechar o app no fundo — voltar não joga na Início.
   const abaLida = useRef(false);
+  /** Última resposta de notificação já levada ao Chat (31/10). */
+  const respostaTratada = useRef<string | null>(null);
   useEffect(() => {
     AsyncStorage.getItem('elysium_aba').then((v) => {
       if (v === 'chat' || v === 'hoje' || v === 'control' || v === 'home') setScreen(v);
@@ -106,9 +108,24 @@ function AppInner() {
       setScreen('chat');
       setPedidoModo(p => ({ modo: 'pc', n: p.n + 1 }));
     };
+    // 31/10: "Responder" pela notificação — o texto vai ao Chat como pergunta (uma vez só por resposta).
+    const tratar = (N: typeof import('expo-notifications'), r: import('expo-notifications').NotificationResponse) => {
+      const c = r.notification.request.content;
+      const pedido = pedidoDaResposta(r.actionIdentifier, r.userText, c.title, c.body);
+      if (pedido) {
+        const chave = `${r.notification.request.identifier}:${r.notification.date}`;
+        if (respostaTratada.current === chave) return;
+        respostaTratada.current = chave;
+        N.dismissNotificationAsync(r.notification.request.identifier).catch(() => {});
+        N.clearLastNotificationResponseAsync().catch(() => {});
+        setPerguntaPendente(pedido); setModoChat('ia'); setScreen('chat');
+        return;
+      }
+      abrirCaixa(c.data);
+    };
     import('expo-notifications').then((N) => {
-      N.getLastNotificationResponseAsync().then(r => { if (r) abrirCaixa(r.notification.request.content.data); }).catch(() => {});
-      const sub = N.addNotificationResponseReceivedListener(r => abrirCaixa(r.notification.request.content.data));
+      N.getLastNotificationResponseAsync().then(r => { if (r) tratar(N, r); }).catch(() => {});
+      const sub = N.addNotificationResponseReceivedListener(r => tratar(N, r));
       tirar = () => sub.remove();
     }).catch(() => { /* sem notificações nesta build */ });
     return () => tirar?.();

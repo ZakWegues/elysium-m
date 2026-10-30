@@ -36,6 +36,19 @@ const CHAVE_ESPELHADOS = () => chavePorPc('elysium_lembretes_espelhados_v1');
 const CHAVE_ATIVAS = 'elysium_notificacoes_ativas_v1';
 const MAX_VISTAS = 120;
 const CANAL = 'elysium-entregas';
+export const CATEGORIA_RESPONDER = 'elysium-responder';
+export const ACAO_RESPONDER = 'responder';
+
+/**
+ * O pedido que vai à Ely quando a pessoa responde pela notificação: a resposta, com o aviso
+ * entre aspas como contexto. null = não era resposta. Pura.
+ */
+export function pedidoDaResposta(acao: string, texto: string | undefined, titulo: string | null | undefined, corpo: string | null | undefined): string | null {
+  const t = texto?.trim();
+  if (acao !== ACAO_RESPONDER || !t) return null;
+  const aviso = [titulo, corpo].filter((x) => x && x.trim()).join(' — ');
+  return aviso ? `${t}\n\n(Respondendo ao aviso: "${aviso.slice(0, 300)}")` : t;
+}
 
 function isExpoGo(): boolean {
   return Constants.appOwnership === 'expo';
@@ -62,6 +75,16 @@ async function modulo(): Promise<Notifications | null> {
           vibrationPattern: [0, 200, 120, 200],
         });
       }
+      // 31/10: "Responder" direto da notificação (padrão do WhatsApp). O texto abre o Chat e
+      // vai para a Ely com a notificação como contexto (App.tsx). API em JS, sem APK novo.
+      try {
+        await N.setNotificationCategoryAsync(CATEGORIA_RESPONDER, [{
+          identifier: ACAO_RESPONDER,
+          buttonTitle: 'Responder',
+          textInput: { submitButtonTitle: 'Enviar', placeholder: 'Fale com a Ely…' },
+          options: { opensAppToForeground: true },
+        }]);
+      } catch { /* sem categorias nesta build: a notificação sai sem o botão */ }
       return N;
     })();
   }
@@ -132,6 +155,7 @@ export async function mostrarEntrega(e: Entrega): Promise<void> {
         body: e.corpo,
         data: { tipo: e.tipo, ref: e.ref ?? null, entregaId: e.id },
         sound: 'default',
+        categoryIdentifier: CATEGORIA_RESPONDER,
         ...(Platform.OS === 'android' ? { channelId: CANAL } : {}),
       },
       trigger: null,
@@ -206,6 +230,7 @@ export async function espelharLembretes(pairing: Pairing): Promise<void> {
           body: r.text,
           data: { tipo: 'lembrete', ref: r.id },
           sound: 'default',
+          categoryIdentifier: CATEGORIA_RESPONDER,
           ...(Platform.OS === 'android' ? { channelId: CANAL } : {}),
         },
         trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(r.dueAt) },
