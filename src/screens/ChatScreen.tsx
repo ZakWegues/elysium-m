@@ -34,7 +34,8 @@ import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import CameraAsk from './CameraAsk';
-import { deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
+import { conversaParaContinuar, deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
+import { syncChats } from '../lib/chatSync';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text, VIDRO_BOTAO } from '../components/ui';
@@ -196,7 +197,14 @@ export default function ChatScreen({
   const favoriteRef = useRef(false);
   const createdAtRef = useRef(Date.now());
 
-  const gravadorRef = useRef(criarAdiador<Parameters<typeof saveSession>[0]>((s) => { void saveSession(s); }, 800, (s) => s.id));
+  // 31/10: grava aqui e já manda ao PC — "Continuar do celular" lá precisa da conversa de agora,
+  // não da próxima sincronização. Sem PC por perto, a sincronização de sempre leva depois.
+  const gravadorRef = useRef(criarAdiador<Parameters<typeof saveSession>[0]>((s) => {
+    void saveSession(s);
+    callRpc(pairingRef.current, 'chat.save', { session: s }).catch(() => {});
+  }, 800, (s) => s.id));
+  /** 31/10: a conversa que acabou de acontecer no PC ("Continuar do PC"), no chat vazio. */
+  const [doPc, setDoPc] = useState<{ id: string; title: string } | null>(null);
   // Bloco 196: quando o dedo encostou e se já soltou — o toque rápido soltava ANTES de a
   // gravação começar (ela espera o reconhecedor do "Ely" soltar o microfone), o "parar"
   // via `recording` ainda falso e saía, e o gravador ficava ligado sem ninguém segurando.
@@ -246,6 +254,18 @@ export default function ChatScreen({
       }
     })();
   }, [sessionId, pairing.activeIp, pairing.port]);
+
+  // 31/10: chat vazio — sincroniza e vê se a conversa mais recente acabou de acontecer no PC.
+  const chatVazio = messages.length === 0;
+  useEffect(() => {
+    if (!chatVazio) { setDoPc(null); return; }
+    let vivo = true;
+    void syncChats(pairingRef.current).then(() => listSessions()).then((ss) => {
+      const c = conversaParaContinuar(ss, 'pc');
+      if (vivo) setDoPc(c ? { id: c.id, title: c.title } : null);
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [chatVazio, sessionId]);
 
   useEffect(() => {
     const hasRealContent = messages.some((m) => m.id !== 'welcome');
@@ -1137,6 +1157,16 @@ export default function ChatScreen({
       {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe.
           22.1: só fundo (sem toque). Chat vazio = ela sozinha no meio, como no PC. */}
       <Esfera3D vazio={messages.length === 0} titulo={nomeDono ? `${saudacao()}, ${nomeDono}.` : `${saudacao()}.`} dica="Pergunte, peça, mande abrir. Segure o microfone para falar." />
+      {/* 31/10: "Continuar do PC" — a conversa que acabou de acontecer lá, a um toque. */}
+      {chatVazio && doPc && (
+        <View style={styles.continuarPc} pointerEvents="box-none">
+          <Pressable onPress={() => { haptica.leve(); onSessionChange(doPc.id); }} accessibilityRole="button" accessibilityLabel={`Continuar do PC: ${doPc.title}`}
+            style={({ pressed }) => [styles.sugestao, VIDRO_BOTAO, { borderRadius: tokens.radii.full, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.7 : 1 }]}>
+            <Feather name="monitor" size={14} color={palette.primary} />
+            <Text variant="caption" color={palette.text} numberOfLines={1} style={{ maxWidth: 240 }}>Continuar do PC: {doPc.title}</Text>
+          </Pressable>
+        </View>
+      )}
       {!semCabecalho && (
         <ScreenHeader
           title="ELYSIUM-M"
@@ -1507,6 +1537,7 @@ const styles = StyleSheet.create({
   },
   ponto: { width: 7, height: 7, borderRadius: 4 },
   starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 7, paddingBottom: 10 },
+  continuarPc: { position: 'absolute', top: '62%', left: 0, right: 0, alignItems: 'center' },
   menuMais: { flexDirection: 'row', gap: 8, paddingBottom: 8 },
   itemMais: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10, borderWidth: StyleSheet.hairlineWidth },
   anelLive: { borderRadius: 24, borderWidth: 1.5, borderColor: 'transparent', padding: 2 },

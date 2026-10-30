@@ -24,8 +24,19 @@ export type ChatSession = {
    * `deriveTitle` da primeira fala, e o renomear duraria até o usuário responder.
    */
   titleCustom?: boolean;
+  /** 31/10: quem mexeu por último (o PC marca); "Continuar do PC" usa. */
+  aparelho?: 'pc' | 'celular';
   messages: StoredMessage[];
 };
+
+/**
+ * "Continuar no outro aparelho" (31/10): a conversa mais recente, se foi mexida por último em
+ * `de` nas últimas 3 horas. Pura — o mesmo critério do PC (chatSessionsStore.ts).
+ */
+export function conversaParaContinuar(sessoes: ChatSession[], de: 'pc' | 'celular', agora = Date.now(), janelaMs = 3 * 3_600_000): ChatSession | null {
+  const recente = [...sessoes].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  return recente && recente.aparelho === de && agora - recente.updatedAt < janelaMs ? recente : null;
+}
 
 async function readAll(): Promise<ChatSession[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY());

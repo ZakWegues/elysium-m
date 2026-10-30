@@ -465,6 +465,8 @@ export type PainelHoje = {
   // Fase 18 (PC 2.2+). PC antigo não manda — tudo opcional.
   rotinasHoje?: { id: string; nome: string; em: number }[];
   rotinasRodaram?: { id: string; nome: string; em: number; ok: boolean; resultado: string }[];
+  /** 31/10 (PC 2.32+): "O que a Ely fez hoje", da mais nova para a mais velha. */
+  atividade?: { em: number; texto: string }[];
   elysium?: { versao: string; novidades: string[]; paraTestar: { item: string; feito: boolean }[]; atualizacaoPronta: string | null };
   ideia?: string | null;
   /** Fase 18: "Meu amanhã" (depois das 18h) e as seções escondidas pelo dono. */
@@ -735,6 +737,8 @@ export type SyncedChatSession = {
   favorite: boolean;
   /** Nome dado à mão. Viaja no contrato: sem ele o outro lado recalcularia o título. */
   titleCustom?: boolean;
+  /** 31/10 (PC 2.32+): quem mexeu por último. */
+  aparelho?: 'pc' | 'celular';
   messages: { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number }[];
 };
 

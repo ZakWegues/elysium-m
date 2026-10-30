@@ -16,7 +16,7 @@ import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, 
 import { Reator } from '../components/Reator';
 import { estourarNoToque, fogos } from '../components/Estouros';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
-import { CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
+import { CardAtividadeHoje, CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
 import { CardEstudo, PlanoDeEstudo, Revisao as RevisaoCartoes } from './hoje/CardEstudo';
 import TarefasScreen, { Despejo } from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
@@ -300,6 +300,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     'metas': painel.metas.length,
     'lembretes-e-tarefas': painel.tarefas?.length ?? 0,
     'listas': painel.listas.length,
+    'o-que-a-ely-fez-hoje': painel.atividade?.length ?? 0,
   } : {};
   const secao = (t: string, acao?: { rotulo: string; onPress: () => void; icone?: keyof typeof Feather.glyphMap }, chave = chaveDe(t)) => (
     <View style={styles.secaoTopo}>
@@ -569,6 +570,12 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                 </>)}
               </>
             )}
+
+            {/* 31/10: a linha do tempo do que a Ely fez (PC 2.32+; PC antigo não manda). */}
+            {painel.atividade && vis('o-que-a-ely-fez-hoje') && (<>
+              {secao('O QUE A ELY FEZ HOJE')}
+              {aberta('o-que-a-ely-fez-hoje') && <CardAtividadeHoje itens={painel.atividade} />}
+            </>)}
 
             {vis('ideia-para-hoje') && (<>
             {secao('IDEIA PARA HOJE', { rotulo: 'Outra', icone: 'refresh-cw', onPress: () => void outraIdeia() })}

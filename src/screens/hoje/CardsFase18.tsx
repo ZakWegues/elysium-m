@@ -164,3 +164,19 @@ const styles = StyleSheet.create({
   dica: { flexDirection: 'row', gap: 10, padding: 12, borderWidth: 1, borderStyle: 'dashed' },
   checkMini: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** 31/10: "O que a Ely fez hoje" — a hora e a ação, da mais nova para a mais velha (até 12). */
+export function CardAtividadeHoje({ itens }: { itens: { em: number; texto: string }[] }) {
+  const { palette } = useTheme();
+  return (
+    <Card glass style={{ gap: 8 }}>
+      {!itens.length && <Text variant="caption" color={palette.textMuted}>Nada ainda hoje. Peça algo à Ely (abrir, lembrar, anotar) e aparece aqui.</Text>}
+      {itens.slice(0, 12).map((x, i) => (
+        <View key={`${x.em}-${i}`} style={styles.linha}>
+          <Text variant="label" color={palette.primary} style={{ minWidth: 44, fontVariant: ['tabular-nums'] }}>{hora(x.em)}</Text>
+          <Text variant="body" style={{ flex: 1 }} numberOfLines={2}>{x.texto}</Text>
+        </View>
+      ))}
+    </Card>
+  );
+}
