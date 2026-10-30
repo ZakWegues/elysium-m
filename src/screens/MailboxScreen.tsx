@@ -26,6 +26,7 @@ import { avisarTokenRecusado } from '../lib/erroRpc';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
 import { abrirArquivo, baixarAnexo, LIMITE_ENVIO_PARA_O_PC, planejarEnvio, resumoDosArquivos, salvarArquivo, tamanhoLegivel, tipoDoArquivo } from '../lib/anexos';
 import { aoChegarRecado } from '../lib/mailboxAviso';
+import { haptica } from '../lib/haptica';
 
 // 24/10: o recado novo já chega pelo WebSocket (aoChegarRecado); a consulta é só rede de segurança.
 const POLL_INTERVAL_MS = 60000;
@@ -256,6 +257,7 @@ export default function MailboxScreen({
     try {
       if (!fila.length) {
         await sendMessage(pairing, { kind: guessKind(text), text, sessionId: sessionId ?? null });
+        haptica.leve();
       }
       // Um recado por arquivo (o PC guarda um anexo por recado); o texto vai junto do primeiro.
       for (const [i, a] of fila.entries()) {

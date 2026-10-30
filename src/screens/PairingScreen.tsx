@@ -5,6 +5,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { BloqueadoError, parsePairingQr, resolveActiveEndpoint, savePairing, UnauthorizedError } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Text } from '../components/ui';
+import { haptica } from '../lib/haptica';
 
 export default function PairingScreen({ onPaired, onCancel }: { onPaired: () => void; onCancel?: () => void }) {
   const { palette, tokens } = useTheme();
@@ -75,6 +76,8 @@ export default function PairingScreen({ onPaired, onCancel }: { onPaired: () => 
     // em que o primeiro responde, nada foi salvo ainda.
     await savePairing(resolved);
     setBusy(false);
+    // 31/10: o pareamento deu certo — um toque de sucesso.
+    haptica.sucesso();
     onPaired();
   }
 

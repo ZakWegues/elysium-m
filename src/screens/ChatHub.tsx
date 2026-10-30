@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
@@ -88,6 +88,13 @@ export default function ChatHub({
       .then(id => setMailboxSessionId(id))
       .catch(err => console.warn('[caixa] falha lendo a conversa ativa', err));
   }, []);
+  // 31/10: Voltar do Android fecha o histórico em vez de sair do app.
+  useEffect(() => {
+    if (!historicoPcAberto) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { setHistoricoPcAberto(false); return true; });
+    return () => sub.remove();
+  }, [historicoPcAberto]);
+
   if (historicoPcAberto) {
     return (
       <MailboxHistorico

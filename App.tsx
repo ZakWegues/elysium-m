@@ -1,6 +1,6 @@
 import { Abertura } from './src/components/abertura/Abertura';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, InteractionManager, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, BackHandler, InteractionManager, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
@@ -422,6 +422,20 @@ function AppInner() {
     else if (destino === 'inicio') setScreen('home');
   }, []));
 
+  // 31/10: Voltar do Android — Conversas volta ao Chat, as outras abas voltam à Início e só da
+  // Início o app sai. Gavetas e telas cheias registram o próprio Voltar depois, e têm prioridade.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (screen === 'conversations') { setScreen('chat'); return true; }
+      if (screen !== 'home') { setScreen('home'); return true; }
+      return false;
+    });
+    return () => sub.remove();
+  }, [screen]);
+
+  // Estável: inline, o contexto mudava a cada render e redesenhava todas as abas.
+  const abrirAjustes = useCallback(() => setSettingsModalVisible(true), []);
+
   const handlePaired = useCallback(() => {
     setAdicionandoPc(false);
     loadPairing().then(setPairing).catch((e) => console.error('[pareamento] não consegui ler o cofre', e));
@@ -479,7 +493,7 @@ function AppInner() {
     // A engrenagem de Ajustes vive no canto superior direito de todo ScreenHeader, e
     // recebe daqui o que abrir. Ver o comentário em ScreenHeader.tsx: ela saiu da barra
     // de abas porque gaveta não é destino de navegação.
-    <AjustesProvider abrir={() => setSettingsModalVisible(true)}>
+    <AjustesProvider abrir={abrirAjustes}>
     <SobreposicaoContext.Provider value={sobreposicao}>
     <View ref={raizRef} collapsable={false} style={{ flex: 1, backgroundColor: palette.background, paddingBottom: keyboard.height }}
       onTouchStart={(e) => registrarToque(e.nativeEvent.pageX, e.nativeEvent.pageY)}>

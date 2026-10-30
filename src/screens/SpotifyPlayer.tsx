@@ -137,7 +137,7 @@ export function SpotifyBar({
         <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{now.artist}</Text>
       </View>
 
-      <Pressable onPress={togglePlay} hitSlop={10} style={[styles.barPlay, { backgroundColor: SPOTIFY_GREEN }]}>
+      <Pressable onPress={togglePlay} hitSlop={10} accessibilityRole="button" accessibilityLabel={now.isPlaying ? 'Pausar' : 'Tocar'} style={[styles.barPlay, { backgroundColor: SPOTIFY_GREEN }]}>
         <Feather name={now.isPlaying ? 'pause' : 'play'} size={16} color="#fff" />
       </Pressable>
     </Pressable>
@@ -287,7 +287,7 @@ export default function SpotifyPlayer({
                 <Feather name="skip-back" size={26} color={palette.text} />
               </Pressable>
 
-              <Pressable onPress={togglePlay} style={[styles.playBtn, { backgroundColor: SPOTIFY_GREEN }]}>
+              <Pressable onPress={togglePlay} accessibilityRole="button" accessibilityLabel={now.isPlaying ? 'Pausar' : 'Tocar'} style={[styles.playBtn, { backgroundColor: SPOTIFY_GREEN }]}>
                 <Feather name={now.isPlaying ? 'pause' : 'play'} size={26} color="#fff" />
               </Pressable>
 
@@ -295,7 +295,7 @@ export default function SpotifyPlayer({
                 <Feather name="skip-forward" size={26} color={palette.text} />
               </Pressable>
 
-              <Pressable onPress={cycleRepeat} hitSlop={8}>
+              <Pressable onPress={cycleRepeat} hitSlop={12} accessibilityRole="button" accessibilityLabel={now.repeat === 'off' ? 'Repetir: desligado' : now.repeat === 'track' ? 'Repetir esta faixa' : 'Repetir a lista'}>
                 <Feather
                   name={now.repeat === 'track' ? 'repeat' : 'repeat'}
                   size={20}

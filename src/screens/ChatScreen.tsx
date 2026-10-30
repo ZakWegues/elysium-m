@@ -23,7 +23,7 @@ import { liberarMicrofone, ocuparMicrofone } from '../lib/microfone';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { MotivoParada, resumoRodada } from '../lib/vozDiag';
-import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import { useAudioRecorder, RecordingPresets, getRecordingPermissionsAsync, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
 import { AuthError, pedidoDaTela, sendCommand } from '../lib/api';
@@ -54,7 +54,8 @@ import { sincronizarModo, trocarModo, useModo } from '../lib/modo';
 import type { ModoDaLista } from '../lib/rpc';
 
 
-type MicStatus = 'checking' | 'ready' | 'denied';
+/** 31/10: 'pedir' = ainda não autorizado; o pedido do sistema só aparece ao tocar no microfone. */
+type MicStatus = 'checking' | 'ready' | 'pedir' | 'denied';
 
 export default function ChatScreen({
   pairing,
@@ -267,41 +268,33 @@ export default function ChatScreen({
     return () => { sub.remove(); gravadorRef.current.descarregar(); };
   }, []);
 
+  // 31/10: na abertura só CONFERE a permissão (o Chat abre sozinho logo depois de parear, e o
+  // diálogo do sistema aparecia sem a pessoa ter pedido nada). Pedir fica para o toque no mic.
+  const prepararMicrofone = useCallback(async (pedir: boolean, cancelado: () => boolean = () => false): Promise<boolean> => {
+    let perm;
+    try {
+      perm = pedir ? await requestRecordingPermissionsAsync() : await getRecordingPermissionsAsync();
+    } catch (err) {
+      if (!cancelado()) { setMicStatus('denied'); pushError(`Falha na permissão: ${errMessage(err)}`); }
+      return false;
+    }
+    if (cancelado()) return false;
+    if (!perm.granted) { setMicStatus(perm.canAskAgain === false ? 'denied' : 'pedir'); return false; }
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    } catch (err) {
+      if (!cancelado()) { setMicStatus('denied'); pushError(`Falha ao preparar o áudio: ${errMessage(err)}`); }
+      return false;
+    }
+    if (!cancelado()) setMicStatus('ready');
+    return true;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      let perm;
-      try {
-        perm = await requestRecordingPermissionsAsync();
-      } catch (err) {
-        if (!cancelled) {
-          setMicStatus('denied');
-          pushError(`Falha na permissão: ${errMessage(err)}`);
-        }
-        return;
-      }
-      if (cancelled) return;
-      if (!perm.granted) {
-        setMicStatus('denied');
-        return;
-      }
-
-      try {
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      } catch (err) {
-        if (!cancelled) {
-          setMicStatus('denied');
-          pushError(`Falha ao preparar o áudio: ${errMessage(err)}`);
-        }
-        return;
-      }
-
-      if (!cancelled) setMicStatus('ready');
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void prepararMicrofone(false, () => cancelled);
+    return () => { cancelled = true; };
+  }, [prepararMicrofone]);
 
   useEffect(() => {
     return () => {
@@ -704,8 +697,9 @@ export default function ChatScreen({
     if (enviandoRef.current || recording || turnoRef.current) return;
     soltouRef.current = false;
     inicioGravacaoRef.current = 0;
+    if (micStatus === 'pedir') { void prepararMicrofone(true); return; }
     if (micStatus !== 'ready') {
-      Alert.alert('Microfone indisponível', 'Permissão de microfone não foi concedida.');
+      Alert.alert('Microfone indisponível', 'A permissão de microfone foi negada. Libere nas configurações do Android para falar com a Ely.');
       return;
     }
 
@@ -1066,6 +1060,9 @@ export default function ChatScreen({
     // Microfone ainda conferindo (Chat recém-aberto pelo atalho): espera, o efeito roda de
     // novo quando o status muda.
     if (micStatus === 'checking') return;
+    // 31/10: pedido de voz explícito (atalho, widget) sem permissão ainda: pede agora; o efeito
+    // roda de novo quando o status virar 'ready'.
+    if (micStatus === 'pedir') { void prepararMicrofone(true); return; }
     const texto = pedidoVoz.texto.trim();
     onPedidoVozTratado?.();
     // Ocupado (respondendo, gravando, outro pedido): o "Ely" é descartado, não enfileirado.
@@ -1331,8 +1328,8 @@ export default function ChatScreen({
           pulsando={recording}
           onPressIn={handleRecordStart}
           onPressOut={handleRecordStop}
-          disabled={sending || micStatus !== 'ready' || faseVoz !== null}
-          accessibilityLabel="Segure para falar"
+          disabled={sending || (micStatus !== 'ready' && micStatus !== 'pedir') || faseVoz !== null}
+          accessibilityLabel={micStatus === 'pedir' ? 'Permitir o microfone' : 'Segure para falar'}
         >
           <Feather
             name="mic"

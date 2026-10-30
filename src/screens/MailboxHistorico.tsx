@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useFolgaDaBarra } from '../lib/folgaBarra';
 import Feather from '@expo/vector-icons/Feather';
 import { MailboxMessage } from '../lib/mailbox';
 import {
@@ -35,6 +36,7 @@ export default function MailboxHistorico({
   onFechar: () => void;
 }) {
   const { palette, tokens } = useTheme();
+  const folgaDaBarra = useFolgaDaBarra();
   const [mensagens, setMensagens] = useState<MailboxMessage[]>([]);
   const [favoritos, setFavoritos] = useState<Record<string, boolean>>({});
   const [busca, setBusca] = useState('');
@@ -259,7 +261,7 @@ export default function MailboxHistorico({
       <FlatList
         data={linhas}
         keyExtractor={item => item.chave}
-        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: 0, gap: tokens.spacing.sm }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: 0, gap: tokens.spacing.sm, paddingBottom: tokens.spacing.lg + folgaDaBarra }}
         renderItem={({ item }) => {
           if (item.tipo === 'dia') {
             return (
