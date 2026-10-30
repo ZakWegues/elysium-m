@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Feather from '@expo/vector-icons/Feather';
-import { parsePairingQr, resolveActiveEndpoint, savePairing, UnauthorizedError } from '../lib/pairing';
+import { BloqueadoError, parsePairingQr, resolveActiveEndpoint, savePairing, UnauthorizedError } from '../lib/pairing';
 import { useTheme } from '../theme';
 import { Button, Text } from '../components/ui';
 
@@ -48,6 +48,9 @@ export default function PairingScreen({ onPaired, onCancel }: { onPaired: () => 
           'Acesso negado',
           'O QR code foi reconhecido, mas o token é inválido. Gere um novo QR code no ELYSIUM e tente de novo.'
         );
+      } else if (err instanceof BloqueadoError) {
+        // 31/10: o PC recusa por um tempo depois de muitas tentativas erradas.
+        Alert.alert('PC em pausa', 'O ELYSIUM recusou tentativas demais e pausou este celular por alguns minutos. Espere um pouco e leia o QR de novo.');
       } else {
         Alert.alert('Erro interno', 'Ocorreu um erro ao verificar a conexão.');
       }

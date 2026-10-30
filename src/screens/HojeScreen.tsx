@@ -1,6 +1,6 @@
 import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useRolagemDaBarra } from '../lib/barraRolagem';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
@@ -166,15 +166,18 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     }
   }, [pairing]);
 
+  const ativaRef = useRef(true);
   useEffect(() => {
     void carregar();
-    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') void carregar(); });
+    // 31/10: só com a aba à vista — fora dela, o useAoReativar já recarrega ao voltar (eram duas cargas).
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active' && ativaRef.current) void carregar(); });
     return () => sub.remove();
   }, [carregar]);
 
   // Voltou ao Hoje (08/10, abas vivas): mostra o que tinha e atualiza por trás.
   useAoReativar(() => { void carregar(); });
   const ativa = useAbaAtiva();
+  ativaRef.current = ativa;
 
   // Contagem dos timers ao vivo, só com timer correndo e a aba à vista.
   useEffect(() => {

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, FadeIn, FadeOut, LinearTransition, ReduceMotion, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { Text } from './ui';
 import { avisoDeSomPc, descreverEstadoPc, detalhesEstadoPc, useEstadoPc, type Tom } from '../lib/estadoPc';
 import { haptica } from '../lib/haptica';
 import { MOV } from '../lib/motion';
+import { useAbaAtiva } from './AbaViva';
 
 /**
  * A linha "em que pé está o PC" da Início (08/10): ELYSIUM na tela, minimizado, na bandeja,
@@ -75,11 +76,14 @@ export function corDoTom(tom: Tom, palette: ReturnType<typeof useTheme>['palette
 /** O ponto colorido; "respira" quando o ELYSIUM está aberto e respondendo. */
 function Ponto({ cor, vivo }: { cor: string; vivo: boolean }) {
   const a = useSharedValue(1);
+  // 31/10: parado com a aba escondida.
+  const ativa = useAbaAtiva();
   useEffect(() => {
-    a.value = vivo
+    a.value = vivo && ativa
       ? withRepeat(withSequence(withTiming(0.35, { duration: 1100, reduceMotion: ReduceMotion.System }), withTiming(1, { duration: 1100, reduceMotion: ReduceMotion.System })), -1)
       : withTiming(1, { duration: 200 });
-  }, [vivo, a]);
+    return () => cancelAnimation(a);
+  }, [vivo, a, ativa]);
   const st = useAnimatedStyle(() => ({ opacity: a.value }));
   return <Animated.View style={[styles.ponto, { backgroundColor: cor }, st]} />;
 }

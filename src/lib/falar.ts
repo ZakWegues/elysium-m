@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cabecalhoAssinado } from './assinatura';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAudioPlayer, AudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
@@ -280,7 +281,7 @@ function prepararModo(): Promise<void> {
 
 async function baixarParte(texto: string, pairing: Pairing): Promise<File> {
   const url = `http://${pairing.activeIp}:${pairing.port}/api/tts?text=${encodeURIComponent(texto)}`;
-  const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${pairing.token}` } }, PRAZO_MS);
+  const res = await fetchWithTimeout(url, { headers: cabecalhoAssinado(pairing.token, 'GET', url) }, PRAZO_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   // 26/10: a voz do Gemini chega em WAV; a do Edge, em MP3.

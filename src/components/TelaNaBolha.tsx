@@ -1,6 +1,6 @@
 import { createElement, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, ToastAndroid, useWindowDimensions, View } from 'react-native';
-import AnimatedReanimated, { Easing, FadeIn, FadeOut, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import AnimatedReanimated, { cancelAnimation, Easing, FadeIn, FadeOut, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -424,6 +424,7 @@ function Bloco({ cor, atraso, parado, style }: { cor: string; atraso: number; pa
   const a = useSharedValue(0.4);
   useEffect(() => {
     if (!parado) a.value = withDelay(atraso, withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true));
+    return () => cancelAnimation(a);
   }, [parado]);
   const estilo = useAnimatedStyle(() => ({ opacity: a.value }));
   return <AnimatedReanimated.View style={[{ borderRadius: 8, backgroundColor: comAlfa(cor, 0.2) }, style, estilo]} />;
@@ -433,6 +434,7 @@ function Barra({ cor, h, atraso, parado }: { cor: string; h: number; atraso: num
   const s = useSharedValue(h);
   useEffect(() => {
     if (!parado) s.value = withDelay(atraso, withRepeat(withTiming(h * 0.6 + 0.35, { duration: 1200, easing: Easing.inOut(Easing.quad) }), -1, true));
+    return () => cancelAnimation(s);
   }, [parado]);
   // Escala em Y a partir da base (sem refazer o layout a cada quadro).
   const estilo = useAnimatedStyle(() => ({ transform: [{ scaleY: s.value }] }));
@@ -444,6 +446,7 @@ function Ponto({ cor, atraso, parado }: { cor: string; atraso: number; parado: b
   useEffect(() => {
     // O ciclo do "pensando" da esfera (≈1,57 s), como os pontos do chat.
     if (!parado) y.value = withDelay(atraso, withRepeat(withSequence(withTiming(-3, { duration: 390 }), withTiming(0, { duration: 390 }), withTiming(0, { duration: 790 })), -1));
+    return () => cancelAnimation(y);
   }, [parado]);
   const estilo = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return <AnimatedReanimated.View style={[styles.ponto, { backgroundColor: cor }, estilo]} />;

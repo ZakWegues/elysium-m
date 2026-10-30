@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { cabecalhoAssinado } from './assinatura';
 import * as Application from 'expo-application';
 import { File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -181,7 +182,7 @@ export async function baixarEInstalar(
     `http://${pairing.activeIp}:${pairing.port}/api/update/apk`,
     destino,
     {
-      headers: { Authorization: `Bearer ${pairing.token}` },
+      headers: cabecalhoAssinado(pairing.token, 'GET', `http://${pairing.activeIp}:${pairing.port}/api/update/apk`),
       onProgress: ({ bytesWritten, totalBytes }) => {
         const total = totalBytes > 0 ? totalBytes : pacote.tamanho;
         if (total > 0) aoProgresso?.(Math.min(bytesWritten / total, 1));

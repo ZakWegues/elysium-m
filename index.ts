@@ -1,6 +1,15 @@
 // O gesture-handler exige ser o PRIMEIRO import do app: ele troca a raiz de toque do
 // Android, e qualquer view montada antes disso fica fora do sistema de gestos.
 import 'react-native-gesture-handler';
+
+// 31/10: na versão instalada, nada de log comum no logcat (URLs com IP da rede, trechos de
+// conversa). Avisos e erros continuam — sem conteúdo (ver telemetry.ts e stream.ts).
+if (!__DEV__) {
+  const nada = () => {};
+  console.log = nada;
+  console.info = nada;
+  console.debug = nada;
+}
 import { registerRootComponent } from 'expo';
 // Define a tarefa de segundo plano no arranque — o TaskManager precisa achá-la quando o
 // Android cria o processo só para rodá-la, sem UI. Ver src/lib/tarefaSegundoPlano.ts.

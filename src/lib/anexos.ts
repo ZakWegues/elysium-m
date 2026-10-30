@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { cabecalhoAssinado } from './assinatura';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { toByteArray } from 'base64-js';
@@ -160,8 +161,9 @@ export async function baixarAnexo(
   if (destino.exists && (!tamanho || destino.size === tamanho)) return destino;
   if (destino.exists) destino.delete();
   try {
-    const tarefa = File.createDownloadTask(`${pc.baseUrl}/api/mailbox/messages/${encodeURIComponent(id)}/raw`, destino, {
-      headers: { Authorization: `Bearer ${pc.token}` },
+    const urlRaw = `${pc.baseUrl}/api/mailbox/messages/${encodeURIComponent(id)}/raw`;
+    const tarefa = File.createDownloadTask(urlRaw, destino, {
+      headers: cabecalhoAssinado(pc.token, 'GET', urlRaw),
       onProgress: ({ bytesWritten, totalBytes }) => { if (totalBytes > 0) aoProgresso?.(bytesWritten / totalBytes); },
     });
     const f = await tarefa.downloadAsync();
@@ -240,9 +242,10 @@ export async function enviarArquivoGrande(
   const tamanho = arquivo.size ?? 0;
   if (!tamanho) throw new Error('Não deu para ler o tamanho do arquivo.');
   if (tamanho > LIMITE_ENVIO_PARA_O_PC) throw new Error('O arquivo passa de 500 MB.');
-  const tarefa = arquivo.createUploadTask(urlDoUpload(pc.baseUrl, nome, tipoDoArquivo(nome, tipo), opcoes), {
+  const urlUp = urlDoUpload(pc.baseUrl, nome, tipoDoArquivo(nome, tipo), opcoes);
+  const tarefa = arquivo.createUploadTask(urlUp, {
     httpMethod: 'PUT',
-    headers: { Authorization: `Bearer ${pc.token}`, 'Content-Type': 'application/octet-stream' },
+    headers: { ...cabecalhoAssinado(pc.token, 'PUT', urlUp), 'Content-Type': 'application/octet-stream' },
     signal: opcoes.signal,
     onProgress: ({ bytesSent, totalBytes }) => { if (totalBytes > 0) opcoes.aoProgresso?.(bytesSent / totalBytes); },
   });

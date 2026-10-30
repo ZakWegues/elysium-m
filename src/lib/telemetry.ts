@@ -56,7 +56,7 @@ export function openTelemetryStream(
       try {
         data = JSON.parse(event.data);
       } catch (err) {
-        console.error('[telemetry-ws] frame ilegível', event.data, err);
+        console.error('[telemetry-ws] frame ilegível', String(event.data).length, 'caracteres', err);
         return;
       }
       if (data.type === 'telemetry') {

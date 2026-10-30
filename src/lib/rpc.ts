@@ -7,6 +7,7 @@
  */
 
 import { baseUrl, Pairing } from './pairing';
+import { cabecalhoAssinado } from './assinatura';
 import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
 import type { EstadoAppPc } from './estadoPc';
 import contrato from '../../contracts/rpc-methods.json';
@@ -798,14 +799,15 @@ export async function callRpc<M extends RpcMethod>(
   params: Record<string, unknown> = {},
   options: RpcOptions = {}
 ): Promise<RpcResults[M]> {
+  const url = `${baseUrl(pairing)}/api/rpc`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${pairing.token}`,
+    ...cabecalhoAssinado(pairing.token, 'POST', url),
   };
   if (options.confirmed) headers['X-Elysium-Confirm'] = '1';
 
   const res = await fetchWithTimeout(
-    `${baseUrl(pairing)}/api/rpc`,
+    url,
     { method: 'POST', headers, body: JSON.stringify({ method, params }) },
     options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   );

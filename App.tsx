@@ -424,7 +424,7 @@ function AppInner() {
 
   const handlePaired = useCallback(() => {
     setAdicionandoPc(false);
-    loadPairing().then(setPairing);
+    loadPairing().then(setPairing).catch((e) => console.error('[pareamento] não consegui ler o cofre', e));
   }, []);
 
   // "Desparear" esquece o PC ATIVO; se houver outro pareado, ele assume (bloco 121).
@@ -433,7 +433,7 @@ function AppInner() {
       setPairing(proximo);
       setScreen('home');
       setSettingsModalVisible(false);
-    });
+    }).catch((e) => console.error('[pareamento] não consegui esquecer o PC', e));
   }, []);
 
   const handleTrocarPc = useCallback((id: string) => {

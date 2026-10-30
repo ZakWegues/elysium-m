@@ -4,6 +4,7 @@ import Animated, { Easing, ReduceMotion, cancelAnimation, useAnimatedStyle, useS
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../theme';
 import { Text } from './ui';
+import { useAbaAtiva } from './AbaViva';
 
 /**
  * O "reator" (fase 16, tema Stark): anel de progresso no centro, um anel tracejado girando
@@ -21,12 +22,15 @@ export function Reator({ tamanho = 84, fracao, rotulo, sub, vivo = false }: {
 }) {
   const { palette } = useTheme();
   const giro = useSharedValue(0);
+  // 31/10: com a aba escondida (abas vivas), o anel para de girar — custava bateria à toa.
+  const ativa = useAbaAtiva();
   useEffect(() => {
     cancelAnimation(giro);
+    if (!ativa) return;
     giro.value = 0;
     giro.value = withRepeat(withTiming(360, { duration: vivo ? 3000 : 14000, easing: Easing.linear, reduceMotion: ReduceMotion.System }), -1, false);
     return () => cancelAnimation(giro);
-  }, [vivo, giro]);
+  }, [vivo, giro, ativa]);
   const externo = useAnimatedStyle(() => ({ transform: [{ rotate: `${giro.value}deg` }] }));
   const interno = useAnimatedStyle(() => ({ transform: [{ rotate: `${-giro.value * 2}deg` }] }));
 

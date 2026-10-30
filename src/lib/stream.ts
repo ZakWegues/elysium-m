@@ -231,7 +231,7 @@ export function openVoiceConnection(
     try {
       data = JSON.parse(event.data);
     } catch (err) {
-      console.error('[voice-ws] resposta ilegível do servidor', event.data, err);
+      console.error('[voice-ws] resposta ilegível do servidor', String(event.data).length, 'caracteres', err);
       return;
     }
     // Frame de outro pedido (um antigo que terminou depois): não é desta bolha.

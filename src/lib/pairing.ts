@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { cabecalhoAssinado } from './assinatura';
 import { fetchWithTimeout, PROBE_TIMEOUT_MS } from './http';
 import { definirPcAtivo } from './pcAtivo';
 
@@ -162,6 +163,18 @@ export async function savePairing(pairing: Pairing): Promise<void> {
   await gravarCofre(cofreCom(await lerCofre(), pairing));
 }
 
+/**
+ * 31/10: grava um endereço novo SÓ se esse PC ainda é o ativo. A sonda começa com um PC e
+ * termina segundos depois — se no meio o Zak trocou de PC ou desapareou, gravar ali reativava
+ * (ou ressuscitava) o PC antigo.
+ */
+export async function savePairingSeAtivo(pairing: Pairing): Promise<boolean> {
+  const c = await lerCofre();
+  if (!c || c.ativo !== idDoPc(pairing) || !c.pcs.some(x => idDoPc(x) === idDoPc(pairing))) return false;
+  await gravarCofre(cofreCom(c, pairing));
+  return true;
+}
+
 /** Esquece o PC ATIVO. Se houver outro, ele assume; senão, o app volta para o QR. */
 export async function clearPairing(): Promise<void> {
   const c = await lerCofre();
@@ -256,9 +269,10 @@ async function pareceElysium(ip: string, port: number): Promise<boolean> {
 }
 
 async function probe(ip: string, port: number, token: string, prazoMs = PROBE_TIMEOUT_MS): Promise<string> {
+  const url = `${baseUrlFor(ip, port)}/api/health`;
   const res = await fetchWithTimeout(
-    `${baseUrlFor(ip, port)}/api/health`,
-    { headers: { Authorization: `Bearer ${token}` } },
+    url,
+    { headers: cabecalhoAssinado(token, 'GET', url) },
     prazoMs
   );
   // 401: o servidor está respondendo mas o token mudou. Isso é diferente de PC offline —
@@ -305,7 +319,9 @@ export async function resolveActiveEndpoint(pairing: Pairing, prazoMs = PROBE_TI
   if (!winner) return null;
 
   const updated = { ...pairing, activeIp: winner };
-  await savePairing(updated);
+  // Grava só se ainda for o PC ativo; no pareamento novo (ainda fora do cofre) quem grava é
+  // a tela de pareamento, com o endereço que respondeu.
+  await savePairingSeAtivo(updated);
   return updated;
 }
 

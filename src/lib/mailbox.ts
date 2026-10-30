@@ -1,4 +1,5 @@
 import { baseUrl, Pairing } from './pairing';
+import { cabecalhoAssinado } from './assinatura';
 import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
 
 export type MailboxAttachmentMeta = { name: string; mimeType: string; sizeBytes: number };
@@ -23,11 +24,12 @@ async function request<T>(
   init?: RequestInit,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
-  const res = await fetchWithTimeout(`${baseUrl(pairing)}${path}`, {
+  const url = `${baseUrl(pairing)}${path}`;
+  const res = await fetchWithTimeout(url, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${pairing.token}`,
+      ...cabecalhoAssinado(pairing.token, init?.method ?? 'GET', url),
       ...(init?.headers ?? {}),
     },
   }, timeoutMs);

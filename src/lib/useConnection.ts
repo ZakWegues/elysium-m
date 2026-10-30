@@ -43,6 +43,7 @@ export function useConnection(
   const emAndamento = useRef<Promise<boolean> | null>(null);
   const ultimaSonda = useRef(0);
   const primeira = useRef(true);
+  const varrendo = useRef(false);
   // Evita que o efeito reinicie a cada novo objeto de pairing devolvido pela sonda.
   const pairingRef = useRef<Pairing | null>(pairing);
   pairingRef.current = pairing;
@@ -99,6 +100,8 @@ export function useConnection(
       const resolved = await resolveActiveEndpoint(current, prazo);
       if (!resolved) { evento({ tipo: 'falhou' }); return false; }
       const refreshed = await refreshEndpoints(resolved);
+      // 31/10: trocou de PC (ou desapareou) durante a sonda — o resultado é do PC antigo.
+      if (pairingRef.current !== current) return false;
       if (refreshed !== resolved || resolved.activeIp !== current.activeIp) onPairingUpdate(refreshed);
       evento({ tipo: 'ok' });
       // Em que pé está o app no PC (janela, bandeja, tela bloqueada). PC anterior à 2.5 não
@@ -177,7 +180,9 @@ export function useConnection(
   /** Varredura da sub-rede: só sob pedido explícito do usuário (254 requisições). */
   const runScan = useCallback(async (): Promise<boolean> => {
     const current = pairingRef.current;
-    if (!current || scanning) return false;
+    // 31/10: guarda num ref — dois toques rápidos liam o `scanning` antigo e varriam duas vezes.
+    if (!current || varrendo.current) return false;
+    varrendo.current = true;
 
     setScanning(true);
     setScanProgress(0);
@@ -199,6 +204,7 @@ export function useConnection(
       return true;
     } finally {
       setScanning(false);
+      varrendo.current = false;
     }
   }, [scanning, onPairingUpdate, evento]);
 
