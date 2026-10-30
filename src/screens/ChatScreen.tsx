@@ -469,6 +469,8 @@ export default function ChatScreen({
    */
   const bolhaAtualRef = useRef<ReturnType<typeof bolhaEmPedacos> | null>(null);
   const inputRef = useRef<TextInput>(null);
+  /** Id da pergunta sendo editada (31/10); o próximo envio do campo a substitui. */
+  const editandoRef = useRef<string | null>(null);
   function pararResposta() {
     if (!enviandoRef.current || paradoRef.current) return;
     paradoRef.current = true;
@@ -559,6 +561,15 @@ export default function ChatScreen({
       if (alvo) { rodarComandoIa(comandoEscolhido, alvo); return; }
     }
     setDraft('');
+    // 31/10: "Editar" na última pergunta — ela troca de texto, o que veio depois sai e o PC
+    // desfaz o turno antigo (o mesmo `refazer` do bloco 130).
+    const editando = texto === undefined && !opcoes.refazer ? editandoRef.current : null;
+    editandoRef.current = null;
+    const iEditada = editando ? messages.findIndex((m) => m.id === editando) : -1;
+    if (iEditada >= 0) {
+      setMessages((prev) => [...prev.slice(0, iEditada), { ...prev[iEditada], text, ts: Date.now() }]);
+      opcoes = { ...opcoes, refazer: true };
+    }
     // Quem manda mensagem quer ver a resposta (e a tela que vier): a lista volta a seguir o fim.
     coladoNoFim.current = true;
     ultimoEnvio.current = Date.now();
@@ -841,7 +852,16 @@ export default function ChatScreen({
     const copiar = { text: 'Copiar', onPress: () => { Clipboard.setStringAsync(puro).catch(() => {}); } };
     // Fase 23: compartilhar com qualquer app (folha do Android).
     const compartilhar = { text: 'Compartilhar', onPress: () => { Share.share({ message: puro }).catch(() => {}); } };
-    if (item.from === 'me') { Alert.alert('Mensagem', undefined, [copiar, compartilhar], { cancelable: true }); return; }
+    if (item.from === 'me') {
+      // Editar só a última pergunta digitada que já teve resposta (como o Refazer).
+      const ultimaMinha = [...messages].reverse().find(m => m.from === 'me');
+      const iItem = messages.findIndex(m => m.id === item.id);
+      const podeEditar = ultimaMinha?.id === item.id && !sending && !item.text.startsWith('🎤') && !item.text.startsWith('📎')
+        && messages.slice(iItem + 1).some(m => m.from === 'reply');
+      const editar = { text: 'Editar', onPress: () => { editandoRef.current = item.id; setDraft(item.text); inputRef.current?.focus(); } };
+      Alert.alert('Mensagem', undefined, podeEditar ? [copiar, compartilhar, editar] : [copiar, compartilhar], { cancelable: true });
+      return;
+    }
     const ouvir = { text: 'Ouvir', onPress: () => { falar(textoPuro(item.text), pairing); } };
     // Refazer só a última resposta, e só se a pergunta dela foi digitada (áudio não tem texto para reenviar).
     const ultima = [...messages].reverse().find(m => m.from === 'reply');
@@ -1310,7 +1330,7 @@ export default function ChatScreen({
             },
           ]}
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={(t) => { if (!t) editandoRef.current = null; setDraft(t); }}
           placeholder="Converse com a Ely…"
           placeholderTextColor={palette.textMuted}
           onSubmitEditing={() => handleSend()}
