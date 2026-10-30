@@ -57,6 +57,9 @@ import type { ModoDaLista } from '../lib/rpc';
 /** 31/10: 'pedir' = ainda não autorizado; o pedido do sistema só aparece ao tocar no microfone. */
 type MicStatus = 'checking' | 'ready' | 'pedir' | 'denied';
 
+/** 31/10: quanto tempo o "Desfazer" fica embaixo da resposta (o PC aceita por 5 min, pela voz). */
+const DESFAZER_MS = 30_000;
+
 export default function ChatScreen({
   pairing,
   onUnpair,
@@ -96,6 +99,13 @@ export default function ChatScreen({
   const folgaDaBarra = useFolgaDaBarra();
   // 22.1: começa vazia — a esfera é a tela de boas-vindas (a bolha de texto era ruído).
   const [messages, setMessages] = useState<StoredMessage[]>([]);
+  // 31/10: o "Desfazer" some sozinho no prazo (e sai do histórico salvo).
+  const prazoDesfazer = messages[messages.length - 1]?.desfazer?.ate;
+  useEffect(() => {
+    if (!prazoDesfazer) return;
+    const t = setTimeout(() => setMessages((prev) => prev.map((m) => (m.desfazer ? { ...m, desfazer: undefined } : m))), Math.max(0, prazoDesfazer - Date.now()));
+    return () => clearTimeout(t);
+  }, [prazoDesfazer]);
   // Fase 23.1: o nome que a Início guardou, para a saudação sob a esfera.
   const [nomeDono, setNomeDono] = useState('');
   useEffect(() => { AsyncStorage.getItem(CHAVE_NOME).then(n => { if (n) setNomeDono(n); }).catch(() => {}); }, []);
@@ -439,7 +449,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -453,9 +463,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string) => {
       setEscrevendoId(null);
-      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}) };
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -588,6 +598,7 @@ export default function ChatScreen({
       let local = false;
       let rapidas: Rapidas | undefined;
       let pedidoId: string | undefined;
+      let desfazer: string | undefined;
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
@@ -604,6 +615,7 @@ export default function ChatScreen({
         local = r.local === true;
         rapidas = r.rapidas;
         pedidoId = r.id;
+        desfazer = r.desfazer;
       } catch (wsErr) {
         // 21/10: só cai no HTTP se a conexão NEM ABRIU (o comando não chegou ao PC). Com o
         // comando já enviado, mandar de novo rodaria duas vezes — a retomada cuida da queda.
@@ -614,7 +626,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes, local, rapidas, pedidoId);
+      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -824,13 +836,13 @@ export default function ChatScreen({
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply, rapidas, id } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
+      const { reply, rapidas, id, desfazer } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
       if (paradoRef.current) { fala?.abortar(); return null; }
       // Com o id, a tela que o PC mandar depois (pedido de tela por voz) acha esta bolha.
-      bolha.fechar(reply, undefined, false, rapidas, id);
+      bolha.fechar(reply, undefined, false, rapidas, id, desfazer);
       return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       // Erro no meio: o que já foi dito fica, e a voz para junto com a resposta.
@@ -1216,6 +1228,14 @@ export default function ChatScreen({
             {/* 22/10 (Fase 4): a tela inteligente da resposta, embaixo da bolha. */}
             {item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
               <TelaNaBolha key={`tela-${item.id}`} tela={item.tela!} id={item.id} acoes={acoesTela} />
+            ) : null}
+            {/* 31/10: a resposta fez algo reversível — "Desfazer" por 30 s (manda "desfaz" ao PC). */}
+            {item.from === 'reply' && item.desfazer && !sending && messages[messages.length - 1]?.id === item.id ? (
+              <Pressable onPress={() => { haptica.leve(); void handleSend('desfaz'); }} accessibilityRole="button" accessibilityLabel={`Desfazer: ${item.desfazer.rotulo}`} hitSlop={6}
+                style={({ pressed }) => [styles.verTela, { borderColor: palette.border, borderStyle: 'solid', opacity: pressed ? 0.7 : 1 }]}>
+                <Feather name="corner-up-left" size={12} color={palette.textMuted} />
+                <Text variant="caption" color={palette.textMuted}>Desfazer</Text>
+              </Pressable>
             ) : null}
             {/* 23/10: "Ver como tela" na última resposta longa que ainda não tem tela (como no PC). */}
             {item.from === 'reply' && !item.tela && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (

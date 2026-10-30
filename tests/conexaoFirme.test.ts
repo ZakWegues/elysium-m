@@ -135,3 +135,22 @@ describe("áudio com id (31/10)", () => {
     conn.close();
   });
 });
+
+describe("desfazer (31/10)", () => {
+  beforeEach(() => { WsFalso.todos = []; vi.useFakeTimers(); });
+
+  it("o rótulo do desfazer vem junto da resposta; sem ele, nada", async () => {
+    const conn = openVoiceConnection(pairing);
+    WsFalso.todos[0].abrir();
+    await conn.ready;
+    const r1 = conn.sendText("volume 30", undefined, { canal: "texto" });
+    const id1 = JSON.parse(WsFalso.todos[0].enviados.find(e => e.includes("command"))!).id;
+    WsFalso.todos[0].pc({ type: "reply", reply: "Volume em 30%.", id: id1, desfazer: "Volume em 30%" });
+    await expect(r1).resolves.toMatchObject({ desfazer: "Volume em 30%" });
+    const r2 = conn.sendText("oi", undefined, { canal: "texto" });
+    const id2 = JSON.parse(WsFalso.todos[0].enviados.filter(e => e.includes("command"))[1]).id;
+    WsFalso.todos[0].pc({ type: "reply", reply: "Oi!", id: id2 });
+    expect((await r2).desfazer).toBeUndefined();
+    conn.close();
+  });
+});
