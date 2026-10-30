@@ -359,6 +359,8 @@ export function openVoiceConnection(
       const p = abrirPedido(resolve, reject, onChunk, onTranscript);
       if (!p) return;
       p.enviado = true;
+      // 31/10: com id, o áudio vira pedido como o texto (retomada e telas) — PC antigo ignora o anúncio.
+      p.id = novoIdDePedido();
 
       (async () => {
         let bytes: Uint8Array;
@@ -375,6 +377,7 @@ export function openVoiceConnection(
 
         try {
           if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('sem conexão');
+          ws.send(JSON.stringify({ type: 'audio', id: p.id, telas: true }));
           ws.send(bytes);
           console.log('[voice-ws] áudio enviado', bytes.byteLength, 'bytes');
         } catch (err) {

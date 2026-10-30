@@ -824,12 +824,13 @@ export default function ChatScreen({
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply, rapidas } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
+      const { reply, rapidas, id } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
       if (paradoRef.current) { fala?.abortar(); return null; }
-      bolha.fechar(reply, undefined, false, rapidas);
+      // Com o id, a tela que o PC mandar depois (pedido de tela por voz) acha esta bolha.
+      bolha.fechar(reply, undefined, false, rapidas, id);
       return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       // Erro no meio: o que já foi dito fica, e a voz para junto com a resposta.

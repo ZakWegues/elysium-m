@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("expo-file-system", () => ({ File: class {}, Directory: class {}, Paths: {}, FileMode: {} }));
+vi.mock("expo-file-system", () => ({ File: class { async bytes() { return new Uint8Array([1, 2, 3]); } }, Directory: class {}, Paths: {}, FileMode: {} }));
 vi.mock("expo-intent-launcher", () => ({ startActivityAsync: async () => ({}) }));
 vi.mock("../src/lib/notificacoes", () => ({ receberEntrega: async () => {} }));
 vi.mock("../src/lib/estadoPc", () => ({ receberFrameEstado: () => {} }));
@@ -108,5 +108,30 @@ describe("arquivos do PC e atualização (21/10)", async () => {
     expect(tipoDoArquivo("x.pdf", "application/pdf")).toBe("application/pdf");
     expect(tamanhoLegivel(5 * 1024 * 1024)).toBe("5,0 MB");
     expect(tamanhoLegivel(2 * 1024 ** 3)).toBe("2,0 GB");
+  });
+});
+
+describe("áudio com id (31/10)", () => {
+  beforeEach(() => { WsFalso.todos = []; vi.useFakeTimers(); });
+
+  it("anuncia o áudio com id antes dos bytes, e a resposta e a tela voltam com esse id", async () => {
+    const telas: { id: string }[] = [];
+    const conn = openVoiceConnection(pairing, undefined, undefined, undefined, (f: { id: string }) => telas.push(f));
+    WsFalso.todos[0].abrir();
+    await conn.ready;
+    const r = conn.sendAudio("file:///gravacao.m4a");
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = WsFalso.todos[0];
+    const i = ws.enviados.findIndex(e => typeof e === "string" && e.includes('"audio"'));
+    const anuncio = JSON.parse(ws.enviados[i]);
+    expect(anuncio).toMatchObject({ type: "audio", telas: true });
+    expect(anuncio.id).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+    expect(ws.enviados[i + 1]).toBeInstanceOf(Uint8Array);
+    ws.pc({ type: "transcript", text: "me mostra num gráfico", id: anuncio.id });
+    ws.pc({ type: "reply", reply: "Montando a tela…", id: anuncio.id });
+    await expect(r).resolves.toMatchObject({ transcript: "me mostra num gráfico", id: anuncio.id });
+    ws.pc({ type: "ui", id: anuncio.id, estado: "gerando" });
+    expect(telas.at(-1)?.id).toBe(anuncio.id);
+    conn.close();
   });
 });
