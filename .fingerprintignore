@@ -4,3 +4,8 @@
 modules/*/android/build/**/*
 modules/*/android/.gradle/**/*
 modules/*/android/.cxx/**/*
+# 31/10 (APK 2.6.0): o mesmo problema no plugin Gradle do expo-updates — o daemon do Kotlin cria
+# um arquivo de sessão em .kotlin/ só enquanto compila, e o fingerprint da build pegava ele.
+**/.kotlin/**/*
+node_modules/expo-updates/expo-updates-gradle-plugin/build/**/*
+node_modules/expo-updates/expo-updates-gradle-plugin/.gradle/**/*
