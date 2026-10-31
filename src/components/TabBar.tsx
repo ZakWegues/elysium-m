@@ -161,6 +161,8 @@ export function TabBar({
   // ativa (`rotulos` 1 = aberta, 0 = encolhida); segurar faz crescer.
   const estiloPilula = useAnimatedStyle(() => ({
     width: PILULA_ENCOLHIDA + (larguraPilula.value - PILULA_ENCOLHIDA) * rotulos.value,
+    // Antes do 1º onLayout a largura é 0: nada de pílula espremida no primeiro quadro.
+    opacity: larguraPilula.value > 0 ? 1 : 0,
     transform: [{ scale: 1 + 0.03 * aperto.value }],
   }));
 
@@ -303,7 +305,9 @@ const styles = StyleSheet.create({
   },
   linha: { flexDirection: 'row', alignItems: 'stretch', flex: 1, paddingHorizontal: 6, paddingVertical: 6, overflow: 'hidden' },
   seletor: {
-    position: 'absolute', left: 0, top: 6, bottom: 6, borderRadius: 999, borderWidth: 1,
+    // 31/10: `left` igual ao `paddingHorizontal` da linha — com 0, o seletor ficava 6 px à
+    // esquerda do centro da aba (a barra "torta").
+    position: 'absolute', left: 6, top: 6, bottom: 6, borderRadius: 999, borderWidth: 1,
     shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
   },
   tabCaixa: { overflow: 'hidden' },

@@ -99,7 +99,9 @@ export function GlassFill({
   const alvoPadrao = useBlurTarget();
   const blurTarget = alvo ?? alvoPadrao;
   const vidro = palette.familia === 'glass';
-  const forca = vidro || alvo ? Math.min(90, Math.round(intensity * 1.2)) : BLUR_NOITE;
+  // Com `alvo` (a barra de abas) o desfoque é forte em todos os temas: ela fica por cima das
+  // telas, e com o mínimo da noite o texto que passa por baixo brigaria com os ícones.
+  const forca = vidro || alvo ?Math.min(90, Math.round(intensity * 1.2)) : BLUR_NOITE;
 
   return (
     <>
