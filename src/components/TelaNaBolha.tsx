@@ -64,6 +64,8 @@ type Props = {
   onTentarDeNovo?: () => void;
   /** Prévia web: a roda do mouse em cima da tela rola o chat. */
   onRolar?: (dy: number) => void;
+  /** 31/10: guardar nas Telas salvas do PC. */
+  onSalvar?: () => void;
 };
 
 /**
@@ -79,6 +81,8 @@ export type AcoesTela = {
   tentar: (msgId: string) => void;
   rolar: (dy: number) => void;
   cresceu: (msgId: string) => void;
+  /** 31/10: guardar nas Telas salvas do PC (com o estado de agora). */
+  salvar?: (msgId: string) => void;
 };
 
 /**
@@ -97,6 +101,7 @@ export const TelaNaBolha = memo(function TelaNaBolha({ tela, id, acoes }: { tela
     onCancelar: () => acoes.cancelar(id),
     onTentarDeNovo: () => acoes.tentar(id),
     onRolar: acoes.rolar,
+    ...(acoes.salvar ? { onSalvar: () => acoes.salvar!(id) } : {}),
   }), [tela, id, acoes]);
   return <TelaInterna {...props} />;
 });
@@ -120,7 +125,7 @@ function TelaInterna(props: Props) {
   return <Previa {...props} />;
 }
 
-function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, onRolar }: Props) {
+function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, onRolar, onSalvar }: Props) {
   const { palette, tokens } = useTheme();
   const reduzir = useReducedMotion();
   const { height: alturaJanela } = useWindowDimensions();
@@ -176,6 +181,7 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
       {mostrou && cortada ? (
         <View style={styles.rodapeCortada} pointerEvents="box-none">
           <LinearGradient colors={[comAlfa(palette.surface, 0), comAlfa(palette.surface, 0.94)]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+          {onSalvar ? <BotaoAbrir rotulo="Salvar" icone="bookmark" onPress={onSalvar} /> : null}
           <BotaoAbrir rotulo="Abrir tela inteira" forte onPress={() => setCheia(true)} />
         </View>
       ) : null}
@@ -188,6 +194,7 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
     {/* Inteira à vista: o "Tela cheia" fica embaixo, sem cobrir nada da tela. */}
     {mostrou && !cortada ? (
       <View style={styles.rodapeInteira}>
+        {onSalvar ? <BotaoAbrir rotulo="Salvar" icone="bookmark" onPress={onSalvar} /> : null}
         <BotaoAbrir rotulo="Tela cheia" onPress={() => setCheia(true)} />
       </View>
     ) : null}
@@ -195,7 +202,7 @@ function Previa({ tela, onPerguntar, onEstado, onPedido, onFalhou, onCresceu, on
   );
 }
 
-function BotaoAbrir({ rotulo, forte, onPress }: { rotulo: string; forte?: boolean; onPress: () => void }) {
+function BotaoAbrir({ rotulo, forte, icone = 'maximize-2', onPress }: { rotulo: string; forte?: boolean; icone?: keyof typeof Feather.glyphMap; onPress: () => void }) {
   const { palette } = useTheme();
   return (
     <Pressable onPress={() => { haptica.leve(); onPress(); }} accessibilityRole="button" accessibilityLabel={rotulo} hitSlop={8}
@@ -204,7 +211,7 @@ function BotaoAbrir({ rotulo, forte, onPress }: { rotulo: string; forte?: boolea
         backgroundColor: comAlfa(palette.surface, 0.92),
         transform: [{ scale: pressed ? 0.97 : 1 }],
       }]}>
-      <Feather name="maximize-2" size={13} color={forte ? palette.text : palette.textMuted} />
+      <Feather name={icone} size={13} color={forte ? palette.text : palette.textMuted} />
       <Text variant="caption" color={forte ? palette.text : palette.textMuted}>{rotulo}</Text>
     </Pressable>
   );
@@ -469,8 +476,8 @@ const styles = StyleSheet.create({
   caixa: { alignSelf: 'stretch', overflow: 'hidden', marginTop: 4, marginBottom: 6 },
   quadroPrevia: { position: 'absolute', left: 0, right: 0, top: 0 },
   web: { flex: 1, backgroundColor: 'transparent' },
-  rodapeCortada: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 88, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 },
-  rodapeInteira: { alignItems: 'flex-end', marginTop: -2, marginBottom: 4 },
+  rodapeCortada: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 88, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8, paddingBottom: 12 },
+  rodapeInteira: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: -2, marginBottom: 4 },
   abrir: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1 },
   cheia: { flex: 1 },
   cheiaTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52, paddingLeft: 18, paddingRight: 8, borderBottomWidth: 1 },
@@ -488,3 +495,21 @@ const styles = StyleSheet.create({
   tentar: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1 },
   escondida: { position: 'absolute', width: 1, height: 1, opacity: 0, left: -10, top: -10 },
 });
+
+/**
+ * 31/10: uma tela salva (Hoje → Telas salvas) aberta inteira, com o estado de quando foi salva.
+ * Mexer nela guarda o estado novo (onEstado); perguntar fecha (não há chat aqui).
+ */
+export function TelaSalvaCheia({ programa, estado, onFechar, onEstado, onPedido }: {
+  programa: string; estado?: Record<string, unknown>; onFechar: () => void;
+  onEstado: (vars: Record<string, unknown>) => void; onPedido: Props['onPedido'];
+}) {
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    carregarRenderer().then((h) => { if (vivo) setHtml(h); }).catch(() => { if (vivo) onFechar(); });
+    return () => { vivo = false; };
+  }, []);
+  if (!html) return null;
+  return <TelaCheia html={html} tela={{ programa, ...(estado ? { estado } : {}) }} onFechar={onFechar} onEstado={onEstado} onPerguntar={onFechar} onPedido={onPedido} />;
+}

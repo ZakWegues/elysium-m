@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
@@ -11,6 +11,8 @@ import { haptica } from '../../lib/haptica';
 import { falar, pararDeFalar, useFala } from '../../lib/falar';
 import { useTheme } from '../../theme';
 import { Card, Text } from '../../components/ui';
+import { TelaSalvaCheia } from '../../components/TelaNaBolha';
+import { pedidoDaTela } from '../../lib/api';
 
 /**
  * Os cards da fase 18 (08/10) no Hoje do celular — o Zak pediu o resumo "com tudo que já tá
@@ -177,6 +179,113 @@ export function CardAtividadeHoje({ itens }: { itens: { em: number; texto: strin
           <Text variant="body" style={{ flex: 1 }} numberOfLines={2}>{x.texto}</Text>
         </View>
       ))}
+    </Card>
+  );
+}
+
+type PadraoOferta = { chave: string; pedido: string; hora: string; texto: string };
+
+/**
+ * 31/10: rotina aprendida — o PC notou o mesmo pedido quase todo dia na mesma hora. Um toque
+ * cria a rotina; "Agora não" silencia por 30 dias. PC antigo (sem `padroes.listar`): some.
+ */
+export function CardPadroes({ pairing }: { pairing: Pairing }) {
+  const { palette } = useTheme();
+  const [padroes, setPadroes] = useState<PadraoOferta[] | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    callRpc(pairing, 'padroes.listar').then((r) => { if (vivo) setPadroes(r.padroes.slice(0, 2)); }).catch(() => { if (vivo) setPadroes([]); });
+    return () => { vivo = false; };
+  }, [pairing]);
+
+  if (!padroes?.length) return null;
+
+  async function responder(p: PadraoOferta, aceitar: boolean) {
+    setOcupado(p.chave);
+    try {
+      if (aceitar) { await callRpc(pairing, 'padroes.aceitar', { chave: p.chave }); haptica.sucesso(); }
+      else await callRpc(pairing, 'padroes.silenciar', { chave: p.chave });
+      setPadroes((ps) => (ps ?? []).filter((x) => x.chave !== p.chave));
+    } catch (e) {
+      Alert.alert('Não deu', errMessage(e));
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  return (
+    <Card glass style={{ gap: 12 }}>
+      {padroes.map((p) => (
+        <View key={p.chave} style={{ gap: 8 }}>
+          <View style={styles.linha}>
+            <Feather name="clock" size={16} color={palette.primary} />
+            <Text variant="body" style={{ flex: 1 }}>{p.texto}</Text>
+          </View>
+          <View style={[styles.linha, { justifyContent: 'flex-end' }]}>
+            {ocupado === p.chave ? <ActivityIndicator color={palette.primary} /> : (<>
+              <Pressable onPress={() => void responder(p, false)} accessibilityRole="button" hitSlop={8} style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
+                <Text variant="label" color={palette.textMuted}>Agora não</Text>
+              </Pressable>
+              <Pressable onPress={() => void responder(p, true)} accessibilityRole="button" hitSlop={8}
+                style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: palette.primarySoft }}>
+                <Text variant="label" color={palette.primary}>Criar rotina às {p.hora}</Text>
+              </Pressable>
+            </>)}
+          </View>
+        </View>
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * 31/10: Telas salvas no PC (o checklist da viagem, o quiz da prova). Toque abre inteira, com o
+ * estado de quando foi salva; mexer guarda o estado novo no PC. Some sem nenhuma (ou PC antigo).
+ */
+export function CardTelasSalvas({ pairing }: { pairing: Pairing }) {
+  const { palette } = useTheme();
+  const [telas, setTelas] = useState<{ id: string; titulo: string; em: number }[]>([]);
+  const [aberta, setAberta] = useState<{ id: string; programa: string; estado?: Record<string, unknown> } | null>(null);
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    callRpc(pairing, 'telas.salvas.listar').then((r) => { if (vivo) setTelas(r.telas); }).catch(() => { /* PC antigo */ });
+    return () => { vivo = false; };
+  }, [pairing]);
+
+  if (!telas.length) return null;
+
+  async function abrir(id: string) {
+    setAbrindo(id);
+    try {
+      const { tela } = await callRpc(pairing, 'telas.salvas.obter', { id });
+      setAberta({ id: tela.id, programa: tela.programa, ...(tela.estado ? { estado: tela.estado } : {}) });
+    } catch (e) {
+      Alert.alert('Não abriu', errMessage(e));
+    } finally {
+      setAbrindo(null);
+    }
+  }
+
+  return (
+    <Card glass style={{ gap: 4 }}>
+      <Text variant="label" color={palette.textMuted}>TELAS SALVAS</Text>
+      {telas.slice(0, 8).map((t) => (
+        <Pressable key={t.id} onPress={() => { haptica.leve(); void abrir(t.id); }} accessibilityRole="button" accessibilityLabel={`Abrir a tela ${t.titulo}`}
+          style={({ pressed }) => [styles.linha, { paddingVertical: 8, opacity: pressed ? 0.7 : 1 }]}>
+          <Feather name="bookmark" size={16} color={palette.primary} />
+          <Text variant="body" style={{ flex: 1 }} numberOfLines={1}>{t.titulo}</Text>
+          {abrindo === t.id ? <ActivityIndicator color={palette.primary} /> : <Feather name="chevron-right" size={16} color={palette.textMuted} />}
+        </Pressable>
+      ))}
+      {aberta ? (
+        <TelaSalvaCheia programa={aberta.programa} estado={aberta.estado} onFechar={() => setAberta(null)}
+          onEstado={(vars) => { void callRpc(pairing, 'telas.salvas.estado', { id: aberta.id, estado: vars }).catch(() => {}); }}
+          onPedido={(rota, params) => pedidoDaTela(pairing, rota, params)} />
+      ) : null}
     </Card>
   );
 }

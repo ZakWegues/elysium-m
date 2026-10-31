@@ -421,6 +421,18 @@
       "destructive": false
     },
     {
+      "method": "padroes.aceitar",
+      "destructive": false
+    },
+    {
+      "method": "padroes.listar",
+      "destructive": false
+    },
+    {
+      "method": "padroes.silenciar",
+      "destructive": false
+    },
+    {
       "method": "pairing.endpoints",
       "destructive": false
     },
@@ -654,6 +666,30 @@
     },
     {
       "method": "tarefas.reagendarAtrasadas",
+      "destructive": false
+    },
+    {
+      "method": "telas.salvas.apagar",
+      "destructive": false
+    },
+    {
+      "method": "telas.salvas.estado",
+      "destructive": false
+    },
+    {
+      "method": "telas.salvas.listar",
+      "destructive": false
+    },
+    {
+      "method": "telas.salvas.mandar",
+      "destructive": false
+    },
+    {
+      "method": "telas.salvas.obter",
+      "destructive": false
+    },
+    {
+      "method": "telas.salvas.salvar",
       "destructive": false
     },
     {

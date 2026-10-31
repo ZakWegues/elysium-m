@@ -188,6 +188,8 @@ export default function ChatScreen({
   /** Áudio enviado, resposta ainda não começou: a animação mostra "pensando". */
   const [pensandoVoz, setPensandoVoz] = useState(false);
   const voiceConnRef = useRef<VoiceConnection | null>(null);
+  /** 31/10: o estado da tela vai ao PC com meio segundo de folga. */
+  const timerEstado = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<FlatList<StoredMessage>>(null);
   // Começa SEMPRE em null, mesmo recebendo um sessionId. Inicializar com a prop fazia a
   // guarda do efeito de carregamento bater já na montagem: abrir uma conversa antiga
@@ -469,7 +471,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[]) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -483,9 +485,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[]) => {
       setEscrevendoId(null);
-      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}) };
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}), ...(memoria?.length ? { memoria } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -539,8 +541,22 @@ export default function ChatScreen({
     const semTela = (id: string) => setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, tela: undefined } : m)));
     return {
       perguntar: (t) => { void atual.current.handleSend(t); },
-      estado: (id, vars) => setMessages((prev) => prev.map((m) => (m.id === id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m))),
+      estado: (id, vars) => {
+        setMessages((prev) => prev.map((m) => (m.id === id && m.tela ? { ...m, tela: { ...m.tela, estado: vars } } : m)));
+        // 31/10: o PC fica sabendo do que foi marcado/respondido (meio segundo de folga entre toques).
+        const programa = atual.current.messages.find((m) => m.id === id)?.tela?.programa;
+        if (timerEstado.current) clearTimeout(timerEstado.current);
+        if (programa) timerEstado.current = setTimeout(() => voiceConnRef.current?.enviarEstadoTela(programa, vars), 500);
+      },
       pedido: (rota, params) => pedidoDaTela(pairingRef.current, rota, params),
+      // 31/10: guarda nas Telas salvas do PC, com o que já foi marcado/respondido.
+      salvar: (id) => {
+        const t = atual.current.messages.find((m) => m.id === id)?.tela;
+        if (!t?.programa) return;
+        callRpc(pairingRef.current, 'telas.salvas.salvar', { programa: t.programa, ...(t.estado ? { estado: t.estado } : {}) })
+          .then((r) => { haptica.sucesso(); Alert.alert('Tela salva', `“${r.tela.titulo}” está no Hoje → Telas salvas (aqui e no PC).`); })
+          .catch((e) => Alert.alert('Não consegui salvar', errMessage(e)));
+      },
       falhou: semTela,
       cancelar: (id) => {
         const m = atual.current.messages.find((x) => x.id === id);
@@ -619,6 +635,7 @@ export default function ChatScreen({
       let rapidas: Rapidas | undefined;
       let pedidoId: string | undefined;
       let desfazer: string | undefined;
+      let memoria: string[] | undefined;
       try {
         // Cinco segundos para o WS abrir. Com o PC fora do ar o handshake pode levar o
         // timeout do TCP inteiro; o HTTP abaixo já sabe lidar com isso (fila offline).
@@ -636,6 +653,7 @@ export default function ChatScreen({
         rapidas = r.rapidas;
         pedidoId = r.id;
         desfazer = r.desfazer;
+        memoria = r.memoria;
       } catch (wsErr) {
         // 21/10: só cai no HTTP se a conexão NEM ABRIU (o comando não chegou ao PC). Com o
         // comando já enviado, mandar de novo rodaria duas vezes — a retomada cuida da queda.
@@ -646,7 +664,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer);
+      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer, memoria);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -856,13 +874,13 @@ export default function ChatScreen({
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply, rapidas, id, desfazer } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
+      const { reply, rapidas, id, desfazer, memoria } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
       if (paradoRef.current) { fala?.abortar(); return null; }
       // Com o id, a tela que o PC mandar depois (pedido de tela por voz) acha esta bolha.
-      bolha.fechar(reply, undefined, false, rapidas, id, desfazer);
+      bolha.fechar(reply, undefined, false, rapidas, id, desfazer, memoria);
       return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       // Erro no meio: o que já foi dito fica, e a voz para junto com a resposta.
@@ -1259,6 +1277,12 @@ export default function ChatScreen({
             {item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
               <TelaNaBolha key={`tela-${item.id}`} tela={item.tela!} id={item.id} acoes={acoesTela} />
             ) : null}
+            {/* 31/10: o que da memória do PC esta resposta usou. */}
+            {item.from === 'reply' && item.memoria?.length ? (
+              <Text variant="caption" color={palette.textMuted} numberOfLines={1} style={styles.lembrei}>
+                Lembrei: {item.memoria.join(' · ')}
+              </Text>
+            ) : null}
             {/* 31/10: a resposta fez algo reversível — "Desfazer" por 30 s (manda "desfaz" ao PC). */}
             {item.from === 'reply' && item.desfazer && !sending && messages[messages.length - 1]?.id === item.id ? (
               <Pressable onPress={() => { haptica.leve(); void handleSend('desfaz'); }} accessibilityRole="button" accessibilityLabel={`Desfazer: ${item.desfazer.rotulo}`} hitSlop={6}
@@ -1521,6 +1545,7 @@ function hostDe(url: string): string {
 
 const styles = StyleSheet.create({
   verTela: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', marginTop: 2 },
+lembrei: { alignSelf: 'flex-start', maxWidth: '88%', marginTop: 2, marginLeft: 4, fontSize: 11 },
   fontes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   selo: { marginTop: 4, fontSize: 10, letterSpacing: 1 },
   fonte: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, maxWidth: 180 },

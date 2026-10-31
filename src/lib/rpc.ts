@@ -182,6 +182,15 @@ export type RpcMethod =
   | 'rotinas.delete'
   | 'rotinas.toggle'
   | 'rotinas.run'
+  | 'padroes.listar'
+  | 'telas.salvas.listar'
+  | 'telas.salvas.obter'
+  | 'telas.salvas.salvar'
+  | 'telas.salvas.estado'
+  | 'telas.salvas.apagar'
+  | 'telas.salvas.mandar'
+  | 'padroes.aceitar'
+  | 'padroes.silenciar'
   | 'notify.pending'
   | 'notify.history'
   | 'notify.ack'
@@ -709,6 +718,17 @@ export type RpcResults = {
   'rotinas.delete': { deleted: boolean };
   'rotinas.toggle': { rotina: Rotina };
   'rotinas.run': { resultado: string };
+  /** 31/10: rotinas aprendidas (o mesmo pedido quase todo dia na mesma hora). */
+  'padroes.listar': { padroes: { chave: string; pedido: string; hora: string; dias: number; texto: string }[] };
+  'padroes.aceitar': { rotina: Rotina };
+  /** 31/10: telas salvas no PC (com o estado). */
+  'telas.salvas.listar': { telas: { id: string; titulo: string; em: number }[] };
+  'telas.salvas.obter': { tela: { id: string; titulo: string; programa: string; estado?: Record<string, unknown>; em: number } };
+  'telas.salvas.salvar': { tela: { id: string; titulo: string; em: number } };
+  'telas.salvas.estado': { ok: boolean };
+  'telas.salvas.apagar': { deleted: boolean };
+  'telas.salvas.mandar': { ok: boolean };
+  'padroes.silenciar': { ok: boolean };
   'notify.pending': { entregas: Entrega[] };
   'notify.history': { entregas: Entrega[] };
   'notify.ack': { acked: number };

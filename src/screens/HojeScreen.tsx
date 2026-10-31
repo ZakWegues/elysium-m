@@ -16,7 +16,7 @@ import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, 
 import { Reator } from '../components/Reator';
 import { estourarNoToque, fogos } from '../components/Estouros';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
-import { CardAtividadeHoje, CardRotinasHoje, OuvirResumo } from './hoje/CardsFase18';
+import { CardAtividadeHoje, CardPadroes, CardRotinasHoje, CardTelasSalvas, OuvirResumo } from './hoje/CardsFase18';
 import { CardEstudo, PlanoDeEstudo, Revisao as RevisaoCartoes } from './hoje/CardEstudo';
 import TarefasScreen, { Despejo } from './TarefasScreen';
 import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefasUi';
@@ -570,6 +570,11 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                 </>)}
               </>
             )}
+
+            {/* 31/10: rotina aprendida (PC 2.35+); some sozinho sem padrão ou com PC antigo. */}
+            <CardPadroes pairing={pairing} />
+            {/* 31/10: telas salvas no PC (some sem nenhuma). */}
+            <CardTelasSalvas pairing={pairing} />
 
             {/* 31/10: a linha do tempo do que a Ely fez (PC 2.32+; PC antigo não manda). */}
             {painel.atividade && vis('o-que-a-ely-fez-hoje') && (<>

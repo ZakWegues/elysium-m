@@ -17,7 +17,7 @@ import { marcarRecusa, marcarVivo, recusaDoErro } from './conexao/sinais';
 import type { Fonte } from './chatHistoryStore';
 
 /** `id`: o do pedido de texto — a tela inteligente (frame `ui`) chega depois com ele. */
-type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; rapidas?: Rapidas; id?: string; /** 31/10: rótulo da ação reversível ("Desfazer"). */ desfazer?: string };
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; rapidas?: Rapidas; id?: string; /** 31/10: rótulo da ação reversível ("Desfazer"). */ desfazer?: string; /** 31/10: o que da memória do PC a resposta usou. */ memoria?: string[] };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -98,6 +98,8 @@ export type VoiceConnection = {
    * tela daquele pedido (ele guarda 10 min) — agora, ou assim que a conexão abrir.
    */
   retomarTela(id: string): void;
+  /** 31/10: o que foi marcado/respondido numa tela — a Ely usa no próximo pedido. PC antigo ignora. */
+  enviarEstadoTela(programa: string, vars: Record<string, unknown>): void;
 };
 
 /**
@@ -227,7 +229,7 @@ export function openVoiceConnection(
   }
 
   function tratarMensagem(event: MessageEvent) {
-    let data: { desfazer?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; id?: string; direction?: string } & Partial<Entrega>;
+    let data: { desfazer?: unknown; memoria?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -268,7 +270,7 @@ export function openVoiceConnection(
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}) }));
+      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}), ...lerMemoria(data.memoria) }));
     } else if (data.type === 'ui') {
       const f = lerUi(data);
       if (f) {
@@ -440,6 +442,11 @@ export function openVoiceConnection(
     return true;
   }
 
+  function enviarEstadoTela(programa: string, vars: Record<string, unknown>) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || programa.length > 60_000) return;
+    try { ws.send(JSON.stringify({ type: 'tela.estado', programa, vars })); } catch { /* sem conexão: fica para a próxima mudança */ }
+  }
+
   function retomarTela(id: string) {
     telaEsperada = id;
     if (ws && ws.readyState === WebSocket.OPEN && !pending) {
@@ -452,5 +459,12 @@ export function openVoiceConnection(
     try { ws?.send(JSON.stringify({ type: 'ui.cancelar', id })); } catch { /* */ }
   }
 
-  return { ready, sendAudio, sendText, close, viva, reconectar, pedirTela, cancelarTela, retomarTela };
+  return { ready, sendAudio, sendText, close, viva, reconectar, pedirTela, cancelarTela, retomarTela, enviarEstadoTela };
+}
+
+/** 31/10: `memoria` do reply ([{id, text}]) → só os textos, no máximo 3. */
+export function lerMemoria(v: unknown): { memoria?: string[] } {
+  if (!Array.isArray(v)) return {};
+  const textos = v.map((f) => (f && typeof f === 'object' && typeof (f as { text?: unknown }).text === 'string' ? (f as { text: string }).text.slice(0, 200) : null)).filter((t): t is string => !!t).slice(0, 3);
+  return textos.length ? { memoria: textos } : {};
 }

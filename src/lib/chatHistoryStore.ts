@@ -11,7 +11,7 @@ const MAX_NON_FAVORITE_SESSIONS = 5;
 export type Fonte = { titulo: string; url: string };
 /** `fontes`: as páginas que a busca na web leu para essa resposta (bloco 131). */
 /** `local` (fase 18): a nuvem falhou e quem respondeu foi o cérebro do PC — selo "modo local". */
-export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[]; local?: boolean;  /** 31/10: a resposta fez algo reversível — o "Desfazer" fica até `ate`. */ desfazer?: { rotulo: string; ate: number }; /** 22/10: botões de resposta da última mensagem. */ rapidas?: Rapidas; sugestoes?: string[]; /** 22/10: id do pedido (a tela chega com ele) e a tela inteligente da resposta. */ pedidoId?: string; tela?: TelaDaMensagem; /** 26/10: erro como cartão com ações (CartaoErro). */ erro?: { titulo: string; detalhe?: string; acoes: ('refazer' | 'depois' | 'cancelar')[]; pergunta?: string; filaId?: string } };
+export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[]; local?: boolean;  /** 31/10: a resposta fez algo reversível — o "Desfazer" fica até `ate`. */ desfazer?: { rotulo: string; ate: number }; /** 31/10: o que da memória do PC a resposta usou ("Lembrei: …"). */ memoria?: string[]; /** 22/10: botões de resposta da última mensagem. */ rapidas?: Rapidas; sugestoes?: string[]; /** 22/10: id do pedido (a tela chega com ele) e a tela inteligente da resposta. */ pedidoId?: string; tela?: TelaDaMensagem; /** 26/10: erro como cartão com ações (CartaoErro). */ erro?: { titulo: string; detalhe?: string; acoes: ('refazer' | 'depois' | 'cancelar')[]; pergunta?: string; filaId?: string } };
 
 export type ChatSession = {
   id: string;
