@@ -3,7 +3,7 @@ import { cabecalhoAssinado } from './assinatura';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAudioPlayer, AudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
-import { Pairing } from './pairing';
+import { baseUrl, Pairing } from './pairing';
 import { fetchWithTimeout } from './http';
 import { liberarMicrofone, ocuparMicrofone } from './microfone';
 import { partesDaFala, trechoParaMostrar } from './divisaoFala';
@@ -280,7 +280,7 @@ function prepararModo(): Promise<void> {
 }
 
 async function baixarParte(texto: string, pairing: Pairing): Promise<File> {
-  const url = `http://${pairing.activeIp}:${pairing.port}/api/tts?text=${encodeURIComponent(texto)}`;
+  const url = `${baseUrl(pairing)}/api/tts?text=${encodeURIComponent(texto)}`;
   const res = await fetchWithTimeout(url, { headers: cabecalhoAssinado(pairing.token, 'GET', url) }, PRAZO_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());

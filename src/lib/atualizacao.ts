@@ -179,6 +179,8 @@ export async function baixarEInstalar(
   const destino = new File(Paths.cache, `elysium-m-${pacote.versao}.apk`);
   try { if (destino.exists) destino.delete(); } catch { /* sobrescreve */ }
   const tarefa = File.createDownloadTask(
+    // O download nativo (expo-file-system) tem cliente HTTP próprio, fora da fixação do TLS: fica em
+    // http, assinado. Trocar o APK no caminho não adianta — o Android só instala com a mesma assinatura.
     `http://${pairing.activeIp}:${pairing.port}/api/update/apk`,
     destino,
     {

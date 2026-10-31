@@ -705,6 +705,10 @@
       "destructive": false
     },
     {
+      "method": "tls.info",
+      "destructive": false
+    },
+    {
       "method": "treinos.delete",
       "destructive": true
     },

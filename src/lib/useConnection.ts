@@ -18,6 +18,27 @@ import { registrarConexao, registrarEstadoApp, useEstadoPc } from './estadoPc';
 import { aplicar, memoriaInicial, proximaSonda, statusLegado, type EstadoConexao, type EventoConexao, type MemoriaConexao } from './conexao/maquina';
 import { aoSinal, liberarCanais, marcarRecusa } from './conexao/sinais';
 import { diagTela } from './telaDiag';
+import { fixarSeValido, garantirFixada, tlsUtil } from './tls';
+
+/**
+ * 31/10: TLS com o PC. Já fixado e funcionando: nada. Senão pede a impressão (pedido assinado),
+ * confere a assinatura com o token e fixa — o pareamento passa a ter `tls` e o app vai em https.
+ * PC antigo (sem tls.info) ou APK sem o módulo: segue igual.
+ */
+async function comTls(p: Pairing): Promise<Pairing> {
+  garantirFixada(p.tls);
+  if (tlsUtil(p.tls)) return p;
+  try {
+    const r = await callRpc(p, 'tls.info', {}, { timeoutMs: 6000 });
+    const info = fixarSeValido(p.token, r.tls);
+    if (!info) return p;
+    if (p.tls?.sha256 === info.sha256 && p.tls.porta === info.porta) return p;
+    diagTela(`tls: fixado o certificado do PC (porta ${info.porta})`);
+    return { ...p, tls: info };
+  } catch {
+    return p;
+  }
+}
 
 export type ConnectionStatus = 'checking' | 'online' | 'offline' | 'unauthorized';
 
@@ -80,11 +101,10 @@ export function useConnection(
 
       const known = new Set(p.endpoints);
       const novos = info.endpoints.filter(ip => !known.has(ip));
-      if (novos.length === 0) return p;
-
       // Os novos entram no fim: o que já está funcionando continua sendo tentado
       // primeiro, e o candidato novo é só mais uma alternativa.
-      return { ...p, endpoints: [...p.endpoints, ...novos] };
+      const comNovos = novos.length === 0 ? p : { ...p, endpoints: [...p.endpoints, ...novos] };
+      return await comTls(comNovos);
     } catch {
       // Desktop antigo, sem este método. Não é motivo pra considerar offline.
       return p;

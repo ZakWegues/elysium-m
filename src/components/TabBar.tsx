@@ -13,6 +13,7 @@ import { haptica } from '../lib/haptica';
 import { mostrarRotulos, rotulos } from '../lib/barraRolagem';
 import { comAlfa, useTheme } from '../theme';
 import { GlassFill, Text, useBlurDaBarra } from './ui';
+import { VidroLiquido } from './vidro/VidroLiquido';
 
 /** Largura da pílula encolhida: só a aba ativa (ícone e nome). */
 const PILULA_ENCOLHIDA = 108;
@@ -182,6 +183,8 @@ export function TabBar({
         <Animated.View style={[styles.pilula, estiloPilula]}>
           {/* Desfoca as telas que passam por baixo (alvo da barra), com tinta escura translúcida. */}
           <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />
+          {/* 31/10: a lente de verdade (Skia, APK 2.6.0+): borda que entorta o fundo e a gota do seletor. */}
+          <VidroLiquido larguraPilula={larguraPilula} larguraTab={larguraTab} progresso={progresso} rotulos={rotulos} visivel={visivel} encolhida={PILULA_ENCOLHIDA} />
           <View style={styles.linha}>
             <Animated.View
               pointerEvents="none"

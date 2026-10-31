@@ -9,6 +9,7 @@ import { useTheme } from '../../theme';
 import { PAPEIS, type PapelId } from '../../theme/fundo';
 import { useFala } from '../../lib/falar';
 import { estadoDaBolota, useFaseDaBolota } from '../../lib/bolota';
+import { ManchasSkia, TEM_SKIA } from '../vidro/ManchasSkia';
 
 /**
  * Fundo do app — fase 23.1: PORTE CAMADA A CAMADA do `css/fundo.css` do desktop.
@@ -290,7 +291,8 @@ export function AppBackground() {
       {stark
         ? <GradeStark cor={palette.primary} fundo={palette.background} largura={width} altura={height} vivo={vivo} />
         // Glass: manchas mais fortes — o vidro precisa de cor atrás para parecer vidro.
-        : <Manchas blobs={palette.blobs} k={k} forca={vidro ? 1.5 : 1} />}
+        // 31/10: no Android com Skia, as mesmas manchas num shader (a barra de abas usa a mesma função).
+        : TEM_SKIA ? <ManchasSkia blobs={palette.blobs} forca={vidro ? 1.5 : 1} /> : <Manchas blobs={palette.blobs} k={k} forca={vidro ? 1.5 : 1} />}
       {familiaResolvida === 'dark' && (
         <>
           <Feixe cor={palette.primary} left="6%" largura="42%" de={-40 * k} ate={150 * k} ms={24_000} pulso={9_000} altura={height} />

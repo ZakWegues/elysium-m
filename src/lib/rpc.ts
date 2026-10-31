@@ -7,6 +7,7 @@
  */
 
 import { baseUrl, Pairing } from './pairing';
+import { desligarTlsNestaSessao } from './tls';
 import { cabecalhoAssinado } from './assinatura';
 import { AuthError, fetchWithTimeout, DEFAULT_TIMEOUT_MS } from './http';
 import type { EstadoAppPc } from './estadoPc';
@@ -183,6 +184,7 @@ export type RpcMethod =
   | 'rotinas.toggle'
   | 'rotinas.run'
   | 'padroes.listar'
+  | 'tls.info'
   | 'telas.salvas.listar'
   | 'telas.salvas.obter'
   | 'telas.salvas.salvar'
@@ -721,6 +723,8 @@ export type RpcResults = {
   /** 31/10: rotinas aprendidas (o mesmo pedido quase todo dia na mesma hora). */
   'padroes.listar': { padroes: { chave: string; pedido: string; hora: string; dias: number; texto: string }[] };
   'padroes.aceitar': { rotina: Rotina };
+  /** 31/10: porta TLS e impressão do certificado, assinadas com o token. null = PC sem TLS. */
+  'tls.info': { tls: { porta: number; sha256: string; assinatura: string } | null };
   /** 31/10: telas salvas no PC (com o estado). */
   'telas.salvas.listar': { telas: { id: string; titulo: string; em: number }[] };
   'telas.salvas.obter': { tela: { id: string; titulo: string; programa: string; estado?: Record<string, unknown>; em: number } };
@@ -830,11 +834,20 @@ export async function callRpc<M extends RpcMethod>(
   };
   if (options.confirmed) headers['X-Elysium-Confirm'] = '1';
 
-  const res = await fetchWithTimeout(
-    url,
-    { method: 'POST', headers, body: JSON.stringify({ method, params }) },
-    options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  );
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      { method: 'POST', headers, body: JSON.stringify({ method, params }) },
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    );
+  } catch (err) {
+    // 31/10: o https não passou (porta 4201 bloqueada, certificado trocado): o resto da sessão vai
+    // em http (assinado), e a próxima sonda refaz a fixação. Tenta de novo já, uma vez.
+    if (!url.startsWith('https:')) throw err;
+    desligarTlsNestaSessao();
+    return callRpc(pairing, method, params, options);
+  }
 
   // 26/10: recusas avisam o estado da conexão (cartão "Ler QR" / "o PC pausou este celular").
   if (res.status === 401) { marcarRecusa('token'); throw new AuthError('token inválido ou expirado'); }

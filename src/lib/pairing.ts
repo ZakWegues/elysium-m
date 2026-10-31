@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { tlsUtil, type InfoTls } from './tls';
 import { cabecalhoAssinado } from './assinatura';
 import { fetchWithTimeout, PROBE_TIMEOUT_MS } from './http';
 import { definirPcAtivo } from './pcAtivo';
@@ -33,6 +34,8 @@ export type Pairing = {
   port: number;
   token: string;
   hostname?: string;
+  /** 31/10: porta TLS e impressão do certificado do PC, fixada no módulo nativo confianca (lib/tls.ts). */
+  tls?: InfoTls;
 };
 
 /**
@@ -198,6 +201,8 @@ export async function trocarPc(id: string): Promise<Pairing | null> {
 }
 
 export function baseUrl(pairing: Pairing): string {
+  // 31/10: com o certificado do PC fixado, https na porta TLS (e o WebSocket vira wss junto).
+  if (pairing.tls && tlsUtil(pairing.tls)) return `https://${pairing.activeIp}:${pairing.tls.porta}`;
   return `http://${pairing.activeIp}:${pairing.port}`;
 }
 
