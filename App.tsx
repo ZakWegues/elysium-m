@@ -32,7 +32,7 @@ import { syncChats } from './src/lib/chatSync';
 import { useCompartilharDoAndroid, useShareIntent } from './src/lib/shareIntent';
 import { FolhaCompartilhar } from './src/components/FolhaCompartilhar';
 import { pedirSobreImagem } from './src/lib/imagemParaEly';
-import { MOV, tempo } from './src/lib/motion';
+import { MOV, pausarFundoPor, tempo } from './src/lib/motion';
 import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedidoDaResposta, pedirPermissao } from './src/lib/notificacoes';
 import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/estadoPc';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
@@ -658,6 +658,8 @@ function TelaAnimada({ chave, children }: { chave: string; children: React.React
   const escala = useSharedValue(1);
 
   useEffect(() => {
+    // 31/10: o fundo animado espera a tela chegar (folga para a thread de UI na troca de aba).
+    pausarFundoPor(240);
     opacidade.value = 0;
     deslocamento.value = 8;
     escala.value = 0.985;
