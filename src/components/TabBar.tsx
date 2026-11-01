@@ -200,7 +200,8 @@ export function TabBar({
               fundo) através de uma lente; a borda dobra o conteúdo e o seletor é uma gota que amplia.
               Sem Android 13 (ou no Stark): o desfoque de sempre, com tinta escura translúcida. */}
           {lente > 0
-            ? <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro} />
+            ? <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro}
+                reserva={<GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />} />
             : <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />}
           <View style={styles.linha}>
             <Animated.View

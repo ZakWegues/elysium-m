@@ -28,6 +28,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private var alvo: BlurTarget? = null
   private var observador: ViewTreeObserver? = null
   private val aCadaQuadro = ViewTreeObserver.OnPreDrawListener { invalidate(); true }
+  private val tentarDeNovo = Runnable { resolverAlvo() }
 
   private var lente = 0f
   private var desfoque = 6f
@@ -48,6 +49,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
 
   fun definirAlvo(id: Int?) {
     alvoId = id
+    estado = "alvo id=$id"
     post { resolverAlvo() }
   }
 
@@ -89,6 +91,14 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     val v = alvoId?.let { runCatching { appContext.findView<View>(it) }.getOrNull() }
     // O ExpoBlurTargetView põe o BlurTarget como primeiro filho; procurar por tipo é mais seguro.
     alvo = (v as? ViewGroup)?.let { achar(it) }
+    // Pelo id não deu (ou o id ainda não chegou): o BlurTarget mais de fora da janela que não
+    // contém esta barra — é o das telas (o do fundo fica dentro dele).
+    if (alvo == null) alvo = (rootView as? ViewGroup)?.let { maisDeFora(it) }
+    estado = when {
+      alvo != null -> "alvo ok (${if (v != null) "pelo id" else "pela janela"})"
+      v == null -> "findView nulo (id=$alvoId)"
+      else -> "sem BlurTarget em ${v.javaClass.simpleName} (${(v as? ViewGroup)?.childCount} filhos)"
+    }
     observador?.takeIf { it.isAlive }?.removeOnPreDrawListener(aCadaQuadro)
     observador = alvo?.viewTreeObserver
     observador?.addOnPreDrawListener(aCadaQuadro)
@@ -104,6 +114,22 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     return null
   }
 
+  private fun maisDeFora(g: ViewGroup): BlurTarget? {
+    val fila = ArrayDeque<ViewGroup>().apply { add(g) }
+    while (fila.isNotEmpty()) {
+      val atual = fila.removeFirst()
+      if (atual is BlurTarget && !contem(atual, this)) return atual
+      for (i in 0 until atual.childCount) (atual.getChildAt(i) as? ViewGroup)?.let { fila.add(it) }
+    }
+    return null
+  }
+
+  private fun contem(pai: ViewGroup, v: View): Boolean {
+    var p = v.parent
+    while (p != null) { if (p === pai) return true; p = p.parent }
+    return false
+  }
+
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     resolverAlvo()
@@ -116,15 +142,23 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     super.onDetachedFromWindow()
   }
 
-  override fun onDraw(canvas: Canvas) {
-    super.onDraw(canvas)
+  // 01/11: dispatchDraw, não onDraw — o Android sempre chama este num ViewGroup; o onDraw pode ser
+  // pulado (na 2.7.0 a barra ficou transparente no aparelho do Zak).
+  override fun dispatchDraw(canvas: Canvas) {
+    desenharLente(canvas)
+    super.dispatchDraw(canvas)
+  }
+
+  private fun desenharLente(canvas: Canvas) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-    val t = alvo ?: return
+    // Sem alvo: tenta de novo daqui a meio segundo (resolver aqui dentro invalidaria todo quadro).
+    val t = alvo ?: run { estado = "onDraw sem alvo"; removeCallbacks(tentarDeNovo); postDelayed(tentarDeNovo, 500); return }
     val n = no ?: return
     val s = shader ?: return
-    if (!canvas.isHardwareAccelerated || width <= 0 || height <= 0) return
-    val conteudo = AcessoAoAlvo.no(t) ?: return
-    if (!conteudo.hasDisplayList()) return
+    if (!canvas.isHardwareAccelerated) { estado = "canvas sem aceleração"; return }
+    if (width <= 0 || height <= 0) { estado = "tamanho zero"; return }
+    val conteudo = AcessoAoAlvo.no(t) ?: run { estado = "alvo sem RenderNode"; return }
+    if (!conteudo.hasDisplayList()) { estado = "alvo sem desenho ainda"; return }
 
     getLocationOnScreen(meu)
     t.getLocationOnScreen(dele)
@@ -148,9 +182,13 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     } else RenderEffect.createRuntimeShaderEffect(s, "conteudo")
     n.setRenderEffect(efeito)
     canvas.drawRenderNode(n)
+    if (!estado.startsWith("desenhando")) estado = "desenhando ${width}x${height}"
   }
 
   companion object {
+    /** Em que pé está o vidro (para o diagnóstico e para o JS saber se pode tirar a reserva). */
+    @Volatile var estado: String = "criada"
+
     /**
      * A lente (mesma geometria da LENTE_SKSL de lib/fundoSkia.ts, agora sobre o conteúdo real).
      * `q` em px da view; a pílula é um retângulo com as pontas redondas (raio = metade da altura).

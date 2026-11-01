@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { View } from 'react-native';
 
 /** Web (prévia) e sem o módulo: não há vidro nativo — a barra usa o desfoque de sempre. */
@@ -13,6 +13,6 @@ export type PropsVidroNativo = {
   seletor: [number, number, number];
 };
 
-export function VidroNativo(_: PropsVidroNativo) {
-  return null;
+export function VidroNativo({ reserva }: PropsVidroNativo & { reserva?: ReactNode }) {
+  return <>{reserva}</>;
 }

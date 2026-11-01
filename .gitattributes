@@ -1,2 +1,5 @@
 # O renderer das telas (cópia do elysium/ui-render/dist): bytes exatos, sem troca de fim de linha.
 assets/ui/* -text
+# 01/11: os módulos nativos locais entram no fingerprint byte a byte; com a troca automática de fim
+# de linha, um checkout mudava o runtime (o APK é gerado com LF).
+modules/** text eol=lf

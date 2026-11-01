@@ -22,6 +22,8 @@ class VidroModule : Module() {
       else "desfoque (API ${Build.VERSION.SDK_INT})"
     }
 
+    Function("estado") { VidroLiquidoView.estado }
+
     View(VidroLiquidoView::class) {
       Prop("alvo") { view: VidroLiquidoView, id: Int? -> view.definirAlvo(id) }
       Prop("lente") { view: VidroLiquidoView, valor: Float -> view.definirLente(valor) }
