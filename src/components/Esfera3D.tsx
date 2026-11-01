@@ -110,7 +110,12 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
   // 24/10: a aba do chat fica montada escondida (abas vivas); fora da tela a esfera não redesenha
   // os 240 pontos a cada quadro.
   const ativa = useAbaAtiva();
-  useEffect(() => { quadro.setActive(ativa); }, [ativa, quadro]);
+  // 31/10: ao voltar para o Chat, a esfera liga depois da transição da aba (250 ms), não no meio dela.
+  useEffect(() => {
+    if (!ativa) { quadro.setActive(false); return; }
+    const t = setTimeout(() => quadro.setActive(true), 250);
+    return () => clearTimeout(t);
+  }, [ativa, quadro]);
 
   const meio = tamanho / 2;
   // Fase 23: UM passe por quadro desenha as três faixas de profundidade (eram três passes,

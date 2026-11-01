@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -13,7 +13,7 @@ import { haptica } from '../lib/haptica';
 import { mostrarRotulos, rotulos } from '../lib/barraRolagem';
 import { comAlfa, useTheme } from '../theme';
 import { GlassFill, Text, useBlurDaBarra } from './ui';
-import { VidroLiquido } from './vidro/VidroLiquido';
+import { VIDRO_NATIVO, VidroNativo } from './vidro/VidroNativo';
 
 /** Largura da pílula encolhida: só a aba ativa (ícone e nome). */
 const PILULA_ENCOLHIDA = 108;
@@ -67,9 +67,11 @@ export function TabBar({
   onNavigate: (screen: Screen) => void;
   badges?: Partial<Record<Screen, number>>;
 }) {
-  const { palette } = useTheme();
+  const { palette, familiaResolvida } = useTheme();
   const insets = useSafeAreaInsets();
   const alvoDoDesfoque = useBlurDaBarra();
+  // 31/10: força da lente nativa (dp). Stark fica sem (a linguagem dele é outra), como no PC.
+  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : familiaResolvida === 'glass' ? 26 : 16;
 
   // -1 quando a tela aberta não é aba nenhuma (Conversas): o seletor some.
   const indiceAtivo = TABS.findIndex((t) => t.screen === active);
@@ -111,6 +113,19 @@ export function TabBar({
       }
     },
   );
+
+  // 31/10: a gota do vidro nativo segue o seletor — o nativo anda de mola até o centro novo; aqui só
+  // se avisa a geometria (largura da aba e se a pílula está aberta ou encolhida).
+  const [geom, setGeom] = useState({ L: 0, aberta: true });
+  useAnimatedReaction(
+    () => ({ L: Math.round(larguraTab.value), aberta: rotulos.value > 0.5 }),
+    (g, antes) => { if (!antes || g.L !== antes.L || g.aberta !== antes.aberta) runOnJS(setGeom)(g); },
+  );
+  const seletorDoVidro: [number, number, number] = indiceAtivo < 0 || geom.L <= 0
+    ? [0, 1, 0]
+    : geom.aberta
+      ? [6 + indiceAtivo * geom.L + geom.L / 2, (geom.L - 8) / 2, 1]
+      : [PILULA_ENCOLHIDA / 2, (PILULA_ENCOLHIDA - 20) / 2, 1];
 
   const navegar = useCallback((i: number) => {
     const alvo = TABS[i];
@@ -181,10 +196,12 @@ export function TabBar({
     <GestureDetector gesture={pan}>
       <View style={[styles.fora, { paddingBottom: insets.bottom + 8 }]} onLayout={medir}>
         <Animated.View style={[styles.pilula, estiloPilula]}>
-          {/* Desfoca as telas que passam por baixo (alvo da barra), com tinta escura translúcida. */}
-          <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />
-          {/* 31/10: a lente de verdade (Skia, APK 2.6.0+): borda que entorta o fundo e a gota do seletor. */}
-          <VidroLiquido larguraPilula={larguraPilula} larguraTab={larguraTab} progresso={progresso} rotulos={rotulos} visivel={visivel} encolhida={PILULA_ENCOLHIDA} />
+          {/* 31/10 (APK 2.7.0): vidro líquido nativo — a barra mostra o que passa atrás dela (telas e
+              fundo) através de uma lente; a borda dobra o conteúdo e o seletor é uma gota que amplia.
+              Sem Android 13 (ou no Stark): o desfoque de sempre, com tinta escura translúcida. */}
+          {lente > 0
+            ? <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro} />
+            : <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />}
           <View style={styles.linha}>
             <Animated.View
               pointerEvents="none"

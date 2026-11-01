@@ -1,6 +1,6 @@
 {
   "name": "elysium-m",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",

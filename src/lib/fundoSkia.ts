@@ -1,9 +1,8 @@
 /**
  * O fundo animado em SkSL (31/10, APK 2.6.0) — as cinco manchas do `AppBackground` (as mesmas
- * do `fundo.css` do PC) como função pura de (ponto, tempo). Existe para o VIDRO LÍQUIDO: a barra
- * de abas não consegue "ler" o que está atrás dela, então ela RECALCULA o fundo naquele ponto,
- * com o ponto entortado pela lente. Fundo e barra usam a mesma função e o mesmo relógio — o que a
- * barra mostra na borda é exatamente o fundo, dobrado.
+ * do `fundo.css` do PC) como função pura de (ponto, tempo), numa camada só. (A lente da barra,
+ * que recalculava este fundo, virou o módulo nativo `modules/vidro` no APK 2.7.0: ela agora dobra
+ * o conteúdo de verdade, não só as manchas.)
  *
  * As constantes são as do `Manchas` (posições, tamanhos, opacidades, ciclos de deriva e de
  * respiração, em px da tela de 1024 escalados por `k`). O vai-e-vem de cada ciclo é a mesma curva
@@ -55,56 +54,6 @@ half4 fundo(float2 p) {
 /** O fundo inteiro (camada das manchas, transparente entre elas). */
 export const MANCHAS_SKSL = `${FUNDO_SKSL}
 half4 main(float2 p) { return fundo(p); }
-`;
-
-/**
- * A lente da barra de abas. `q` é o ponto dentro da pílula; `origem` é onde a pílula está na
- * tela; `tam` é o tamanho dela. Perto da aresta (faixa `borda`), o fundo é puxado para dentro
- * (t²) e fica mais opaco — o vidro grosso da borda; o miolo fica transparente e deixa ver o
- * desfoque que já existe por baixo. O seletor é uma gota: amplia o fundo embaixo dele.
- * `sel` = (centro x, meia largura, visível 0–1). Saída pré-multiplicada.
- */
-export const LENTE_SKSL = `${FUNDO_SKSL}
-uniform half4 bg;
-uniform float2 origem;
-uniform float2 tam;
-uniform float lente;
-uniform float3 sel;
-
-half4 main(float2 q) {
-  float r = tam.y * 0.5;
-  float2 c = tam * 0.5;
-  float2 h = max(c - float2(r), float2(0.0));
-  float2 rel = q - c;
-  float2 d0 = abs(rel) - h;
-  float dist = length(max(d0, float2(0.0))) + min(max(d0.x, d0.y), 0.0) - r;
-  float dentro = -dist;
-  if (dentro < 0.0) return half4(0.0);
-
-  float2 n;
-  if (d0.x > 0.0 && d0.y > 0.0) n = normalize(d0);
-  else if (d0.x > d0.y) n = float2(1.0, 0.0);
-  else n = float2(0.0, 1.0);
-  n *= float2(rel.x < 0.0 ? -1.0 : 1.0, rel.y < 0.0 ? -1.0 : 1.0);
-
-  float borda = 16.0;
-  float tt = clamp(1.0 - dentro / borda, 0.0, 1.0);
-  float2 desl = -n * tt * tt * lente;
-
-  // A gota do seletor: elipse com o tamanho dele, amplia o fundo (puxa para o centro).
-  float2 sc = float2(sel.x, c.y);
-  float2 e = (q - sc) / float2(max(sel.y, 1.0), max(r - 6.0, 1.0));
-  float gota = clamp(1.0 - dot(e, e), 0.0, 1.0) * sel.z;
-  desl += -(q - sc) * 0.22 * gota;
-
-  half4 b = fundo(origem + q + desl);
-  half3 opaco = bg.rgb * (1.0 - b.a) + b.rgb;
-  // Fio de luz na aresta de cima (a luz vem de cima), mais fraco embaixo.
-  float fio = smoothstep(2.0, 0.0, abs(dentro - 1.0)) * (0.30 + 0.30 * (-n.y));
-  float alpha = max(tt * tt * 0.88, gota * 0.7);
-  half3 cor = opaco + half3(fio);
-  return half4(cor * alpha, alpha);
-}
 `;
 
 /** "#rrggbb" ou "rgba(…)" → [r, g, b, a] de 0 a 1 (uniform de cor do Skia). */

@@ -79,6 +79,8 @@ export default function HomeScreen({
   useEffect(() => { if (pedidoBusca) setBuscaAberta(true); }, [pedidoBusca]);
   const [telemetria, setTelemetria] = useState<TelemetryFrame | null>(null);
   const [status, setStatus] = useState<TelemetryStatus>('connecting');
+  /** 31/10: o último JSON guardado do Início — só grava de novo quando muda. */
+  const guardadoJson = useRef("");
   const [dados, setDados] = useState<Dados>({
     telemetria: null, lembretes: [], sugestoes: [], clima: null,
     processos: [], discos: [], transferencia: '', saude: null, foco: null, aprendi: null, hoje: null, listas: null, timers: null,
@@ -296,7 +298,12 @@ export default function HomeScreen({
     setDados(prev => {
       const novo = { ...prev, ...d };
       // 26/10: o que veio do PC fica guardado (modo offline); sem nada novo, segue o guardado.
-      if (Object.keys(d).length) { void lembrar('inicio', novo); setGuardadoEm(null); }
+      if (Object.keys(d).length) {
+        // 31/10: grava no aparelho só o que mudou (era a cada volta à aba, no meio da transição).
+        const json = JSON.stringify(novo);
+        if (json !== guardadoJson.current) { guardadoJson.current = json; void lembrar('inicio', novo); }
+        setGuardadoEm(null);
+      }
       return novo;
     });
     setPrimeiraLeitura(true);

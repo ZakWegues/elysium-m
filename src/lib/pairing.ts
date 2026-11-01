@@ -71,6 +71,9 @@ function migrate(raw: unknown): Pairing | null {
       port: obj.port,
       token: obj.token,
       hostname: typeof obj.hostname === 'string' ? obj.hostname : undefined,
+      // 31/10: sem isto o TLS fixado sumia a cada leitura e o app refazia a fixação toda vez.
+      ...(obj.tls && typeof obj.tls.porta === 'number' && typeof obj.tls.sha256 === 'string' && /^[0-9a-f]{64}$/.test(obj.tls.sha256)
+        ? { tls: { porta: obj.tls.porta, sha256: obj.tls.sha256 } } : {}),
     };
   }
 

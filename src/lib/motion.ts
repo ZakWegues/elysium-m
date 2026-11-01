@@ -187,3 +187,15 @@ export const ENTRA = FadeInDown.withInitialValues({ transform: [{ translateY: 8 
   .duration(MOV.base).easing(SUAVE_UI).reduceMotion(ReduceMotion.System);
 /** Saída — sempre mais rápida que a entrada. */
 export const SAI = FadeOut.duration(MOV.saida).reduceMotion(ReduceMotion.System);
+
+/**
+ * 31/10: o fundo animado para enquanto a tela troca (os 180 ms da `TelaAnimada`) — é quando a
+ * thread de UI mais precisa de folga. Quem liga e desliga é a própria transição (App.tsx).
+ */
+export const pausaFundo = makeMutable(false);
+let timerPausa: ReturnType<typeof setTimeout> | null = null;
+export function pausarFundoPor(ms: number): void {
+  pausaFundo.value = true;
+  if (timerPausa) clearTimeout(timerPausa);
+  timerPausa = setTimeout(() => { pausaFundo.value = false; timerPausa = null; }, ms);
+}

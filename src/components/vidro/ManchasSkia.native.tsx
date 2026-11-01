@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { StyleSheet, useWindowDimensions } from 'react-native';
-import { Canvas, Fill, Shader, Skia, useClock } from '@shopify/react-native-skia';
-import { useDerivedValue } from 'react-native-reanimated';
-import { reduzirUI } from '../../lib/motion';
+import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia';
+import { useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated';
+import { pausaFundo, reduzirUI } from '../../lib/motion';
 import { corParaUniform, escalaDoFundo, INICIO_DO_FUNDO, MANCHAS_SKSL } from '../../lib/fundoSkia';
 
 /** Tem Skia aqui (APK 2.6.0+): o AppBackground troca as manchas de SVG por estas. */
@@ -16,14 +16,23 @@ const efeito = Skia.RuntimeEffect.Make(MANCHAS_SKSL);
  */
 export function ManchasSkia({ blobs, forca }: { blobs: readonly [string, string, string]; forca: number }) {
   const { width, height } = useWindowDimensions();
-  const relogio = useClock();
-  const desde = useMemo(() => Date.now() - INICIO_DO_FUNDO, []);
+  // 31/10: relógio próprio, a 30 quadros por segundo (as manchas andam devagar; 60 só gastava) e
+  // parado durante a troca de tela e com "reduzir movimento".
+  const tempo = useSharedValue((Date.now() - INICIO_DO_FUNDO) / 1000);
+  const acumulado = useSharedValue(0);
+  useFrameCallback((f) => {
+    if (pausaFundo.value || reduzirUI.value) return;
+    acumulado.value += (f.timeSincePreviousFrame ?? 16) / 1000;
+    if (acumulado.value < 1 / 30) return;
+    tempo.value += acumulado.value;
+    acumulado.value = 0;
+  });
   const cores = useMemo(() => blobs.map(corParaUniform), [blobs]);
   const k = escalaDoFundo(width);
   const uniforms = useDerivedValue(() => ({
     res: [width, height],
     // "Reduzir movimento": as manchas param onde estão.
-    t: reduzirUI.value ? 0 : (relogio.value + desde) / 1000,
+    t: tempo.value,
     k,
     forca,
     c0: cores[0], c1: cores[1], c2: cores[2],
