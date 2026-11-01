@@ -118,3 +118,21 @@ try {
   fs.rmSync(copia, { force: true });
 }
 console.log(`✓ ${tag} publicada em https://github.com/${REPO}/releases/tag/${tag}`);
+
+// O PC só procura versão nova a cada 6 h: avisa o ELYSIUM desta máquina para buscar o APK já,
+// e o celular oferece a instalação na próxima vez que abrir. Sem o PC de pé, só avisa.
+try {
+  const cfg = JSON.parse(fs.readFileSync(path.join(process.env.APPDATA ?? "", "ELYSIUM", "elysium-config.json"), "utf8"));
+  const porta = cfg.overrides?.serverPort ?? 4200;
+  const r = await fetch(`http://127.0.0.1:${porta}/api/rpc`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${cfg.serverToken}` },
+    body: JSON.stringify({ method: "update.status", params: { verificar: true, aguardar: true } }),
+    signal: AbortSignal.timeout(10 * 60 * 1000),
+  });
+  const cel = (await r.json()).result?.celular;
+  if (cel?.versao === versao && cel.pronto) console.log(`✓ o PC já guardou o ${versao} para o celular`);
+  else console.log(`! o PC respondeu, mas o ${versao} ainda não está pronto lá (${cel ? `${cel.versao}, pronto=${cel.pronto}` : "sem versão"})`);
+} catch (e) {
+  console.log(`! não consegui avisar o PC (${e instanceof Error ? e.message : e}) — ele busca sozinho em até 6 h`);
+}
