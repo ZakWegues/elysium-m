@@ -105,20 +105,17 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     invalidate()
   }
 
-  private fun achar(g: ViewGroup): BlurTarget? {
-    if (g is BlurTarget) return g
-    for (i in 0 until g.childCount) {
-      val c = g.getChildAt(i)
-      if (c is BlurTarget) return c
-    }
-    return null
-  }
+  // 01/11: o ExpoBlurTargetView responde getChildAt com os filhos do BlurTarget, nunca com o
+  // próprio BlurTarget — procurar entre os filhos não o acha nunca. O pai real de um filho é ele.
+  private fun achar(g: ViewGroup): BlurTarget? =
+    g as? BlurTarget ?: (if (g.childCount > 0) g.getChildAt(0)?.parent as? BlurTarget else null)
 
   private fun maisDeFora(g: ViewGroup): BlurTarget? {
     val fila = ArrayDeque<ViewGroup>().apply { add(g) }
     while (fila.isNotEmpty()) {
       val atual = fila.removeFirst()
-      if (atual is BlurTarget && !contem(atual, this)) return atual
+      val t = achar(atual)
+      if (t != null && !contem(t, this)) return t
       for (i in 0 until atual.childCount) (atual.getChildAt(i) as? ViewGroup)?.let { fila.add(it) }
     }
     return null
