@@ -7,6 +7,7 @@ import { getActiveSessionId, setActiveSessionId } from '../lib/mailboxStore';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, ScreenHeader, Text, VIDRO_BOTAO } from '../components/ui';
+import { VidroNativo, VIDRO_NATIVO } from '../components/vidro/VidroNativo';
 import ChatScreen from './ChatScreen';
 import MailboxScreen from './MailboxScreen';
 import MailboxHistorico from './MailboxHistorico';
@@ -115,12 +116,13 @@ export default function ChatHub({
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
+        flutuante
         // Os dois cantos são o mesmo objeto: círculo de vidro, ícone fino em cor de
         // texto, sem glow. Antes o histórico era um ícone solto à esquerda e os presets
         // uma bolinha com borda à direita — dois pesos para dois alvos irmãos.
         left={
           <GlassCircle accessibilityLabel="Histórico"
-            size={34}
+            size={40}
             onPress={() => (modo === 'ia' ? onOpenConversations() : setHistoricoPcAberto(true))}
           >
             <Feather name="clock" size={17} color={palette.textMuted} />
@@ -172,7 +174,9 @@ function SwitchModo({
   onTroca: (m: 'ia' | 'pc') => void;
   temNovidade: boolean;
 }) {
-  const { palette, tokens } = useTheme();
+  const { palette, tokens, familiaResolvida } = useTheme();
+  // 01/11: a pílula também é vidro líquido nativo, e a gota da lente segue o polegar.
+  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : 8;
   // `x` vai de 0 (ia) a 1 (pc).
   const x = useSharedValue(modo === 'ia' ? 0 : 1);
   const [largura, setLargura] = useState(0);
@@ -199,8 +203,16 @@ function SwitchModo({
   return (
     <View
       onLayout={e => setLargura(e.nativeEvent.layout.width)}
-      style={[styles.switch, VIDRO_BOTAO, { borderRadius: tokens.radii.full }]}
+      style={[styles.switch, VIDRO_BOTAO, { borderRadius: tokens.radii.full }, lente ? { backgroundColor: 'transparent', overflow: 'hidden' } : null]}
     >
+      {lente > 0 && largura > 0 && (() => {
+        const w = largura / 2 - 3;
+        return (
+          <VidroNativo alvo={null} lente={lente} brilho={0.3}
+            seletor={[3 + w / 2 + (modo === 'pc' ? w : 0), w / 2 - 4, 1]}
+            reserva={<View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: VIDRO_BOTAO.backgroundColor }]} />} />
+        );
+      })()}
       {/* O polegar é um irmão atrás dos dois botões: o texto ativo não precisa de fundo
           próprio, e a troca é um único translate. */}
       <Animated.View

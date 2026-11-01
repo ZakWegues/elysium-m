@@ -9,7 +9,7 @@ import { callRpc, Entrega, Reminder, Rotina } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { useTheme } from '../theme';
-import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../components/ui';
+import { Button, Card, GlassCircle, GlassModal, ScreenHeader, Text, Toque, useFolgaDoTopo } from '../components/ui';
 import { notificacoesAtivas, definirNotificacoesAtivas, pedirPermissao, sincronizarNotificacoes } from '../lib/notificacoes';
 import { useAoReativar } from '../components/AbaViva';
 import { comConfirmacao } from '../lib/confirm';
@@ -157,6 +157,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
     }
   }
 
+  const folgaTopo = useFolgaDoTopo();
   return (
     <View style={{ flex: 1 }}>
       {naGaveta ? (
@@ -169,17 +170,18 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
       ) : (
       <ScreenHeader
         title="Rotinas"
+        flutuante
         right={(
-          <Pressable onPress={() => setEditando({})} hitSlop={10} accessibilityLabel="Nova rotina">
-            <Feather name="plus-circle" size={24} color={palette.primary} />
-          </Pressable>
+          <GlassCircle size={40} onPress={() => setEditando({})} accessibilityLabel="Nova rotina">
+            <Feather name="plus" size={20} color={palette.primary} />
+          </GlassCircle>
         )}
       />
       )}
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: naGaveta ? tokens.spacing.lg : folgaTopo, gap: tokens.spacing.md, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={puxar} tintColor={palette.primary} colors={[palette.primary]} />}
       >
         {erro && (

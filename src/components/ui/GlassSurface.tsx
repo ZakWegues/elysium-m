@@ -5,6 +5,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, w
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
 import { useBlurTarget } from './BlurTarget';
+import { VidroNativo, VIDRO_NATIVO } from '../vidro/VidroNativo';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -164,6 +165,7 @@ export function GlassCircle({
   style,
   children,
   accessibilityLabel,
+  anel,
 }: {
   size?: number;
   onPress?: () => void;
@@ -178,8 +180,16 @@ export function GlassCircle({
   children: React.ReactNode;
   /** Botão só de ícone precisa de nome para o leitor de tela (fase 16). */
   accessibilityLabel?: string;
+  /** Cor de um anel fino na borda (o estado do PC no botão de busca). */
+  anel?: string;
 }) {
-  const { palette } = useTheme();
+  const { palette, familiaResolvida } = useTheme();
+  // 01/11: o mesmo vidro líquido nativo da barra de abas, com pouco brilho. No topo flutuante ele
+  // dobra o que rola por baixo; dentro das telas, o fundo. Stark e Android < 13: o vidro de antes.
+  const raio = Math.round(size * 0.3);
+  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : size >= 40 ? 8 : 6;
+  // Apertar acende a gota no meio: o que está atrás amplia um pouco.
+  const [gota, setGota] = React.useState(false);
 
   const escala = useSharedValue(1);
 
@@ -205,8 +215,8 @@ export function GlassCircle({
   return (
     <AnimatedPressable
       onPress={onPress}
-      onPressIn={() => { apertado.value = withTiming(1, { duration: 90 }); onPressIn?.(); }}
-      onPressOut={() => { apertado.value = withTiming(0, { duration: 160 }); onPressOut?.(); }}
+      onPressIn={() => { apertado.value = withTiming(1, { duration: 90 }); if (lente) setGota(true); onPressIn?.(); }}
+      onPressOut={() => { apertado.value = withTiming(0, { duration: 160 }); if (lente) setGota(false); onPressOut?.(); }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -217,8 +227,10 @@ export function GlassCircle({
           width: size,
           height: size,
           // 30/10: quadrado de canto suave, não bolha (o Zak achou as bolinhas estranhas).
-          borderRadius: Math.round(size * 0.3),
+          borderRadius: raio,
           ...VIDRO_BOTAO,
+          ...(lente ? { backgroundColor: 'transparent' } : null),
+          ...(anel ? { borderColor: anel, borderWidth: 1.5 } : null),
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
@@ -228,6 +240,11 @@ export function GlassCircle({
         estiloAnimado,
       ]}
     >
+      {lente > 0 && (
+        <VidroNativo alvo={null} lente={lente} raio={raio} brilho={0.3}
+          seletor={[size / 2, size * 0.32, gota ? 1 : 0]}
+          reserva={<View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: VIDRO_BOTAO.backgroundColor }]} />} />
+      )}
       {/* Vidro dos botões; aceso, ganha a tinta da cor do tema. */}
       {ativo && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.primarySoft }]} />}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.09)' }, estiloRealce]} />

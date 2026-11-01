@@ -30,6 +30,7 @@ import { useAbaAtiva } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import {
   Button, Card, GlassCircle, GlassModal, MetricBar, ScreenHeader, Text, Toque,
+  useFolgaDoTopo,
 } from '../components/ui';
 
 /**
@@ -95,6 +96,7 @@ export default function ControlScreen({
 }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
+  const folgaTopo = useFolgaDoTopo();
   // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
   const aoRolar = useRolagemDaBarra();
   const [trackpadOpen, setTrackpadOpen] = useState(false);
@@ -117,9 +119,9 @@ export default function ControlScreen({
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader title="PC" />
+      <ScreenHeader title="PC" flutuante />
 
-      <ScrollView onScroll={aoRolar} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
+      <ScrollView onScroll={aoRolar} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: folgaTopo, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
         <MirrorPanel pairing={pairing} onError={handleError} />
 
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}

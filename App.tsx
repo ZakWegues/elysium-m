@@ -22,7 +22,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { FOLGA_DA_BARRA, TabBar, Screen } from './src/components/TabBar';
 import { FolgaDaBarraContext } from './src/lib/folgaBarra';
-import { AjustesProvider, AppBackground, BarraBlurProvider, BlurTargetProvider, GlassModal, SobreposicaoContext } from './src/components/ui';
+import { AjustesProvider, AppBackground, BarraBlurProvider, BlurTargetProvider, GlassModal, SobreposicaoContext, TopoFlutuante } from './src/components/ui';
 import { CamadaEstouros, registrarToque } from './src/components/Estouros';
 import { IndicadorConexao } from './src/components/conexao/IndicadorConexao';
 import { useConnection } from './src/lib/useConnection';
@@ -580,6 +580,8 @@ function AppInner() {
       </TelaAnimada>
       </BarraBlurProvider>
       </FolgaDaBarraContext.Provider>
+      {/* 01/11: busca, Ajustes e o que cada tela pedir no topo — fora do alvo, como a barra. */}
+      <TopoFlutuante />
       {/* A barra e os avisos flutuam numa camada por cima das telas. */}
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: keyboard.height }}>
       {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area

@@ -21,7 +21,7 @@ import { callRpc } from '../lib/rpc';
 import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
-import { GlassCircle, GlassFill, ScreenHeader, Text } from '../components/ui';
+import { GlassCircle, GlassFill, ScreenHeader, Text, useFolgaDoTopo } from '../components/ui';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
 import { abrirArquivo, baixarAnexo, LIMITE_ENVIO_PARA_O_PC, planejarEnvio, resumoDosArquivos, salvarArquivo, tamanhoLegivel, tipoDoArquivo } from '../lib/anexos';
@@ -51,6 +51,7 @@ export default function MailboxScreen({
 }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
+  const folgaTopo = useFolgaDoTopo();
   const [messages, setMessages] = useState<MailboxMessage[]>([]);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -374,7 +375,7 @@ export default function MailboxScreen({
     <View style={{ flex: 1 }}>
       {!semCabecalho && <ScreenHeader title="Caixa de recados" />}
       {baixando && (
-        <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingVertical: 6 }}>
+        <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingVertical: 6, marginTop: semCabecalho ? folgaTopo : 0 }}>
           Baixando {baixando.nome}… {Math.round(baixando.fracao * 100)}%
         </Text>
       )}
@@ -398,7 +399,7 @@ export default function MailboxScreen({
         ref={listRef}
         data={ordered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: semCabecalho ? folgaTopo : tokens.spacing.lg, gap: tokens.spacing.sm }}
         onContentSizeChange={aoCrescerConteudo}
         // O arrasto do dedo é o ÚNICO jeito de soltar a âncora. Posição de rolagem sozinha
         // não serve: durante a montagem ela chega defasada e derrubava a âncora no meio.

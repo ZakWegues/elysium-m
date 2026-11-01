@@ -23,6 +23,8 @@ type PropsNativas = {
   desfoque: number;
   tinta: number[];
   seletor: number[];
+  raio: number;
+  brilho: number;
   style: object;
   pointerEvents: 'none';
 };
@@ -32,7 +34,7 @@ let avisou = false;
 /** Vale para o app inteiro: confirmado uma vez, a barra não volta para a reserva. */
 let confirmado = false;
 
-export function VidroNativo({ alvo, lente, seletor, reserva }: PropsVidroNativo & { reserva?: ReactNode }) {
+export function VidroNativo({ alvo, lente, seletor = [0, 0, 0], raio = 0, brilho = 1, tinta = [0.086, 0.086, 0.1, 0.3], reserva }: PropsVidroNativo & { reserva?: ReactNode }) {
   const [id, setId] = useState<number | null>(null);
   const [desenhando, setDesenhando] = useState(confirmado);
   useEffect(() => {
@@ -66,7 +68,9 @@ export function VidroNativo({ alvo, lente, seletor, reserva }: PropsVidroNativo 
         alvo={id}
         lente={lente}
         desfoque={7}
-        tinta={[0.086, 0.086, 0.1, 0.3]}
+        tinta={tinta}
+        raio={raio}
+        brilho={brilho}
         seletor={seletor}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"

@@ -11,7 +11,7 @@ import { syncChats } from '../lib/chatSync';
 import { callRpc } from '../lib/rpc';
 import { Pairing } from '../lib/pairing';
 import { useTheme } from '../theme';
-import { Button, Card, ScreenHeader, Text } from '../components/ui';
+import { Button, Card, GlassCircle, ScreenHeader, Text, useFolgaDoTopo } from '../components/ui';
 import { buscarNasConversas } from '../lib/buscaConversas';
 import Animated from 'react-native-reanimated';
 import { LAYOUT, ENTRA, SAI } from '../lib/motion';
@@ -40,6 +40,7 @@ export default function ConversationsScreen({
 }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
+  const folgaTopo = useFolgaDoTopo();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -117,21 +118,22 @@ export default function ConversationsScreen({
     <View style={{ flex: 1 }}>
       <ScreenHeader
         semAjustes
+        flutuante
         title="Conversas"
         right={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            {syncing
-              ? <ActivityIndicator size="small" color={palette.primary} />
-              : <Pressable accessibilityLabel="Atualizar" accessibilityRole="button" onPress={sync} hitSlop={8}>
-                  <Feather name="refresh-cw" size={18} color={palette.textMuted} />
-                </Pressable>}
-            <Pressable accessibilityLabel="Fechar" accessibilityRole="button" onPress={onBack} hitSlop={8}>
-              <Feather name="x" size={22} color={palette.textMuted} />
-            </Pressable>
-          </View>
+          <>
+            <GlassCircle size={40} disabled={syncing} accessibilityLabel="Atualizar" onPress={sync}>
+              {syncing
+                ? <ActivityIndicator size="small" color={palette.primary} />
+                : <Feather name="refresh-cw" size={17} color={palette.textMuted} />}
+            </GlassCircle>
+            <GlassCircle size={40} accessibilityLabel="Fechar" onPress={onBack}>
+              <Feather name="x" size={20} color={palette.textMuted} />
+            </GlassCircle>
+          </>
         }
       />
-      <Animated.ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
+      <Animated.ScrollView contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: folgaTopo, gap: tokens.spacing.sm, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
         <Button title="+ Nova conversa" onPress={onNew} />
 
         <View style={[styles.busca, { borderColor: palette.border, borderRadius: tokens.radii.lg }]}>

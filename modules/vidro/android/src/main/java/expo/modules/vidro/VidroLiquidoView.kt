@@ -36,6 +36,8 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private var selCentro = 0f
   private var selMeia = 1f
   private var selVisivel = 0f
+  private var raio = 0f
+  private var brilho = 1f
   private var animacao: ValueAnimator? = null
 
   private val meu = IntArray(2)
@@ -55,6 +57,10 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
 
   fun definirLente(valor: Float) { lente = valor; invalidate() }
   fun definirDesfoque(valor: Float) { desfoque = valor.coerceIn(0f, 40f); invalidate() }
+  /** Raio do canto em dp; 0 = pílula (metade da altura). Os botões são quadrados de canto suave. */
+  fun definirRaio(valor: Float) { raio = valor.coerceAtLeast(0f); invalidate() }
+  /** Quanto do fio de luz e do brilho do topo aparece (0–1). Os botões usam pouco. */
+  fun definirBrilho(valor: Float) { brilho = valor.coerceIn(0f, 1f); invalidate() }
 
   fun definirTinta(cor: List<Double>) {
     if (cor.size == 4) tinta = floatArrayOf(cor[0].toFloat(), cor[1].toFloat(), cor[2].toFloat(), cor[3].toFloat())
@@ -170,6 +176,8 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     s.setFloatUniform("lente", lente * densidade)
     s.setFloatUniform("sel", selCentro * densidade, selMeia * densidade, selVisivel)
     s.setFloatUniform("tinta", tinta[0], tinta[1], tinta[2], tinta[3])
+    s.setFloatUniform("raio", raio * densidade)
+    s.setFloatUniform("brilho", brilho)
     val raio = desfoque * densidade
     val efeito = if (raio > 0.5f) {
       RenderEffect.createChainEffect(
@@ -197,9 +205,11 @@ uniform float dens;
 uniform float lente;
 uniform float3 sel;
 uniform half4 tinta;
+uniform float raio;
+uniform float brilho;
 
 half4 main(float2 q) {
-  float r = tam.y * 0.5;
+  float r = raio > 0.0 ? min(raio, min(tam.x, tam.y) * 0.5) : tam.y * 0.5;
   float2 c = tam * 0.5;
   float2 h = max(c - float2(r), float2(0.0));
   float2 rel = q - c;
@@ -214,7 +224,8 @@ half4 main(float2 q) {
   else n = float2(0.0, 1.0);
   n *= float2(rel.x < 0.0 ? -1.0 : 1.0, rel.y < 0.0 ? -1.0 : 1.0);
 
-  float borda = 18.0 * dens;
+  // Botão pequeno: a faixa que dobra é proporcional, senão a lente toma o botão inteiro.
+  float borda = min(18.0 * dens, min(tam.x, tam.y) * 0.35);
   float tt = clamp(1.0 - dentro / borda, 0.0, 1.0);
   float2 desl = -n * tt * tt * lente;
 
@@ -234,7 +245,7 @@ half4 main(float2 q) {
   // Fio de luz na aresta de cima e um brilho difuso no topo (a luz vem de cima).
   float fio = smoothstep(2.0 * dens, 0.0, abs(dentro - 1.0 * dens)) * (0.28 + 0.32 * (-n.y));
   float topo = smoothstep(r, 0.0, q.y) * 0.06;
-  cor += half3(fio + topo);
+  cor += half3((fio + topo) * brilho);
   return half4(cor, 1.0);
 }
 """

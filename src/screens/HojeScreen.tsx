@@ -10,7 +10,7 @@ import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { confirmDestructive } from '../lib/confirm';
 import { useTheme } from '../theme';
-import { Button, Card, GlassModal, ScreenHeader, Text, Toque } from '../components/ui';
+import { Button, Card, GlassModal, ScreenHeader, Text, Toque, useFolgaDoTopo } from '../components/ui';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, tituloComContador } from '../lib/secoesHoje';
 import { Reator } from '../components/Reator';
@@ -50,6 +50,7 @@ function restante(ms: number) {
 export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, onAbrirRotinas }: { pairing: Pairing; pedidoTarefas?: number; onResponder?: (pergunta: string) => void; onAbrirRotinas?: () => void }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
+  const folgaTopo = useFolgaDoTopo();
   // 30/10: rolar para baixo esconde os nomes da barra de abas (como no Nuvio).
   const aoRolar = useRolagemDaBarra();
   const { width: largura, height: altura } = useWindowDimensions();
@@ -321,12 +322,12 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader title="Hoje" />
+      <ScreenHeader title="Hoje" flutuante />
       <ScrollView
         onScroll={aoRolar}
         scrollEventThrottle={32}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: Math.max(120, tokens.spacing.lg + folgaDaBarra) }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: folgaTopo, gap: tokens.spacing.md, paddingBottom: Math.max(120, tokens.spacing.lg + folgaDaBarra) }}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={puxar} tintColor={palette.primary} colors={[palette.primary]} />}
       >
         {!painel && !erro && <ActivityIndicator color={palette.primary} />}

@@ -11,7 +11,7 @@ import { syncMailboxSessions } from '../lib/mailboxSync';
 import { confirmDestructive } from '../lib/confirm';
 import { Pairing } from '../lib/pairing';
 import { useTheme } from '../theme';
-import { Button, Card, ScreenHeader, Text } from '../components/ui';
+import { Button, Card, GlassCircle, ScreenHeader, Text } from '../components/ui';
 
 /**
  * Histórico do lado "PC" — os recados trocados entre celular e computador.
@@ -163,21 +163,21 @@ export default function MailboxHistorico({
         semAjustes
         title="Conversas do PC"
         left={
-          <Pressable accessibilityLabel="Voltar" accessibilityRole="button" onPress={onFechar} hitSlop={8}>
-            <Feather name="chevron-left" size={22} color={palette.text} />
-          </Pressable>
+          <GlassCircle size={40} accessibilityLabel="Voltar" onPress={onFechar}>
+            <Feather name="chevron-left" size={20} color={palette.text} />
+          </GlassCircle>
         }
         right={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            {sincronizando
-              ? <ActivityIndicator size="small" color={palette.primary} />
-              : <Pressable accessibilityLabel="Atualizar" accessibilityRole="button" onPress={sincronizar} hitSlop={8}>
-                  <Feather name="refresh-cw" size={17} color={palette.textMuted} />
-                </Pressable>}
-            <Pressable accessibilityLabel="Favoritar" accessibilityRole="button" onPress={() => setSoFavoritos(v => !v)} hitSlop={8}>
+          <>
+            <GlassCircle size={40} disabled={sincronizando} accessibilityLabel="Atualizar" onPress={sincronizar}>
+              {sincronizando
+                ? <ActivityIndicator size="small" color={palette.primary} />
+                : <Feather name="refresh-cw" size={17} color={palette.textMuted} />}
+            </GlassCircle>
+            <GlassCircle size={40} ativo={soFavoritos} accessibilityLabel="Favoritar" onPress={() => setSoFavoritos(v => !v)}>
               <Feather name="star" size={18} color={soFavoritos ? palette.accent : palette.textMuted} />
-            </Pressable>
-          </View>
+            </GlassCircle>
+          </>
         }
       />
 

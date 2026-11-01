@@ -18,13 +18,13 @@ import { confirmDestructive } from '../lib/confirm';
 import { errMessage } from '../lib/errors';
 import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/telemetry';
 import { useTheme } from '../theme';
-import { Card, Esqueleto, GlassCircle, ScreenHeader, Text } from '../components/ui';
+import { Card, Esqueleto, GlassCircle, ScreenHeader, Text, useFolgaDoTopo } from '../components/ui';
 import { haptica } from '../lib/haptica';
 import BuscaPanel from './BuscaPanel';
 import AvisoAtualizacao, { NovidadesCelular } from '../components/AvisoAtualizacao';
 import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
-import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados, saudacao } from './inicio/tipos';
+import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados } from './inicio/tipos';
 import { CHAVE_LAYOUT_V2, migrarLayout, resumoDaInicio } from '../lib/layoutInicio';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
@@ -326,15 +326,13 @@ export default function HomeScreen({
   // Voltou à Início: os cards se atualizam por trás, sem sumir.
   useAoReativar(() => { void carregar(); });
 
-  // O nome da saudação vem da config do PC (fase 13): dado pessoal fica nos dados do app,
-  // nunca no código. Guardado no aparelho para a saudação funcionar sem rede.
-  const [nome, setNome] = useState('');
+  // O nome vem da config do PC (fase 13): dado pessoal fica nos dados do app, nunca no
+  // código. Guardado no aparelho para a saudação do Chat funcionar sem rede (01/11: a Início
+  // não mostra mais a saudação no topo).
   useEffect(() => {
-    AsyncStorage.getItem(CHAVE_NOME).then((n) => { if (n) setNome(n); }).catch(() => {});
     callRpc(pairing, 'pairing.endpoints', {}, { timeoutMs: 5000 })
       .then((r) => {
         const n = (r.tratamento || r.nome || '').trim();
-        setNome(n);
         AsyncStorage.setItem(CHAVE_NOME, n).catch(() => {});
       })
       .catch(() => { /* sem PC: fica o guardado */ });
@@ -466,29 +464,27 @@ export default function HomeScreen({
   }
 
   const online = status === 'open';
+  const folgaTopo = useFolgaDoTopo();
 
   return (
     <View style={{ flex: 1 }}>
       <ScreenHeader
-        title={nome ? `${saudacao()}, ${nome}` : saudacao()}
+        flutuante
         right={
-          <View style={styles.linhaStatus}>
-            {/* 08/10: o microfone que mostrava a escuta do "Ely" saiu do topo — o Zak o lia como a
-                mão livre que ele pediu para tirar. O estado da escuta continua em Ajustes → Voz. */}
-            <GlassCircle accessibilityLabel="Buscar" size={32} onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
-              <Feather name="search" size={16} color={palette.textMuted} />
-            </GlassCircle>
-            {/* Só o ponto: a saudação virou o título e não sobra largura para "PC online"
-                aqui. O texto do estado mora na linha abaixo do cabeçalho. */}
-            <View style={[styles.ponto, { backgroundColor: online ? palette.success : palette.error }]} />
-          </View>
+          // 08/10: o microfone que mostrava a escuta do "Ely" saiu do topo — o Zak o lia como a
+          // mão livre que ele pediu para tirar. O estado da escuta continua em Ajustes → Voz.
+          // 01/11: o ponto do PC virou o anel da busca (a frase do estado segue no conteúdo).
+          <GlassCircle accessibilityLabel={`Buscar (PC ${online ? 'online' : 'offline'})`} size={40} anel={online ? palette.success : palette.error}
+            onPress={() => { haptica.leve(); setBuscaAberta(true); }}>
+            <Feather name="search" size={18} color={palette.textMuted} />
+          </GlassCircle>
         }
       />
 
       <ScrollView
         onScroll={aoRolar}
         scrollEventThrottle={32}
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: folgaTopo, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={puxando} onRefresh={async () => { setPuxando(true); try { await carregar(); } finally { setPuxando(false); } }} tintColor={palette.primary} colors={[palette.primary]} />}
         // Só para de rolar enquanto um arrasto está REALMENTE em curso. Antes isto era
@@ -650,8 +646,6 @@ export default function HomeScreen({
  */
 
 const styles = StyleSheet.create({
-  linhaStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ponto: { width: 8, height: 8, borderRadius: 4 },
   cabecalho: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   linhaCfg: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   linhaCfgAlvo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },

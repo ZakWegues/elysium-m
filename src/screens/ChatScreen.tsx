@@ -38,7 +38,7 @@ import { conversaParaContinuar, deriveTitle, Fonte, listSessions, saveSession, S
 import { syncChats } from '../lib/chatSync';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text, VIDRO_BOTAO } from '../components/ui';
+import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text, useFolgaDoTopo, VIDRO_BOTAO } from '../components/ui';
 import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
@@ -98,6 +98,7 @@ export default function ChatScreen({
 }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
+  const folgaTopo = useFolgaDoTopo();
   // 22.1: começa vazia — a esfera é a tela de boas-vindas (a bolha de texto era ruído).
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   // 31/10: o "Desfazer" some sozinho no prazo (e sai do histórico salvo).
@@ -1202,7 +1203,7 @@ export default function ChatScreen({
         ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: tokens.spacing.lg, gap: tokens.spacing.sm }}
+        contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: semCabecalho ? folgaTopo : tokens.spacing.lg, gap: tokens.spacing.sm }}
         onContentSizeChange={aoCrescerConteudo}
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
