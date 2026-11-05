@@ -442,7 +442,9 @@ export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; i
   /** 22/10: respostas rápidas e telas interativas. PC anterior à 2.15 não manda. */
   respostasRapidas?: boolean; respostasProntas?: string[]; respostasInterativas?: 'nunca' | 'pedir' | 'perguntar' | 'priorizar';
   /** 05/11: modo sem censura (conversa no modelo do PC). PC anterior à 2.41 não manda. */
-  semCensura?: boolean };
+  semCensura?: boolean;
+  /** 05/11: sem censura total — nada vai para o Gemini. */
+  semCensuraSoLocal?: boolean };
 
 /** Hábito com as contas do PC (fase 16). `mapa`: 30 dias, true feito, false não, null não vale. */
 export type Habito = {

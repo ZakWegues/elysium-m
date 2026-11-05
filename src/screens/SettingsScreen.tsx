@@ -201,6 +201,16 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
           <VidroSwitch value={perfil.semCensura} disabled={salvando} onValueChange={(v) => gravar({ semCensura: v })} accessibilityLabel="Modo sem censura" />
         </View>
       )}
+      {/* 05/11: dentro do modo sem censura, o nível "só o PC" — nada vai para o Gemini. */}
+      {perfil.semCensura === true && perfil.semCensuraSoLocal !== undefined && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: tokens.spacing.sm, paddingLeft: tokens.spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <Text variant="subheading">Só o PC</Text>
+            <Text variant="caption" color={palette.textMuted}>Nada vai para o Gemini, nem a pesquisa — tudo é respondido pelo modelo do PC. Use quando o Gemini recusa antes. Perde a busca na web e o “me lembra de X” escrito livre.</Text>
+          </View>
+          <VidroSwitch value={perfil.semCensuraSoLocal} disabled={salvando} onValueChange={(v) => gravar({ semCensuraSoLocal: v })} accessibilityLabel="Sem censura só o PC" />
+        </View>
+      )}
       {/* 22/10: respostas rápidas e telas interativas. PC anterior à 2.15 não tem os campos. */}
       {perfil.respostasRapidas !== undefined && (
         <>
