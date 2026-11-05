@@ -10,7 +10,7 @@ import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { confirmDestructive } from '../lib/confirm';
 import { useTheme } from '../theme';
-import { Button, Card, GlassModal, ScreenHeader, Text, Toque, useFolgaDoTopo } from '../components/ui';
+import { Button, Card, GlassModal, ScreenHeader, Text, Toque, useFolgaDoTopo, FundoVidro } from '../components/ui';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alternarSecao, CHAVE_SECOES_HOJE, EstadoSecoes, estaAberta, lerSecoes, tituloComContador } from '../lib/secoesHoje';
 import { Reator } from '../components/Reator';
@@ -476,6 +476,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                       return (
                         <Pressable key={d} onPress={() => setDiaNova(d)} hitSlop={4}
                           style={[styles.chipDia, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
+              <FundoVidro cor={on ? palette.primarySoft : undefined} />
                           <Text variant="caption" color={on ? palette.primary : palette.textMuted} maxFontSizeMultiplier={1.3}>{d === 'nenhum' ? 'Sem data' : d === 'hoje' ? 'Hoje' : 'Amanhã'}</Text>
                         </Pressable>
                       );
@@ -847,6 +848,7 @@ function FormHabito({ pairing, base, aoTerminar }: { pairing: Pairing; base: Par
           return (
             <Pressable key={n} onPress={() => setFolgas(n)} accessibilityRole="radio" accessibilityState={{ selected: on }}
               style={[styles.chipDia, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
+              <FundoVidro cor={on ? palette.primarySoft : undefined} />
               <Text variant="caption" color={on ? palette.primary : palette.textMuted}>{n === 0 ? 'Nenhuma' : n === 1 ? '1 por semana' : '2 por semana'}</Text>
             </Pressable>
           );

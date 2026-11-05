@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import * as Application from 'expo-application';
 import AvisoAtualizacao from '../components/AvisoAtualizacao';
 import { versaoInstalada } from '../lib/atualizacao';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
@@ -19,7 +19,7 @@ import { errMessage } from '../lib/errors';
 import { useTheme, palettes, getPalette, ROTULO_FAMILIA, FamiliaEscolha, ThemeName } from '../theme';
 import { PAPEIS, type PapelId } from '../theme/fundo';
 import { escolherImagemDeFundo } from '../theme/fundoGaleria';
-import { Button, Card, Text, Toque } from '../components/ui';
+import { Button, Card, Text, Toque, VidroSwitch } from '../components/ui';
 import { PainelMemoria } from './ControlScreen';
 import { falaAntecipadaLigada, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
@@ -199,7 +199,7 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
               <Text variant="subheading">Respostas rápidas</Text>
               <Text variant="caption" color={palette.textMuted}>Botões embaixo da resposta quando ela pergunta: Sim, Não, as opções dela e “Outra resposta…”. Falar continua valendo.</Text>
             </View>
-            <Switch value={perfil.respostasRapidas} disabled={salvando} onValueChange={(v) => gravar({ respostasRapidas: v })} trackColor={{ true: palette.primary }} accessibilityLabel="Respostas rápidas" />
+            <VidroSwitch value={perfil.respostasRapidas} disabled={salvando} onValueChange={(v) => gravar({ respostasRapidas: v })} accessibilityLabel="Respostas rápidas" />
           </View>
           <Text variant="subheading" style={{ marginTop: tokens.spacing.sm }}>Respostas prontas</Text>
           <Text variant="caption" color={palette.textMuted}>Uma por linha, até 6.</Text>
@@ -256,7 +256,7 @@ function CerebroHermes({ pairing }: { pairing: Pairing }) {
             {h.ligado ? rotulo : 'Desligado — Groq e modelo local'}{h.ligado && h.modelo ? ` · ${h.modelo.split('/').pop()}` : ''}
           </Text>
         </View>
-        <Switch value={h.ligado} disabled={mexendo} onValueChange={alternar} trackColor={{ true: palette.primary }} accessibilityLabel="Usar o Hermes como cérebro" />
+        <VidroSwitch value={h.ligado} disabled={mexendo} onValueChange={alternar} accessibilityLabel="Usar o Hermes como cérebro" />
       </View>
       <Text variant="caption" color={palette.textMuted}>
         O Hermes do PC pensa e age com a voz e o jeito da Ely. Se ele cair ou demorar, responde a reserva.
@@ -587,7 +587,7 @@ function AvisosLocais() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
         <Feather name="smartphone" size={18} color={palette.primary} />
         <Text variant="body" style={{ flex: 1 }}>Avisar neste celular</Text>
-        <Switch value={ligado} onValueChange={alternar} trackColor={{ true: palette.primary }} />
+        <VidroSwitch value={ligado} onValueChange={alternar} />
       </View>
       <Text variant="caption" color={palette.textMuted}>
         Rotinas e lembretes do PC viram notificação aqui — pela rede ou pelo túnel, sem nuvem.
@@ -688,7 +688,7 @@ function VozSection() {
             Com o app aberto na Início ou no Chat, diga “Ely” e o seu pedido (ou “Ely, pausa a música”). Ela responde uma vez; para outro pedido, diga “Ely” de novo. Só com o app na tela — nada escuta em segundo plano.
           </Text>
         </View>
-        <Switch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} trackColor={{ true: palette.primary }} />
+        <VidroSwitch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} />
       </View>
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="volume-2" size={17} color={ler ? palette.primary : palette.textMuted} />
@@ -698,7 +698,7 @@ function VozSection() {
             Quando você digita, ela também fala o começo da resposta. Pedidos por voz sempre respondem falando.
           </Text>
         </View>
-        <Switch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} trackColor={{ true: palette.primary }} accessibilityLabel="Ler respostas digitadas" />
+        <VidroSwitch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} accessibilityLabel="Ler respostas digitadas" />
       </View>
       <Pressable onPress={() => setAvancado(v => !v)} accessibilityRole="button" accessibilityState={{ expanded: avancado }}
         hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 }}>
@@ -714,7 +714,7 @@ function VozSection() {
             No pedido por voz, ela fala a primeira frase assim que fica pronta. Se a fala picotar, desligue.
           </Text>
         </View>
-        <Switch value={antecipada} onValueChange={(v) => { setAntecipada(v); ligarFalaAntecipada(v); }} trackColor={{ true: palette.primary }} accessibilityLabel="Começar a falar antes de terminar" />
+        <VidroSwitch value={antecipada} onValueChange={(v) => { setAntecipada(v); ligarFalaAntecipada(v); }} accessibilityLabel="Começar a falar antes de terminar" />
       </View>
       {palavra && (
         <Text variant="caption" color={estado.fase === 'falhou' ? palette.error : palette.textMuted}>

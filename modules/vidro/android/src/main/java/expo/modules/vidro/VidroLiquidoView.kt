@@ -38,6 +38,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private var selVisivel = 0f
   private var raio = 0f
   private var brilho = 1f
+  private var perfil = 0f
   private var animacao: ValueAnimator? = null
 
   private val meu = IntArray(2)
@@ -59,8 +60,10 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   fun definirDesfoque(valor: Float) { desfoque = valor.coerceIn(0f, 40f); invalidate() }
   /** Raio do canto em dp; 0 = pílula (metade da altura). Os botões são quadrados de canto suave. */
   fun definirRaio(valor: Float) { raio = valor.coerceAtLeast(0f); invalidate() }
-  /** Quanto do fio de luz e do brilho do topo aparece (0–1). Os botões usam pouco. */
+  /** Quanto do brilho do aro aparece (0–1). Os botões usam pouco. */
   fun definirBrilho(valor: Float) { brilho = valor.coerceIn(0f, 1f); invalidate() }
+  /** 0 = painel (domo), 1 = lente (squircle + Snell) — ver LENTE_AGSL. */
+  fun definirPerfil(valor: Float) { perfil = valor; invalidate() }
 
   fun definirTinta(cor: List<Double>) {
     if (cor.size == 4) tinta = floatArrayOf(cor[0].toFloat(), cor[1].toFloat(), cor[2].toFloat(), cor[3].toFloat())
@@ -178,6 +181,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     s.setFloatUniform("tinta", tinta[0], tinta[1], tinta[2], tinta[3])
     s.setFloatUniform("raio", raio * densidade)
     s.setFloatUniform("brilho", brilho)
+    s.setFloatUniform("perfil", perfil)
     val raio = desfoque * densidade
     val efeito = if (raio > 0.5f) {
       RenderEffect.createChainEffect(
@@ -195,8 +199,14 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     @Volatile var estado: String = "criada"
 
     /**
-     * A lente (mesma geometria da LENTE_SKSL de lib/fundoSkia.ts, agora sobre o conteúdo real).
-     * `q` em px da view; a pílula é um retângulo com as pontas redondas (raio = metade da altura).
+     * A lente, com a óptica da biblioteca Glisse (github.com/0kzh/glisse, MIT), agora sobre o
+     * conteúdo real. `q` em px da view; a forma é um retângulo de pontas redondas (raio = metade
+     * da altura quando `raio` é 0).
+     *   perfil 0 (painel): um domo — o aro (25% do lado menor) puxa o que está atrás para dentro
+     *     em arco; `lente` é o deslocamento máximo na aresta, em px.
+     *   perfil 1 (lente): superfície squircle e refração de Snell com n = 1,5; o deslocamento sai
+     *     em px do ângulo de entrada e da espessura, × `lente` / 16 (16 = a força do Dark).
+     * Dispersão R/G/B 1,08 / 1,04 / 1 e brilho em três faixas no aro, luz de cima à esquerda.
      */
     const val LENTE_AGSL = """
 uniform shader conteudo;
@@ -207,6 +217,7 @@ uniform float3 sel;
 uniform half4 tinta;
 uniform float raio;
 uniform float brilho;
+uniform float perfil;
 
 half4 main(float2 q) {
   float r = raio > 0.0 ? min(raio, min(tam.x, tam.y) * 0.5) : tam.y * 0.5;
@@ -224,28 +235,51 @@ half4 main(float2 q) {
   else n = float2(0.0, 1.0);
   n *= float2(rel.x < 0.0 ? -1.0 : 1.0, rel.y < 0.0 ? -1.0 : 1.0);
 
-  // Botão pequeno: a faixa que dobra é proporcional, senão a lente toma o botão inteiro.
-  float borda = min(18.0 * dens, min(tam.x, tam.y) * 0.35);
-  float tt = clamp(1.0 - dentro / borda, 0.0, 1.0);
-  float2 desl = -n * tt * tt * lente;
+  float m = min(tam.x, tam.y);
+  float faixa;
+  float desloca;
+  if (perfil > 0.5) {
+    float bisel = clamp(m * 0.12, 4.0 * dens, 10.0 * dens);
+    float espessura = clamp(m * 0.2, 8.0 * dens, 24.0 * dens);
+    faixa = bisel;
+    float t = clamp(dentro / bisel, 0.0, 1.0);
+    float sup = pow(1.0 - pow(1.0 - t, 4.0), 0.25);
+    float entrada = atan(pow(1.0 - t, 3.0) / max(pow(sup, 3.0), 0.0001));
+    float saida = asin(sin(entrada) / 1.5);
+    desloca = dentro < bisel ? tan(entrada - saida) * (espessura + sup * bisel) * (lente / (16.0 * dens)) : 0.0;
+  } else {
+    faixa = m * 0.25;
+    float t = clamp(1.0 - dentro / faixa, 0.0, 1.0);
+    desloca = (1.0 - sqrt(1.0 - t * t)) * lente;
+  }
+  float2 desl = -n * desloca;
 
   float2 sc = float2(sel.x, c.y);
   float2 e = (q - sc) / float2(max(sel.y, 1.0), max(r - 6.0 * dens, 1.0));
   float gota = clamp(1.0 - dot(e, e), 0.0, 1.0) * sel.z;
   desl += -(q - sc) * 0.18 * gota;
 
-  // Aberração cromática leve só na aresta: o vermelho dobra um pouco mais que o azul.
-  float sep = 1.0 + 0.05 * tt;
-  half4 cr = conteudo.eval(q + desl * sep);
-  half4 cg = conteudo.eval(q + desl);
-  half4 cb = conteudo.eval(q + desl / sep);
+  half4 cr = conteudo.eval(q + desl * 1.08);
+  half4 cg = conteudo.eval(q + desl * 1.04);
+  half4 cb = conteudo.eval(q + desl);
   half3 cor = half3(cr.r, cg.g, cb.b);
 
-  cor = mix(cor, tinta.rgb, tinta.a * (1.0 - 0.35 * tt));
-  // Fio de luz na aresta de cima e um brilho difuso no topo (a luz vem de cima).
-  float fio = smoothstep(2.0 * dens, 0.0, abs(dentro - 1.0 * dens)) * (0.28 + 0.32 * (-n.y));
-  float topo = smoothstep(r, 0.0, q.y) * 0.06;
-  cor += half3((fio + topo) * brilho);
+  float naBorda = clamp(1.0 - dentro / max(faixa, 1.0), 0.0, 1.0);
+  cor = mix(cor, tinta.rgb, tinta.a * (1.0 - 0.35 * naBorda));
+  // Brilho: três faixas suaves no aro, mais fortes onde a borda encara a luz (cima-esquerda), e
+  // um fio de 1,2 px na aresta. Somado em "screen", × brilho.
+  float luz = -(n.x + n.y) * 0.7071;
+  float glint = pow(max(luz, 0.0), 3.0);
+  float refl = pow(max(-luz, 0.0), 3.0);
+  float d = dentro / max(faixa, 1.0);
+  float a = 0.0;
+  if (d < 1.0) {
+    float bandas = (exp(-pow((d - 0.18) / 0.22, 2.0)) + exp(-pow((d - 0.42) / 0.22, 2.0)) + exp(-pow((d - 0.66) / 0.22, 2.0))) / 3.0;
+    a = bandas * (0.06 + 0.8 * glint + 0.35 * refl) * 0.85 * 0.35;
+  }
+  if (dentro < 1.22 * dens) a += 0.22 * (0.35 + 0.65 * glint);
+  a = clamp(a * brilho, 0.0, 1.0);
+  cor = half3(1.0) - (half3(1.0) - cor) * half3(1.0 - a);
   return half4(cor, 1.0);
 }
 """

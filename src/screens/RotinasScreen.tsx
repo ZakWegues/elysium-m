@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View, RefreshControl } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View, RefreshControl } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { MOV } from '../lib/motion';
 import Feather from '@expo/vector-icons/Feather';
@@ -9,7 +9,7 @@ import { callRpc, Entrega, Reminder, Rotina } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { useTheme } from '../theme';
-import { Button, Card, GlassCircle, GlassModal, ScreenHeader, Text, Toque, useFolgaDoTopo } from '../components/ui';
+import { Button, Card, GlassCircle, GlassModal, ScreenHeader, Text, Toque, useFolgaDoTopo, VidroSwitch, FundoVidro } from '../components/ui';
 import { notificacoesAtivas, definirNotificacoesAtivas, pedirPermissao, sincronizarNotificacoes } from '../lib/notificacoes';
 import { useAoReativar } from '../components/AbaViva';
 import { comConfirmacao } from '../lib/confirm';
@@ -201,7 +201,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
                 Rotinas e lembretes viram notificação — com o app fechado, pelo menos a cada 15 min.
               </Text>
             </View>
-            <Switch value={avisos} onValueChange={mudarAvisos} trackColor={{ true: palette.primary }} />
+            <VidroSwitch value={avisos} onValueChange={mudarAvisos} />
           </View>
         </Card>
 
@@ -216,6 +216,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
               <View style={styles.chips}>
                 {livres.map((m, i) => (
                   <Toque key={i} onPress={() => setEditando(m)} style={[styles.chip, { backgroundColor: palette.primarySoft }]}>
+                <FundoVidro cor={palette.primarySoft} />
                     <Text variant="caption" color={palette.primary}>+ {m.nome} · {m.hora}</Text>
                   </Toque>
                 ))}
@@ -235,6 +236,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
             <View style={[styles.chips, { marginTop: tokens.spacing.md }]}>
               {EXEMPLOS.map((ex, i) => (
                 <Toque key={i} onPress={() => setEditando(ex)} style={[styles.chip, { backgroundColor: palette.primarySoft }]}>
+                <FundoVidro cor={palette.primarySoft} />
                   <Text variant="caption" color={palette.primary}>{ex.nome} · {ex.hora}</Text>
                 </Toque>
               ))}
@@ -273,7 +275,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
                   </View>
                 </View>}
               </View>
-              <Switch value={r.ativa} onValueChange={(v) => alternar(r, v)} trackColor={{ true: palette.primary }} />
+              <VidroSwitch value={r.ativa} onValueChange={(v) => alternar(r, v)} />
             </View>
             {!!r.ultimoResultado && (
               <View style={[styles.resultado, { borderLeftColor: palette.primary, backgroundColor: palette.primarySoft }]}>
@@ -391,6 +393,7 @@ function FormRotina({ base, eventos, onSalvar, onCancelar }: {
         <View style={[styles.chips, { marginTop: 8 }]}>
           {EXEMPLOS.map((ex, i) => (
             <Toque key={i} onPress={() => setTexto(ex.texto ?? '')} style={[styles.chip, { backgroundColor: palette.primarySoft }]}>
+                <FundoVidro cor={palette.primarySoft} />
               <Text variant="caption" color={palette.primary}>{ex.texto}</Text>
             </Toque>
           ))}
@@ -401,6 +404,7 @@ function FormRotina({ base, eventos, onSalvar, onCancelar }: {
         <View style={[styles.chips, { marginTop: 8 }]}>
           {[['hora', 'Numa hora'], ['evento', 'Num evento']].map(([id, rotulo]) => (
             <Toque key={id} onPress={() => setPorEvento(id === 'evento')} style={[styles.chip, { backgroundColor: (id === 'evento') === porEvento ? palette.primarySoft : palette.surface }]}>
+                <FundoVidro cor={(id === 'evento') === porEvento ? palette.primarySoft : undefined} />
               <Text variant="caption" color={(id === 'evento') === porEvento ? palette.primary : palette.textMuted}>{rotulo}</Text>
             </Toque>
           ))}
@@ -412,6 +416,7 @@ function FormRotina({ base, eventos, onSalvar, onCancelar }: {
           <View style={styles.chips}>
             {eventos.map(e => (
               <Toque key={e.id} onPress={() => setEvento(e.id)} style={[styles.chip, { backgroundColor: evento === e.id ? palette.primarySoft : palette.surface }]}>
+                <FundoVidro cor={evento === e.id ? palette.primarySoft : undefined} />
                 <Text variant="caption" color={evento === e.id ? palette.primary : palette.textMuted}>{e.rotulo}</Text>
               </Toque>
             ))}
@@ -458,9 +463,9 @@ function FormRotina({ base, eventos, onSalvar, onCancelar }: {
       </View>
       <View style={{ gap: 6 }}>
         <Text variant="label">Entregar</Text>
-        <View style={styles.linha}><Feather name="monitor" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>No PC (notificação)</Text><Switch value={pc} onValueChange={setPc} trackColor={{ true: palette.primary }} /></View>
-        <View style={styles.linha}><Feather name="smartphone" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Neste celular</Text><Switch value={celular} onValueChange={setCelular} trackColor={{ true: palette.primary }} /></View>
-        <View style={styles.linha}><Feather name="mic" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Falar no PC</Text><Switch value={falar} onValueChange={setFalar} trackColor={{ true: palette.primary }} /></View>
+        <View style={styles.linha}><Feather name="monitor" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>No PC (notificação)</Text><VidroSwitch value={pc} onValueChange={setPc} /></View>
+        <View style={styles.linha}><Feather name="smartphone" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Neste celular</Text><VidroSwitch value={celular} onValueChange={setCelular} /></View>
+        <View style={styles.linha}><Feather name="mic" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Falar no PC</Text><VidroSwitch value={falar} onValueChange={setFalar} /></View>
       </View>
       <View style={styles.acoes}>
         <Button

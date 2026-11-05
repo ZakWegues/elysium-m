@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import type { Pairing } from '../../lib/pairing';
 import { callRpc, type Cartao, type ItemDespejo } from '../../lib/rpc';
@@ -9,7 +9,7 @@ import { haptica } from '../../lib/haptica';
 import { confirmDestructive } from '../../lib/confirm';
 import { useAoReativar } from '../../components/AbaViva';
 import { useTheme } from '../../theme';
-import { Button, Card, Text } from '../../components/ui';
+import { Button, Card, Text, VidroSwitch } from '../../components/ui';
 
 /**
  * Estudo no Hoje (fase 20): o pomodoro do PC com o relógio, os cartões de revisão do dia
@@ -243,7 +243,7 @@ export function PlanoDeEstudo({ pairing, aoTerminar }: { pairing: Pairing; aoTer
           <Text variant="caption" color={palette.textMuted}>{plano.resumo}</Text>
           {plano.itens.map(it => (
             <View key={it.id} style={styles.linha}>
-              <Switch value={!fora.has(it.id)} onValueChange={(v) => setFora(f => { const n = new Set(f); if (v) n.delete(it.id); else n.add(it.id); return n; })} />
+              <VidroSwitch value={!fora.has(it.id)} onValueChange={(v) => setFora(f => { const n = new Set(f); if (v) n.delete(it.id); else n.add(it.id); return n; })} />
               <View style={{ flex: 1 }}>
                 <Text variant="body">{it.texto}</Text>
                 {it.rotulo ? <Text variant="caption" color={palette.textMuted}>{it.rotulo}</Text> : null}

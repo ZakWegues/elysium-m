@@ -1,11 +1,12 @@
 import React from 'react';
 import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
 import { useBlurTarget } from './BlurTarget';
 import { VidroNativo, VIDRO_NATIVO } from '../vidro/VidroNativo';
+import { useAperto } from './aperto';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -186,7 +187,7 @@ export function GlassCircle({
   const { palette, familiaResolvida } = useTheme();
   // 01/11: o mesmo vidro líquido nativo da barra de abas, com pouco brilho. No topo flutuante ele
   // dobra o que rola por baixo; dentro das telas, o fundo. Stark e Android < 13: o vidro de antes.
-  const raio = Math.round(size * 0.3);
+  const raio = size / 2;
   const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : size >= 40 ? 8 : 6;
   // Apertar acende a gota no meio: o que está atrás amplia um pouco.
   const [gota, setGota] = React.useState(false);
@@ -205,18 +206,18 @@ export function GlassCircle({
     }
   }, [pulsando, escala]);
 
-  // 30/10: apertar clareia o fundo e encolhe um pouco — o retorno do toque sem a bolha.
-  const apertado = useSharedValue(0);
+  // 04/11: apertar clareia o fundo e CRESCE um pouco, na mola da Glisse (components/ui/aperto.ts).
+  const aperto = useAperto(size);
   const estiloAnimado = useAnimatedStyle(() => ({
-    transform: [{ scale: escala.value * (1 - 0.06 * apertado.value) }],
+    transform: [{ scale: escala.value * (1 + aperto.cresce * aperto.p.value) }],
   }));
-  const estiloRealce = useAnimatedStyle(() => ({ opacity: apertado.value }));
+  const estiloRealce = useAnimatedStyle(() => ({ opacity: aperto.p.value }));
 
   return (
     <AnimatedPressable
       onPress={onPress}
-      onPressIn={() => { apertado.value = withTiming(1, { duration: 90 }); if (lente) setGota(true); onPressIn?.(); }}
-      onPressOut={() => { apertado.value = withTiming(0, { duration: 160 }); if (lente) setGota(false); onPressOut?.(); }}
+      onPressIn={() => { aperto.apertar(); if (lente) setGota(true); onPressIn?.(); }}
+      onPressOut={() => { aperto.soltar(); if (lente) setGota(false); onPressOut?.(); }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -226,7 +227,7 @@ export function GlassCircle({
         {
           width: size,
           height: size,
-          // 30/10: quadrado de canto suave, não bolha (o Zak achou as bolinhas estranhas).
+          // 04/11: redondo (o Zak pediu os botões redondos, como os da Glisse).
           borderRadius: raio,
           ...VIDRO_BOTAO,
           ...(lente ? { backgroundColor: 'transparent' } : null),

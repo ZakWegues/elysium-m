@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { haptica } from '../lib/haptica';
+import { VidroNativo, VIDRO_NATIVO } from './vidro/VidroNativo';
 
 /**
  * Slider do volume do PC (fase 12).
@@ -25,8 +26,12 @@ export default function SliderVolume({ nivel, mudo, aoMudar }: {
   /** Recebe 0–100. `final` = o dedo soltou. */
   aoMudar: (valor: number, final: boolean) => void;
 }) {
-  const { palette } = useTheme();
+  const { palette, familiaResolvida } = useTheme();
   const largura = useSharedValue(0);
+  // 04/11: segurado, o polegar cresce e vira lente (jeito da Glisse).
+  const pega = useSharedValue(0);
+  const [segurado, setSegurado] = useState(false);
+  const lente = VIDRO_NATIVO && familiaResolvida !== 'stark';
   const valor = useSharedValue(nivel);
   const arrastando = useSharedValue(false);
   const [mostrado, setMostrado] = useState(nivel);
@@ -51,6 +56,8 @@ export default function SliderVolume({ nivel, mudo, aoMudar }: {
     .minDistance(2)
     .onBegin((e) => {
       arrastando.value = true;
+      pega.value = withSpring(1, { stiffness: 515, damping: 27.3, mass: 1 });
+      runOnJS(setSegurado)(true);
       const w = largura.value || 1;
       valor.value = Math.round(Math.min(100, Math.max(0, (e.x / w) * 100)));
       runOnJS(mudou)(valor.value, false);
@@ -65,11 +72,17 @@ export default function SliderVolume({ nivel, mudo, aoMudar }: {
     })
     .onFinalize(() => {
       arrastando.value = false;
+      pega.value = withSpring(0, { stiffness: 250, damping: 11.8, mass: 1 });
+      runOnJS(setSegurado)(false);
       runOnJS(mudou)(valor.value, true);
     });
 
   const preenchido = useAnimatedStyle(() => ({ width: `${valor.value}%` }));
-  const polegar = useAnimatedStyle(() => ({ left: `${valor.value}%` }));
+  const polegar = useAnimatedStyle(() => {
+    const w = 30 + 12 * pega.value, h = 20 + 8 * pega.value;
+    return { left: `${valor.value}%`, width: w, height: h, marginLeft: -w / 2, top: (32 - h) / 2 };
+  });
+  const branco = useAnimatedStyle(() => ({ opacity: 1 - 0.85 * pega.value }));
 
   const cor = mudo ? palette.textMuted : palette.primary;
   return (
@@ -85,7 +98,10 @@ export default function SliderVolume({ nivel, mudo, aoMudar }: {
           <View style={[styles.trilha, { backgroundColor: palette.primarySoft }]}>
             <Animated.View style={[styles.cheio, { backgroundColor: cor }, preenchido]} />
           </View>
-          <Animated.View style={[styles.polegar, { backgroundColor: cor, borderColor: palette.background }, polegar]} />
+          <Animated.View pointerEvents="none" style={[styles.polegar, polegar]}>
+            {lente && segurado && <VidroNativo alvo={null} lente={16} perfil={1} brilho={0.6} tinta={[1, 1, 1, 0.06]} reserva={null} />}
+            <Animated.View style={[StyleSheet.absoluteFill, styles.branco, branco]} />
+          </Animated.View>
         </View>
       </GestureDetector>
     </View>
@@ -98,5 +114,6 @@ const styles = StyleSheet.create({
   area: { height: 32, justifyContent: 'center' },
   trilha: { height: 6, borderRadius: 3, overflow: 'hidden' },
   cheio: { height: '100%', borderRadius: 3 },
-  polegar: { position: 'absolute', width: 18, height: 18, borderRadius: 9, marginLeft: -9, borderWidth: 2, top: 7 },
+  polegar: { position: 'absolute', borderRadius: 999, overflow: 'hidden', elevation: 3 },
+  branco: { backgroundColor: '#fff', borderRadius: 999 },
 });

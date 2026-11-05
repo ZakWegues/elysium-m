@@ -11,7 +11,7 @@ import { errMessage } from '../../lib/errors';
 import { falar, pararDeFalar, useFala } from '../../lib/falar';
 import { useTheme } from '../../theme';
 import { SpotifyBar } from '../SpotifyPlayer';
-import { MetricBar, Text, VIDRO_BOTAO } from '../../components/ui';
+import { MetricBar, Text, VIDRO_BOTAO, FundoVidro } from '../../components/ui';
 import type { DefCard } from './tipos';
 
 /**
@@ -124,6 +124,7 @@ function Bolhas({ lista, onToque }: { lista: Sugestao[]; onToque: (s: Sugestao) 
             borderColor: palette.glassBorder,
           }]}
         >
+          <FundoVidro cor={palette.primarySoft} />
           <Feather name={(s.icone as keyof typeof Feather.glyphMap) ?? 'zap'} size={13} color={palette.primary} />
           <Text variant="caption" style={{ flexShrink: 1 }}>{s.texto}</Text>
         </Pressable>

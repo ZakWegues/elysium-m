@@ -10,7 +10,7 @@ import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import { agruparTarefas, atrasada, filtrarTarefas, mascaraHora, montarQuando, proximosDias, quandoTarefa, validarHora } from '../lib/tarefasUi';
 import { useTheme } from '../theme';
-import { Button, GlassModal, Snackbar, SobreposicaoContext, Text, useDesfazer } from '../components/ui';
+import { Button, GlassModal, Snackbar, SobreposicaoContext, Text, useDesfazer, FundoVidro } from '../components/ui';
 import { estourarNoToque } from '../components/Estouros';
 import { useAbaAtiva } from '../components/AbaViva';
 
@@ -179,6 +179,7 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
           return (
             <Pressable key={f} onPress={() => { haptica.tique(); setFiltro(f); }} accessibilityRole="tab" accessibilityState={{ selected: on }}
               style={[styles.chip, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
+              <FundoVidro cor={on ? palette.primarySoft : undefined} />
               <Text variant="caption" color={on ? palette.primary : palette.text} maxFontSizeMultiplier={1.3}>{f === 'abertas' ? 'Abertas' : f === 'feitas' ? 'Feitas (30 dias)' : 'Todas'}</Text>
             </Pressable>
           );
@@ -457,6 +458,7 @@ function EditorTarefa({ pairing, base, aoTerminar, aoApagar }: {
   const chip = (on: boolean, rotulo: string, aoTocar: () => void, chave: string) => (
     <Pressable key={chave} onPress={() => { haptica.tique(); aoTocar(); }} accessibilityRole="radio" accessibilityState={{ selected: on }}
       style={[styles.chip, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
+              <FundoVidro cor={on ? palette.primarySoft : undefined} />
       <Text variant="caption" color={on ? palette.primary : palette.text} maxFontSizeMultiplier={1.3}>{rotulo}</Text>
     </Pressable>
   );

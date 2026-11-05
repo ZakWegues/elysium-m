@@ -2,7 +2,7 @@ import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useRolagemDaBarra } from '../lib/barraRolagem';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Switch, TextInput, View,
+  ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
 import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
@@ -30,7 +30,8 @@ import { useAbaAtiva } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import {
   Button, Card, GlassCircle, GlassModal, MetricBar, ScreenHeader, Text, Toque,
-  useFolgaDoTopo,
+  useFolgaDoTopo, VidroSwitch,
+  FundoVidro,
 } from '../components/ui';
 
 /**
@@ -612,7 +613,7 @@ export function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError:
                 {anonimo ? 'Ligado: nada das conversas vira lembrança até desligar (ou o PC reiniciar o ELYSIUM).' : 'Para uma conversa não ser lembrada. Também por voz: "modo anônimo".'}
               </Text>
             </View>
-            <Switch value={anonimo} onValueChange={alternarAnonimo} trackColor={{ true: palette.primary }} accessibilityLabel="Modo anônimo" />
+            <VidroSwitch value={anonimo} onValueChange={alternarAnonimo} accessibilityLabel="Modo anônimo" />
           </View>
         </View>
       )}
@@ -1107,6 +1108,7 @@ function PainelProgramas({ pairing, onError }: { pairing: Pairing; onError: Erro
             <View style={styles.grid}>
               {abertos.map(a => (
                 <View key={a.command} style={[styles.chipAberto, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}>
+                  <FundoVidro cor={palette.primarySoft} />
                   <Text variant="caption" color={palette.primary}>{a.key}</Text>
                   {busyKey === a.key
                     ? <ActivityIndicator size="small" color={palette.primary} />

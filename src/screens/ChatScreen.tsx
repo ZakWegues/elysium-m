@@ -38,7 +38,7 @@ import { conversaParaContinuar, deriveTitle, Fonte, listSessions, saveSession, S
 import { syncChats } from '../lib/chatSync';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
-import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text, useFolgaDoTopo, VIDRO_BOTAO } from '../components/ui';
+import { GlassCircle, GlassFill, GlassModal, ScreenHeader, Text, useFolgaDoTopo, VIDRO_BOTAO, FundoVidro } from '../components/ui';
 import PresetsPopover from './PresetsPopover';
 import { Markdown } from '../components/Markdown';
 import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
@@ -1338,6 +1338,7 @@ export default function ChatScreen({
       {modo && faixas.includes('modo') && (
         <View style={[styles.starters, { paddingHorizontal: tokens.spacing.md }]}>
           <View style={[styles.chipModo, VIDRO_BOTAO, { borderColor: palette.primary, borderRadius: tokens.radii.full }]}>
+            <FundoVidro />
             <Pressable onPress={() => setDraft('/modo ')} accessibilityLabel={`Modo ${modo.nome} ligado. Toque para trocar`}>
               <Text variant="caption" color={palette.text}>{modo.icone}  Modo {modo.nome}</Text>
             </Pressable>

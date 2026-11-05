@@ -14,7 +14,7 @@ import {
   SENSIBILIDADE_MAX, SENSIBILIDADE_MIN, SENSIBILIDADE_PADRAO,
 } from '../lib/trackpad';
 import { useTheme } from '../theme';
-import { Text } from '../components/ui';
+import { Text, FundoVidro } from '../components/ui';
 import { BarraMidia } from '../components/BarraMidia';
 
 /**
@@ -335,6 +335,7 @@ export default function TrackpadFullscreen({
                     onPress={() => atalho(a)}
                     style={[styles.chip, corChip, armado === a.rotulo && { backgroundColor: palette.error, borderColor: palette.error }]}
                   >
+                    <FundoVidro cor={armado === a.rotulo ? palette.error : palette.primarySoft} />
                     <Text variant="caption" color={armado === a.rotulo ? palette.onPrimary : palette.primary}>
                       {armado === a.rotulo ? 'Toque de novo' : a.rotulo}
                     </Text>

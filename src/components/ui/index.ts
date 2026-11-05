@@ -9,5 +9,7 @@ export { AppBackground } from './AppBackground';
 export { BarraBlurProvider, BlurTargetProvider, useBlurDaBarra, useBlurTarget } from './BlurTarget';
 export { default as Popover } from './Popover';
 export { Toque } from './Toque';
+export { FundoVidro } from './FundoVidro';
+export { VidroSwitch } from './VidroSwitch';
 export { Esqueleto } from './Esqueleto';
 export { Snackbar, useDesfazer, type EstadoDesfazer } from './Snackbar';

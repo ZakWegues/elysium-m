@@ -13,8 +13,10 @@ export type PropsVidroNativo = {
   seletor?: [number, number, number];
   /** Raio do canto em dp; sem ele, pílula (metade da altura). */
   raio?: number;
-  /** Fio de luz e brilho do topo, de 0 a 1 (padrão 1; os botões usam pouco). */
+  /** Brilho do aro, de 0 a 1 (padrão 1; os botões usam pouco). */
   brilho?: number;
+  /** 0 = painel (domo; barra, botões, chips), 1 = lente (squircle + Snell; polegar segurado). */
+  perfil?: 0 | 1;
   /** [r, g, b, a] de 0 a 1. */
   tinta?: number[];
 };

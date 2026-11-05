@@ -30,6 +30,7 @@ class VidroModule : Module() {
       Prop("desfoque") { view: VidroLiquidoView, valor: Float -> view.definirDesfoque(valor) }
       Prop("raio") { view: VidroLiquidoView, valor: Float -> view.definirRaio(valor) }
       Prop("brilho") { view: VidroLiquidoView, valor: Float -> view.definirBrilho(valor) }
+      Prop("perfil") { view: VidroLiquidoView, valor: Float -> view.definirPerfil(valor) }
       // [r, g, b, a] de 0 a 1.
       Prop("tinta") { view: VidroLiquidoView, cor: List<Double> -> view.definirTinta(cor) }
       // [centro x (dp), meia largura (dp), visível 0–1]: a gota anda de mola até lá.
