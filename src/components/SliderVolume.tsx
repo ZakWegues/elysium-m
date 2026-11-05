@@ -99,7 +99,7 @@ export default function SliderVolume({ nivel, mudo, aoMudar }: {
             <Animated.View style={[styles.cheio, { backgroundColor: cor }, preenchido]} />
           </View>
           <Animated.View pointerEvents="none" style={[styles.polegar, polegar]}>
-            {lente && segurado && <VidroNativo alvo={null} lente={16} perfil={1} brilho={0.6} tinta={[1, 1, 1, 0.06]} reserva={null} />}
+            {lente && segurado && <VidroNativo alvo={null} lente={22} perfil={1} brilho={0.6} tinta={[1, 1, 1, 0.06]} reserva={null} />}
             <Animated.View style={[StyleSheet.absoluteFill, styles.branco, branco]} />
           </Animated.View>
         </View>

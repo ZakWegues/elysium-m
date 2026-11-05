@@ -176,7 +176,7 @@ function SwitchModo({
 }) {
   const { palette, tokens, familiaResolvida } = useTheme();
   // 01/11: a pílula também é vidro líquido nativo, e a gota da lente segue o polegar.
-  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : 8;
+  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : 12;
   // `x` vai de 0 (ia) a 1 (pc).
   const x = useSharedValue(modo === 'ia' ? 0 : 1);
   const [largura, setLargura] = useState(0);
@@ -208,7 +208,7 @@ function SwitchModo({
       {lente > 0 && largura > 0 && (() => {
         const w = largura / 2 - 3;
         return (
-          <VidroNativo alvo={null} lente={lente} brilho={0.3}
+          <VidroNativo alvo={null} lente={lente} brilho={0.4}
             seletor={[3 + w / 2 + (modo === 'pc' ? w : 0), w / 2 - 4, 1]}
             reserva={<View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: VIDRO_BOTAO.backgroundColor }]} />} />
         );

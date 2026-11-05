@@ -71,7 +71,8 @@ export function TabBar({
   const insets = useSafeAreaInsets();
   const alvoDoDesfoque = useBlurDaBarra();
   // 31/10: força da lente nativa (dp). Stark fica sem (a linguagem dele é outra), como no PC.
-  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : familiaResolvida === 'glass' ? 26 : 16;
+  // 05/11: mais intensa (era 26/16).
+  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : familiaResolvida === 'glass' ? 36 : 24;
 
   // -1 quando a tela aberta não é aba nenhuma (Conversas): o seletor some.
   const indiceAtivo = TABS.findIndex((t) => t.screen === active);
@@ -121,10 +122,18 @@ export function TabBar({
     () => ({ L: Math.round(larguraTab.value), aberta: rotulos.value > 0.5 }),
     (g, antes) => { if (!antes || g.L !== antes.L || g.aberta !== antes.aberta) runOnJS(setGeom)(g); },
   );
+  // 05/11: segurando, a gota sai do lugar e acompanha o dedo (em sextos de aba: cada passo é uma
+  // mola no nativo), mais larga e ampliando mais — o "lift" da Glisse. Solta, volta para a aba.
+  const [gotaNoDedo, setGotaNoDedo] = useState<number | null>(null);
+  useAnimatedReaction(
+    () => (aperto.value > 0.5 && rotulos.value > 0.5 ? Math.round(progresso.value * 6) / 6 : -1),
+    (v, antes) => { if (v !== antes) runOnJS(setGotaNoDedo)(v < 0 ? null : v); },
+  );
+  const posGota = gotaNoDedo ?? indiceAtivo;
   const seletorDoVidro: [number, number, number] = indiceAtivo < 0 || geom.L <= 0
     ? [0, 1, 0]
     : geom.aberta
-      ? [6 + indiceAtivo * geom.L + geom.L / 2, (geom.L - 8) / 2, 1]
+      ? [6 + posGota * geom.L + geom.L / 2, ((geom.L - 8) / 2) * (gotaNoDedo != null ? 1.12 : 1), gotaNoDedo != null ? 1.8 : 1]
       : [PILULA_ENCOLHIDA / 2, (PILULA_ENCOLHIDA - 20) / 2, 1];
 
   const navegar = useCallback((i: number) => {

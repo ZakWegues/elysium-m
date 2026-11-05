@@ -61,7 +61,7 @@ export function VidroSwitch({
     >
       <View style={[styles.trilha, { backgroundColor: value ? palette.primary : 'rgba(0,0,0,0.28)' }]} />
       <Animated.View pointerEvents="none" style={[styles.polegar, estiloPolegar]}>
-        {lente && segurado && <VidroNativo alvo={null} lente={16} perfil={1} brilho={0.6} tinta={[1, 1, 1, 0.06]} reserva={null} />}
+        {lente && segurado && <VidroNativo alvo={null} lente={22} perfil={1} brilho={0.6} tinta={[1, 1, 1, 0.06]} reserva={null} />}
         <Animated.View style={[StyleSheet.absoluteFill, styles.branco, estiloBranco]} />
       </Animated.View>
     </Pressable>

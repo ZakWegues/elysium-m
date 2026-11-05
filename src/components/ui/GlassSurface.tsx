@@ -188,7 +188,7 @@ export function GlassCircle({
   // 01/11: o mesmo vidro líquido nativo da barra de abas, com pouco brilho. No topo flutuante ele
   // dobra o que rola por baixo; dentro das telas, o fundo. Stark e Android < 13: o vidro de antes.
   const raio = size / 2;
-  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : size >= 40 ? 8 : 6;
+  const lente = !VIDRO_NATIVO || familiaResolvida === 'stark' ? 0 : size >= 40 ? 12 : 9;
   // Apertar acende a gota no meio: o que está atrás amplia um pouco.
   const [gota, setGota] = React.useState(false);
 
@@ -242,7 +242,7 @@ export function GlassCircle({
       ]}
     >
       {lente > 0 && (
-        <VidroNativo alvo={null} lente={lente} raio={raio} brilho={0.3}
+        <VidroNativo alvo={null} lente={lente} raio={raio} brilho={0.4}
           seletor={[size / 2, size * 0.32, gota ? 1 : 0]}
           reserva={<View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: VIDRO_BOTAO.backgroundColor }]} />} />
       )}

@@ -13,7 +13,7 @@ export function FundoVidro({ cor }: { cor?: string }) {
   if (!VIDRO_NATIVO || familiaResolvida === 'stark') return null;
   return (
     <>
-      <VidroNativo alvo={null} lente={4} brilho={0.25} reserva={null} />
+      <VidroNativo alvo={null} lente={7} brilho={0.35} reserva={null} />
       {cor && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: cor, borderRadius: 999 }]} />}
     </>
   );
