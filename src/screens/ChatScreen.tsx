@@ -472,7 +472,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[]) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[], semCensura?: boolean) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -486,9 +486,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[]) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[], semCensura?: boolean) => {
       setEscrevendoId(null);
-      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}), ...(memoria?.length ? { memoria } : {}) };
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(semCensura ? { semCensura: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}), ...(memoria?.length ? { memoria } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -633,6 +633,7 @@ export default function ChatScreen({
       let reply: string;
       let fontes: Fonte[] | undefined;
       let local = false;
+      let semCensura = false;
       let rapidas: Rapidas | undefined;
       let pedidoId: string | undefined;
       let desfazer: string | undefined;
@@ -651,6 +652,7 @@ export default function ChatScreen({
         reply = r.reply;
         fontes = r.fontes;
         local = r.local === true;
+        semCensura = r.semCensura === true;
         rapidas = r.rapidas;
         pedidoId = r.id;
         desfazer = r.desfazer;
@@ -665,7 +667,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer, memoria);
+      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer, memoria, semCensura);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -1260,6 +1262,10 @@ export default function ChatScreen({
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
                 <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta da reserva: o cérebro principal não respondeu a tempo">reserva</Text>
+              ) : null}
+              {/* 05/11: modo sem censura — quem escreveu foi o modelo do PC. */}
+              {item.semCensura ? (
+                <Text variant="caption" color={palette.textMuted} style={styles.selo} accessibilityLabel="Resposta do modo sem censura, escrita pelo modelo do PC">sem censura</Text>
               ) : null}
               {/* Fontes da busca (bloco 131): um toque abre o site. */}
               {item.fontes?.length ? (

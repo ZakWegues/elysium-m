@@ -17,7 +17,7 @@ import { marcarRecusa, marcarVivo, recusaDoErro } from './conexao/sinais';
 import type { Fonte } from './chatHistoryStore';
 
 /** `id`: o do pedido de texto — a tela inteligente (frame `ui`) chega depois com ele. */
-type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; rapidas?: Rapidas; id?: string; /** 31/10: rótulo da ação reversível ("Desfazer"). */ desfazer?: string; /** 31/10: o que da memória do PC a resposta usou. */ memoria?: string[] };
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; semCensura?: boolean; rapidas?: Rapidas; id?: string; /** 31/10: rótulo da ação reversível ("Desfazer"). */ desfazer?: string; /** 31/10: o que da memória do PC a resposta usou. */ memoria?: string[] };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -229,7 +229,7 @@ export function openVoiceConnection(
   }
 
   function tratarMensagem(event: MessageEvent) {
-    let data: { desfazer?: unknown; memoria?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; id?: string; direction?: string } & Partial<Entrega>;
+    let data: { desfazer?: unknown; memoria?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -270,7 +270,7 @@ export function openVoiceConnection(
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
-      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}), ...lerMemoria(data.memoria) }));
+      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, ...(data.semCensura === true ? { semCensura: true } : {}), rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}), ...lerMemoria(data.memoria) }));
     } else if (data.type === 'ui') {
       const f = lerUi(data);
       if (f) {

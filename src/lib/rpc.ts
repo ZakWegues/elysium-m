@@ -440,7 +440,9 @@ export type EstadoHermes = {
 };
 export type Perfil = { estiloResposta: 'direto' | 'equilibrado' | 'detalhado'; instrucoesPessoais: string; /** Fase 16: como a Ely chama o dono ("chefe"). PC antigo não manda. */ tratamento?: string;
   /** 22/10: respostas rápidas e telas interativas. PC anterior à 2.15 não manda. */
-  respostasRapidas?: boolean; respostasProntas?: string[]; respostasInterativas?: 'nunca' | 'pedir' | 'perguntar' | 'priorizar' };
+  respostasRapidas?: boolean; respostasProntas?: string[]; respostasInterativas?: 'nunca' | 'pedir' | 'perguntar' | 'priorizar';
+  /** 05/11: modo sem censura (conversa no modelo do PC). PC anterior à 2.41 não manda. */
+  semCensura?: boolean };
 
 /** Hábito com as contas do PC (fase 16). `mapa`: 30 dias, true feito, false não, null não vale. */
 export type Habito = {

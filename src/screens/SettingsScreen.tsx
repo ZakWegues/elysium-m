@@ -191,6 +191,16 @@ function SecaoConversa({ pairing }: { pairing: Pairing }) {
         style={{ minHeight: 110, textAlignVertical: 'top', color: palette.text, borderWidth: StyleSheet.hairlineWidth, borderColor: palette.border, borderRadius: tokens.radii.md, padding: 12, fontSize: 14 }}
       />
       <Button title={salvando ? 'Salvando…' : 'Salvar instruções'} disabled={salvando || rascunho === perfil.instrucoesPessoais} onPress={() => gravar({ instrucoesPessoais: rascunho })} />
+      {/* 05/11: com censura = o cérebro de sempre (Gemini); sem censura = a conversa no modelo do PC. */}
+      {perfil.semCensura !== undefined && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: tokens.spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <Text variant="subheading">Modo sem censura</Text>
+            <Text variant="caption" color={palette.textMuted}>A conversa passa a ser escrita pelo modelo do PC, sem recusas. A pesquisa continua no Gemini; lembretes, apps e telas seguem iguais. Mais lento e mais simples. Também dá para falar “modo sem censura” e “modo com censura”.</Text>
+          </View>
+          <VidroSwitch value={perfil.semCensura} disabled={salvando} onValueChange={(v) => gravar({ semCensura: v })} accessibilityLabel="Modo sem censura" />
+        </View>
+      )}
       {/* 22/10: respostas rápidas e telas interativas. PC anterior à 2.15 não tem os campos. */}
       {perfil.respostasRapidas !== undefined && (
         <>
