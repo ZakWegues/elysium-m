@@ -208,7 +208,7 @@ function SwitchModo({
       {lente > 0 && largura > 0 && (() => {
         const w = largura / 2 - 3;
         return (
-          <VidroNativo alvo={null} lente={lente} brilho={0.4}
+          <VidroNativo alvo={null} lente={lente} brilho={0.4} segueAparelho={false}
             seletor={[3 + w / 2 + (modo === 'pc' ? w : 0), w / 2 - 4, 1]}
             reserva={<View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: VIDRO_BOTAO.backgroundColor }]} />} />
         );
