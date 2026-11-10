@@ -1,7 +1,7 @@
-import { useFolgaDaBarra } from '../lib/folgaBarra';
+import { AlturaAvisosContext, useFolgaDaBarra } from '../lib/folgaBarra';
 import { CartaoErro, textoDoErro } from '../components/chat/CartaoErro';
 import { limiaresDaGravacao } from '../lib/silencio';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
 import { aoChegarImagem, pegarImagemPendente } from '../lib/imagemParaEly';
@@ -98,6 +98,7 @@ export default function ChatScreen({
 }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
+  const alturaAvisos = useContext(AlturaAvisosContext);
   const folgaTopo = useFolgaDoTopo();
   // 22.1: começa vazia — a esfera é a tela de boas-vindas (a bolha de texto era ruído).
   const [messages, setMessages] = useState<StoredMessage[]>([]);
@@ -1177,7 +1178,10 @@ export default function ChatScreen({
     <View style={{ flex: 1 }}>
       {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe.
           22.1: só fundo (sem toque). Chat vazio = ela sozinha no meio, como no PC. */}
-      <Esfera3D vazio={messages.length === 0} titulo={nomeDono ? `${saudacao()}, ${nomeDono}.` : `${saudacao()}.`} dica="Pergunte, peça, mande abrir. Segure o microfone para falar." />
+      {/* 09/11: o aviso de conexão empurra o campo para cima; a esfera e a saudação sobem junto. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { bottom: alturaAvisos }]}>
+        <Esfera3D vazio={messages.length === 0} titulo={nomeDono ? `${saudacao()}, ${nomeDono}.` : `${saudacao()}.`} dica="Pergunte, peça, mande abrir. Segure o microfone para falar." />
+      </View>
       {/* 31/10: "Continuar do PC" — a conversa que acabou de acontecer lá, a um toque. */}
       {chatVazio && doPc && (
         <View style={styles.continuarPc} pointerEvents="box-none">

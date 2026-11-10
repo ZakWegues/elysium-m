@@ -24,6 +24,8 @@ import { PainelMemoria } from './ControlScreen';
 import { falaAntecipadaLigada, lerRespostasEscritas, ligarFalaAntecipada, ligarLerRespostasEscritas } from '../lib/falar';
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 import { trocarModo, useModo } from '../lib/modo';
+import { ligarBrilhoSegueAparelho, useBrilhoSegueAparelho } from '../lib/brilhoAparelho';
+import { VIDRO_NATIVO } from '../components/vidro/VidroNativo';
 import { confirmDestructive } from '../lib/confirm';
 import type { ModoDaLista } from '../lib/rpc';
 
@@ -73,7 +75,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       <View style={styles.hub}>
         {azulejos.map((a, i) => (
           <Animated.View key={a.id} style={styles.celula} entering={FadeInDown.delay(i * 30).duration(MOV.base).reduceMotion(ReduceMotion.System)}>
-            <Toque onPress={() => setSecao(a.id)} style={{ flex: 1 }}>
+            <Toque onPress={() => setSecao(a.id)} accessibilityRole="button" accessibilityLabel={`${a.titulo}: ${a.resumo}`} style={{ flex: 1 }}>
               <Card glass style={styles.azulejo}>
                 <View style={[styles.iconeAzulejo, { backgroundColor: palette.primarySoft, borderRadius: tokens.radii.md }]}>
                   <Feather name={a.icone} size={19} color={palette.primary} />
@@ -90,7 +92,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
 
   return (
     <Animated.View entering={FadeIn.duration(MOV.base).reduceMotion(ReduceMotion.System)} style={{ gap: tokens.spacing.lg }}>
-      <Pressable onPress={() => setSecao(null)} hitSlop={10} style={styles.voltar}>
+      <Pressable onPress={() => setSecao(null)} hitSlop={12} accessibilityRole="button" accessibilityHint="Volta aos Ajustes" style={styles.voltar}>
         <Feather name="chevron-left" size={18} color={palette.primary} />
         <Text variant="label" color={palette.primary}>{azulejos.find(a => a.id === secao)?.titulo}</Text>
       </Pressable>
@@ -448,6 +450,7 @@ function SecaoPareamento({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pai
 
 function SecaoAparencia() {
   const { name, palette, tokens, familia, familiaResolvida, setTheme, setFamilia } = useTheme();
+  const segue = useBrilhoSegueAparelho();
   return (
     <View style={{ gap: tokens.spacing.lg }}>
       <View style={{ gap: tokens.spacing.sm }}>
@@ -530,6 +533,20 @@ function SecaoAparencia() {
 
       <SecaoFundo />
 
+      {/* 09/11 (APK 2.10.0): só com o vidro nativo (Android 13+) e fora do Stark. */}
+      {VIDRO_NATIVO && familiaResolvida !== 'stark' && (
+        <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+          <Feather name="sun" size={17} color={segue ? palette.primary : palette.textMuted} />
+          <View style={{ flex: 1 }}>
+            <Text variant="body">Brilho segue o celular</Text>
+            <Text variant="caption" color={palette.textMuted}>
+              O reflexo do vidro inclina quando você inclina o aparelho. Com “reduzir movimento” do Android ligado, fica parado.
+            </Text>
+          </View>
+          <VidroSwitch value={segue} onValueChange={ligarBrilhoSegueAparelho} accessibilityLabel="Brilho segue o celular" />
+        </View>
+      )}
+
     </View>
   );
 }
@@ -607,7 +624,7 @@ function AvisosLocais() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.spacing.sm }}>
         <Feather name="smartphone" size={18} color={palette.primary} />
         <Text variant="body" style={{ flex: 1 }}>Avisar neste celular</Text>
-        <VidroSwitch value={ligado} onValueChange={alternar} />
+        <VidroSwitch value={ligado} onValueChange={alternar} accessibilityLabel="Avisar neste celular" />
       </View>
       <Text variant="caption" color={palette.textMuted}>
         Rotinas e lembretes do PC viram notificação aqui — pela rede ou pelo túnel, sem nuvem.
@@ -708,7 +725,7 @@ function VozSection() {
             Com o app aberto na Início ou no Chat, diga “Ely” e o seu pedido (ou “Ely, pausa a música”). Ela responde uma vez; para outro pedido, diga “Ely” de novo. Só com o app na tela — nada escuta em segundo plano.
           </Text>
         </View>
-        <VidroSwitch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} />
+        <VidroSwitch value={palavra} onValueChange={(v) => { setPalavra(v); ligarPalavra(v); }} accessibilityLabel="Ouvir “Ely”" />
       </View>
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="volume-2" size={17} color={ler ? palette.primary : palette.textMuted} />
@@ -721,7 +738,7 @@ function VozSection() {
         <VidroSwitch value={ler} onValueChange={(v) => { setLer(v); ligarLerRespostasEscritas(v); }} accessibilityLabel="Ler respostas digitadas" />
       </View>
       <Pressable onPress={() => setAvancado(v => !v)} accessibilityRole="button" accessibilityState={{ expanded: avancado }}
-        hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 }}>
+        hitSlop={7} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, minHeight: 32 }}>
         <Feather name={avancado ? 'chevron-down' : 'chevron-right'} size={16} color={palette.primary} />
         <Text variant="label" color={palette.primary}>Avançado</Text>
       </Pressable>

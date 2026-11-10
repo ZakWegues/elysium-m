@@ -96,7 +96,7 @@ function Pilula({ texto, icone, onPress }: { texto: string | null; icone?: keyof
       style={styles.pilulaLinha}
       pointerEvents={onPress ? 'auto' : 'none'}
     >
-      {onPress ? <Toque onPress={onPress} haptico="tique">{corpo}</Toque> : corpo}
+      {onPress ? <Toque onPress={onPress} haptico="tique" accessibilityRole="button" accessibilityHint="Mostra o motivo e as opções" hitSlop={7}>{corpo}</Toque> : corpo}
     </Animated.View>
   );
 }
@@ -161,7 +161,7 @@ function CartaoConexao({
       </View>
       <View style={styles.botoes}>
         {botoes.map((b) => (
-          <Toque key={b.rotulo} onPress={b.acao} haptico="leve"
+          <Toque key={b.rotulo} onPress={b.acao} haptico="leve" accessibilityRole="button" hitSlop={4}
             style={[styles.botao, { borderRadius: tokens.radii.full, backgroundColor: b.principal ? palette.primary : 'transparent', borderColor: b.principal ? palette.primary : palette.border }]}>
             <Text variant="label" color={b.principal ? palette.onPrimary : palette.text} style={{ fontSize: 13 }}>{b.rotulo}</Text>
           </Toque>

@@ -243,7 +243,7 @@ export function PlanoDeEstudo({ pairing, aoTerminar }: { pairing: Pairing; aoTer
           <Text variant="caption" color={palette.textMuted}>{plano.resumo}</Text>
           {plano.itens.map(it => (
             <View key={it.id} style={styles.linha}>
-              <VidroSwitch value={!fora.has(it.id)} onValueChange={(v) => setFora(f => { const n = new Set(f); if (v) n.delete(it.id); else n.add(it.id); return n; })} />
+              <VidroSwitch value={!fora.has(it.id)} onValueChange={(v) => setFora(f => { const n = new Set(f); if (v) n.delete(it.id); else n.add(it.id); return n; })} accessibilityLabel={it.texto} />
               <View style={{ flex: 1 }}>
                 <Text variant="body">{it.texto}</Text>
                 {it.rotulo ? <Text variant="caption" color={palette.textMuted}>{it.rotulo}</Text> : null}

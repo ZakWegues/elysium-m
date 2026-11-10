@@ -548,6 +548,7 @@ function Atalhos({
         <Pressable
           key={i.chave}
           onPress={i.acao}
+          accessibilityRole="button"
           style={({ pressed }) => [styles.ladrilho, VIDRO_BOTAO, { borderRadius: tokens.radii.lg, opacity: pressed ? 0.75 : 1 }]}
         >
           <Feather name={i.icone} size={20} color={palette.primary} />

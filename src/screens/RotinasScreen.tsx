@@ -162,7 +162,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
     <View style={{ flex: 1 }}>
       {naGaveta ? (
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: tokens.spacing.lg }}>
-          <Pressable onPress={() => setEditando({})} hitSlop={10} accessibilityLabel="Nova rotina" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Pressable onPress={() => setEditando({})} hitSlop={12} accessibilityRole="button" accessibilityLabel="Nova rotina" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Feather name="plus-circle" size={20} color={palette.primary} />
             <Text variant="label" color={palette.primary}>Nova rotina</Text>
           </Pressable>
@@ -201,7 +201,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
                 Rotinas e lembretes viram notificação — com o app fechado, pelo menos a cada 15 min.
               </Text>
             </View>
-            <VidroSwitch value={avisos} onValueChange={mudarAvisos} />
+            <VidroSwitch value={avisos} onValueChange={mudarAvisos} accessibilityLabel="Avisar neste celular" />
           </View>
         </Card>
 
@@ -215,7 +215,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
               <Text variant="label" color={palette.textMuted} style={styles.secao}>MODELOS PRONTOS</Text>
               <View style={styles.chips}>
                 {livres.map((m, i) => (
-                  <Toque key={i} onPress={() => setEditando(m)} style={[styles.chip, { backgroundColor: palette.primarySoft }]}>
+                  <Toque key={i} onPress={() => setEditando(m)} hitSlop={{ top: 4, bottom: 4 }} accessibilityRole="button" style={[styles.chip, { backgroundColor: palette.primarySoft }]}>
                 <FundoVidro cor={palette.primarySoft} />
                     <Text variant="caption" color={palette.primary}>+ {m.nome} · {m.hora}</Text>
                   </Toque>
@@ -245,7 +245,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
         )}
         {rotinas.map((r, i) => (
           <Animated.View key={r.id} entering={FadeInDown.delay(i * 30).duration(MOV.base).reduceMotion(ReduceMotion.System)}>
-          <Card glass style={{ opacity: r.ativa ? 1 : 0.55 }}>
+          <Card glass style={{ opacity: r.ativa ? 1 : 0.7 }}>
             <View style={styles.linha}>
               <View style={{ width: 64 }}>
                 {r.gatilho?.tipo === 'evento'
@@ -275,7 +275,7 @@ export default function RotinasScreen({ pairing, onUnpair, naGaveta }: { pairing
                   </View>
                 </View>}
               </View>
-              <VidroSwitch value={r.ativa} onValueChange={(v) => alternar(r, v)} />
+              <VidroSwitch value={r.ativa} onValueChange={(v) => alternar(r, v)} accessibilityLabel={`Rotina ${r.nome} ligada`} />
             </View>
             {!!r.ultimoResultado && (
               <View style={[styles.resultado, { borderLeftColor: palette.primary, backgroundColor: palette.primarySoft }]}>
@@ -463,9 +463,9 @@ function FormRotina({ base, eventos, onSalvar, onCancelar }: {
       </View>
       <View style={{ gap: 6 }}>
         <Text variant="label">Entregar</Text>
-        <View style={styles.linha}><Feather name="monitor" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>No PC (notificação)</Text><VidroSwitch value={pc} onValueChange={setPc} /></View>
-        <View style={styles.linha}><Feather name="smartphone" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Neste celular</Text><VidroSwitch value={celular} onValueChange={setCelular} /></View>
-        <View style={styles.linha}><Feather name="mic" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Falar no PC</Text><VidroSwitch value={falar} onValueChange={setFalar} /></View>
+        <View style={styles.linha}><Feather name="monitor" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>No PC (notificação)</Text><VidroSwitch value={pc} onValueChange={setPc} accessibilityLabel="No PC (notificação)" /></View>
+        <View style={styles.linha}><Feather name="smartphone" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Neste celular</Text><VidroSwitch value={celular} onValueChange={setCelular} accessibilityLabel="Neste celular" /></View>
+        <View style={styles.linha}><Feather name="mic" size={16} color={palette.textMuted} /><Text variant="body" style={{ flex: 1 }}>Falar no PC</Text><VidroSwitch value={falar} onValueChange={setFalar} accessibilityLabel="Falar no PC" /></View>
       </View>
       <View style={styles.acoes}>
         <Button
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   linha: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   secao: { marginTop: 8, letterSpacing: 0.4, fontSize: 11 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  chip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999 },
   dias: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 6 },
   dia: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   diaGrande: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

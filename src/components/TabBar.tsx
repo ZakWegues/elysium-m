@@ -11,6 +11,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { reduzirUI } from '../lib/motion';
 import { haptica } from '../lib/haptica';
 import { mostrarRotulos, rotulos } from '../lib/barraRolagem';
+import { inclinaDoArrasto } from '../lib/inclinaLuz';
 import { comAlfa, useTheme } from '../theme';
 import { GlassFill, Text, useBlurDaBarra } from './ui';
 import { VIDRO_NATIVO, VidroNativo } from './vidro/VidroNativo';
@@ -90,6 +91,8 @@ export function TabBar({
   const aperto = useSharedValue(0);
   /** O esticão da gelatina: 1 parado, maior quando o seletor anda rápido. */
   const estica = useSharedValue(1);
+  /** O último valor de inclinação mandado ao JS (para não mandar o mesmo de novo). */
+  const inclinaVista = useSharedValue(0);
 
   const MOLA = { damping: 15, stiffness: 190, mass: 0.9 } as const;
 
@@ -130,6 +133,15 @@ export function TabBar({
     (v, antes) => { if (v !== antes) runOnJS(setGotaNoDedo)(v < 0 ? null : v); },
   );
   const posGota = gotaNoDedo ?? indiceAtivo;
+  // 09/11: segurando, o brilho inclina para onde o seletor corre (velocidade por quadro → abas/s).
+  const [inclina, setInclina] = useState(0);
+  useAnimatedReaction(
+    () => progresso.value,
+    (agora, antes) => {
+      const v = aperto.value > 0.5 && antes != null ? inclinaDoArrasto((agora - antes) * 60) : 0;
+      if (v !== inclinaVista.value) { inclinaVista.value = v; runOnJS(setInclina)(v); }
+    },
+  );
   const seletorDoVidro: [number, number, number] = indiceAtivo < 0 || geom.L <= 0
     ? [0, 1, 0]
     : geom.aberta
@@ -209,7 +221,7 @@ export function TabBar({
               fundo) através de uma lente; a borda dobra o conteúdo e o seletor é uma gota que amplia.
               Sem Android 13 (ou no Stark): o desfoque de sempre, com tinta escura translúcida. */}
           {lente > 0
-            ? <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro}
+            ? <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro} inclina={inclina}
                 reserva={<GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />} />
             : <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />}
           <View style={styles.linha}>

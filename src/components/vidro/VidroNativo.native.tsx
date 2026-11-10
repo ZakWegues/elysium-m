@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useState } from 'react';
 import { findNodeHandle, StyleSheet } from 'react-native';
 import { requireNativeView, requireOptionalNativeModule } from 'expo';
 import { diagTela } from '../../lib/telaDiag';
+import { movimentoReduzido } from '../../lib/motion';
+import { useBrilhoSegueAparelho } from '../../lib/brilhoAparelho';
 import type { PropsVidroNativo } from './VidroNativo';
 
 /**
@@ -26,6 +28,8 @@ type PropsNativas = {
   raio: number;
   brilho: number;
   perfil: number;
+  inclina: number;
+  segueAparelho: boolean;
   style: object;
   pointerEvents: 'none';
 };
@@ -35,8 +39,9 @@ let avisou = false;
 /** Vale para o app inteiro: confirmado uma vez, a barra não volta para a reserva. */
 let confirmado = false;
 
-export function VidroNativo({ alvo, lente, seletor = [0, 0, 0], raio = 0, brilho = 1, perfil = 0, tinta = [0.086, 0.086, 0.1, 0.3], reserva }: PropsVidroNativo & { reserva?: ReactNode }) {
+export function VidroNativo({ alvo, lente, seletor = [0, 0, 0], raio = 0, brilho = 1, perfil = 0, tinta = [0.086, 0.086, 0.1, 0.3], inclina = 0, segueAparelho = true, reserva }: PropsVidroNativo & { reserva?: ReactNode }) {
   const [id, setId] = useState<number | null>(null);
+  const segueNosAjustes = useBrilhoSegueAparelho();
   const [desenhando, setDesenhando] = useState(confirmado);
   useEffect(() => {
     // O alvo é montado antes da barra (App.tsx); o id do nó nativo dele só existe depois do 1º quadro.
@@ -73,6 +78,8 @@ export function VidroNativo({ alvo, lente, seletor = [0, 0, 0], raio = 0, brilho
         raio={raio}
         brilho={brilho}
         perfil={perfil}
+        inclina={inclina}
+        segueAparelho={segueAparelho && segueNosAjustes && !movimentoReduzido()}
         seletor={seletor}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"

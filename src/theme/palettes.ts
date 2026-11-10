@@ -212,7 +212,8 @@ function build(name: ThemeName, familia: Familia): Palette {
     surface3: misturar(face.surface, '#ffffff', 0.06),
     border: stark ? comAlfa(face.primary, 0.18) : 'rgba(255,255,255,0.10)',
     text: '#EEF1F6', textMuted: '#9AA3B2', textFaint: '#6f7889',
-    onPrimary: stark ? '#FFFFFF' : '#0b0d14',
+    // 09/11: branco sobre as primárias claras do Stark dava 2:1; o escuro passa de 6:1 nas três.
+    onPrimary: '#0b0d14',
     error: '#FF6B6B', errorSoft: 'rgba(255,107,107,0.16)', success: '#4ADE80',
     bolhaMinha: comAlfa(face.primary, vidro ? 0.24 : 0.18), bolhaMinhaBorda: comAlfa(face.primary, 0.35),
     bolhaEla: vidro ? comAlfa(base, 0.5) : 'rgba(255,255,255,0.05)',

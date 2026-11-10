@@ -307,7 +307,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
     <View style={styles.secaoTopo}>
       <Pressable onPress={() => alternar(chave)} onLongPress={() => perguntarOcultar(t, chave)} accessibilityRole="button"
         accessibilityState={{ expanded: aberta(chave) }} accessibilityHint="Toque para abrir ou fechar; toque longo para ocultar a seção" hitSlop={6}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 32 }}>
         <Feather name={aberta(chave) ? 'chevron-down' : 'chevron-right'} size={14} color={palette.textMuted} />
         <Text variant="label" color={palette.textMuted} style={styles.secao}>{tituloComContador(t, contagens[chave])}</Text>
       </Pressable>
@@ -474,7 +474,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                     {(['nenhum', 'hoje', 'amanha'] as const).map(d => {
                       const on = diaNova === d;
                       return (
-                        <Pressable key={d} onPress={() => setDiaNova(d)} hitSlop={4}
+                        <Pressable key={d} onPress={() => setDiaNova(d)} hitSlop={{ top: 6, bottom: 6, left: 3, right: 3 }} accessibilityRole="button" accessibilityState={{ selected: on }}
                           style={[styles.chipDia, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
               <FundoVidro cor={on ? palette.primarySoft : undefined} />
                           <Text variant="caption" color={on ? palette.primary : palette.textMuted} maxFontSizeMultiplier={1.3}>{d === 'nenhum' ? 'Sem data' : d === 'hoje' ? 'Hoje' : 'Amanhã'}</Text>
@@ -485,7 +485,7 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                   <View style={[styles.linha, { marginTop: 6, marginBottom: 6 }]}>
                     <TextInput value={horaNova} onChangeText={v => setHoraNova(mascaraHora(v))} placeholder="Hora (opcional)" placeholderTextColor={palette.textMuted} maxLength={5} keyboardType="number-pad"
                       style={[styles.campo, { flex: 1, paddingVertical: 8, borderColor: palette.border, color: palette.text, borderRadius: tokens.radii.md }]} />
-                    <Pressable onPress={adicionarTarefa} hitSlop={8} accessibilityLabel="Adicionar tarefa" style={[styles.botaoAdd, { backgroundColor: palette.primary }]}>
+                    <Pressable onPress={adicionarTarefa} hitSlop={8} accessibilityRole="button" accessibilityLabel="Adicionar tarefa" style={[styles.botaoAdd, { backgroundColor: palette.primary }]}>
                       <Feather name="plus" size={18} color={palette.background} />
                     </Pressable>
                   </View>
@@ -638,8 +638,8 @@ export default function HojeScreen({ pairing, pedidoTarefas = 0, onResponder, on
                       <View style={{ width: `${Math.round(f * 100)}%`, height: '100%', backgroundColor: palette.primary, borderRadius: 3 }} />
                     </View>
                     <View style={styles.linha}>
-                      <Pressable onPress={() => somar(m, -1)} hitSlop={10} style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Tirar 1 de ${m.titulo}`}><Text variant="label">−1</Text></Pressable>
-                      <Pressable onPress={() => somar(m, 1)} hitSlop={10} style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Somar 1 em ${m.titulo}`}><Text variant="label">+1</Text></Pressable>
+                      <Pressable onPress={() => somar(m, -1)} hitSlop={10} accessibilityRole="button" style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Tirar 1 de ${m.titulo}`}><Text variant="label">−1</Text></Pressable>
+                      <Pressable onPress={() => somar(m, 1)} hitSlop={10} accessibilityRole="button" style={[styles.passo, { borderColor: palette.border }]} accessibilityLabel={`Somar 1 em ${m.titulo}`}><Text variant="label">+1</Text></Pressable>
                     </View>
                   </Pressable>
                 );

@@ -65,7 +65,7 @@ export function BarraMidia({ pairing, onError, semCartao }: { pairing: Pairing; 
       <View style={styles.barraMidia}>
         <View style={styles.grupoMidia}>
           {TECLAS_MIDIA.map(t => (
-            <GlassCircle key={t.op} size={38} onPress={() => { haptica.leve(); media(t.op); }}>
+            <GlassCircle key={t.op} accessibilityLabel={t.rotulo} size={38} onPress={() => { haptica.leve(); media(t.op); }}>
               <Feather name={t.icone} size={17} color={palette.primary} />
             </GlassCircle>
           ))}

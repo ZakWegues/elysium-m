@@ -19,6 +19,10 @@ export type PropsVidroNativo = {
   perfil?: 0 | 1;
   /** [r, g, b, a] de 0 a 1. */
   tinta?: number[];
+  /** 09/11 (APK 2.10.0): para que lado o brilho inclina, de −1 a 1 (o arrasto do seletor). */
+  inclina?: number;
+  /** O brilho acompanha a inclinação do aparelho (desligado com "reduzir movimento"). */
+  segueAparelho?: boolean;
 };
 
 export function VidroNativo({ reserva }: PropsVidroNativo & { reserva?: ReactNode }) {

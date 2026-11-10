@@ -128,7 +128,7 @@ export function GlassModal({
   return (
     <View style={styles.camada}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.glassBackdrop }]} />
         </Pressable>
       </Animated.View>
@@ -136,7 +136,7 @@ export function GlassModal({
       <Animated.View
         style={[
           styles.sheet,
-          expandida && { top: insets.top + 8, maxHeight: undefined },
+          expandida && { top: insets.top + 8, maxHeight: '100%' },
           {
             borderTopLeftRadius: tokens.radii['2xl'],
             borderTopRightRadius: tokens.radii['2xl'],

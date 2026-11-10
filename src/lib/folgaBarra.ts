@@ -11,3 +11,6 @@ export const FolgaDaBarraContext = createContext(0);
 export function useFolgaDaBarra(): number {
   return useContext(FolgaDaBarraContext);
 }
+
+/** 09/11: só a parte da folga que é o aviso de conexão (pílula ou cartão) acima da barra. */
+export const AlturaAvisosContext = createContext(0);

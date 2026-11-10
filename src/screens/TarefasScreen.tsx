@@ -177,7 +177,7 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
         {(['abertas', 'feitas', 'todas'] as const).map(f => {
           const on = f === filtro;
           return (
-            <Pressable key={f} onPress={() => { haptica.tique(); setFiltro(f); }} accessibilityRole="tab" accessibilityState={{ selected: on }}
+            <Pressable key={f} onPress={() => { haptica.tique(); setFiltro(f); }} hitSlop={{ top: 4, bottom: 4 }} accessibilityRole="tab" accessibilityState={{ selected: on }}
               style={[styles.chip, { borderColor: on ? palette.primary : palette.border, backgroundColor: on ? palette.primarySoft : 'transparent' }]}>
               <FundoVidro cor={on ? palette.primarySoft : undefined} />
               <Text variant="caption" color={on ? palette.primary : palette.text} maxFontSizeMultiplier={1.3}>{f === 'abertas' ? 'Abertas' : f === 'feitas' ? 'Feitas (30 dias)' : 'Todas'}</Text>
@@ -214,7 +214,7 @@ export default function TarefasScreen({ pairing, onClose, onMudou, abrirNova = f
             <View style={[styles.secaoTopo, { marginTop: 14 }]}>
               <Text variant="label" color={section.chave === 'atrasadas' ? palette.error : palette.textMuted} style={{ letterSpacing: 1.4, flex: 1 }}>{section.titulo} · {section.data.length}</Text>
               {section.chave === 'atrasadas' && (
-                <Pressable onPress={reagendarAtrasadas} hitSlop={10} accessibilityRole="button" style={styles.linha}>
+                <Pressable onPress={reagendarAtrasadas} hitSlop={13} accessibilityRole="button" style={styles.linha}>
                   <Feather name="calendar" size={13} color={palette.primary} />
                   <Text variant="label" color={palette.primary}>Reagendar</Text>
                 </Pressable>
@@ -328,7 +328,7 @@ function LinhaTarefa({ t, aoTocarCirculo, aoEditar, aoConcluirRapido, aoAdiar, a
           style={[styles.check, { borderColor: t.prioridade === 'alta' ? palette.accent : palette.primary, backgroundColor: t.feita ? palette.primary : 'transparent' }]}>
           {t.feita && <Feather name="check" size={15} color={palette.background} />}
         </Pressable>
-        <Pressable onPress={aoEditar} accessibilityRole="button" accessibilityHint="Toque para editar; deslize para concluir, adiar ou apagar" style={{ flex: 1, gap: 2, paddingVertical: 2 }}>
+        <Pressable onPress={aoEditar} accessibilityRole="button" accessibilityHint="Toque para editar; deslize para concluir, adiar ou apagar" style={{ flex: 1, gap: 2, paddingVertical: 2, minHeight: 44, justifyContent: 'center' }}>
           <Text variant="body" color={t.feita ? palette.textMuted : palette.text} style={t.feita ? { textDecorationLine: 'line-through' } : undefined}>
             {t.prioridade === 'alta' ? '★ ' : ''}{t.texto}
           </Text>
@@ -385,7 +385,7 @@ function QuickAdd({ pairing, aoCriar }: { pairing: Pairing; aoCriar: (doHoje?: T
         <TextInput
           value={texto}
           onChangeText={setTexto}
-          placeholder='Nova tarefa — "prova de física sexta 14h"'
+          placeholder='Nova tarefa — "prova sexta 14h"'
           placeholderTextColor={palette.textMuted}
           maxLength={200}
           onSubmitEditing={() => void criar()}

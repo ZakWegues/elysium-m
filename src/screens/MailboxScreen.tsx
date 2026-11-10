@@ -381,13 +381,14 @@ export default function MailboxScreen({
       )}
 
       {loading && (
-        <View style={styles.center}>
+        <View style={[styles.center, { marginTop: semCabecalho && !baixando ? folgaTopo : 0 }]}>
           <ActivityIndicator color={palette.primary} />
         </View>
       )}
 
+      {/* 09/11: no hub o topo flutua; sem a folga o aviso ficava atrás do switch IA/PC. */}
       {!loading && ordered.length === 0 && (
-        <View style={styles.center}>
+        <View style={[styles.center, { marginTop: semCabecalho && !baixando ? folgaTopo : 0 }]}>
           <Feather name="inbox" size={22} color={palette.textMuted} />
           <Text variant="body" color={palette.textMuted} style={{ marginTop: tokens.spacing.sm }}>
             Nenhuma mensagem ainda.
@@ -521,7 +522,7 @@ export default function MailboxScreen({
             style={[styles.input, { borderColor: palette.border, borderRadius: tokens.radii.full, color: palette.text }]}
             value={draft}
             onChangeText={setDraft}
-            placeholder="Cola um link ou escreve uma nota..."
+            placeholder="Link ou nota…"
             placeholderTextColor={palette.textMuted}
             editable={!sending}
           />

@@ -40,6 +40,10 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private var brilho = 1f
   private var perfil = 0f
   private var animacao: ValueAnimator? = null
+  /** 09/11: a luz gira com o arrasto (−1 a 1, vem do JS) e, se ligado, com a inclinação do aparelho. */
+  private var inclinaAlvo = 0f
+  private var inclinaAtual = 0f
+  private var segueAparelho = false
 
   private val meu = IntArray(2)
   private val dele = IntArray(2)
@@ -64,6 +68,13 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   fun definirBrilho(valor: Float) { brilho = valor.coerceIn(0f, 1f); invalidate() }
   /** 0 = painel (domo), 1 = lente (squircle + Snell) — ver LENTE_AGSL. */
   fun definirPerfil(valor: Float) { perfil = valor; invalidate() }
+  fun definirInclina(valor: Float) { inclinaAlvo = valor.coerceIn(-1f, 1f); invalidate() }
+  fun definirSegueAparelho(valor: Boolean) {
+    if (valor == segueAparelho) return
+    segueAparelho = valor
+    if (valor && isAttachedToWindow && windowVisibility == View.VISIBLE) Inclinacao.entrar(this) else Inclinacao.sair(this)
+    invalidate()
+  }
 
   fun definirTinta(cor: List<Double>) {
     if (cor.size == 4) tinta = floatArrayOf(cor[0].toFloat(), cor[1].toFloat(), cor[2].toFloat(), cor[3].toFloat())
@@ -139,12 +150,20 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     resolverAlvo()
+    if (segueAparelho) Inclinacao.entrar(this)
+  }
+
+  // Fora da tela (app no fundo, aba escondida) o sensor não precisa ficar ligado por esta view.
+  override fun onWindowVisibilityChanged(visibility: Int) {
+    super.onWindowVisibilityChanged(visibility)
+    if (segueAparelho && visibility == View.VISIBLE && isAttachedToWindow) Inclinacao.entrar(this) else Inclinacao.sair(this)
   }
 
   override fun onDetachedFromWindow() {
     observador?.takeIf { it.isAlive }?.removeOnPreDrawListener(aCadaQuadro)
     observador = null
     animacao?.cancel()
+    Inclinacao.sair(this)
     super.onDetachedFromWindow()
   }
 
@@ -182,6 +201,12 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     s.setFloatUniform("raio", raio * densidade)
     s.setFloatUniform("brilho", brilho)
     s.setFloatUniform("perfil", perfil)
+    // A luz: de cima à esquerda (225°), girando até 35° com o arrasto e 25° com o aparelho.
+    inclinaAtual += (inclinaAlvo - inclinaAtual) * 0.22f
+    if (kotlin.math.abs(inclinaAlvo - inclinaAtual) > 0.005f) postInvalidateOnAnimation() else inclinaAtual = inclinaAlvo
+    val graus = 225f + inclinaAtual * 35f + (if (segueAparelho) Inclinacao.valor * 25f else 0f)
+    val rad = Math.toRadians(graus.toDouble())
+    s.setFloatUniform("luzDir", kotlin.math.cos(rad).toFloat(), kotlin.math.sin(rad).toFloat())
     val raio = desfoque * densidade
     val efeito = if (raio > 0.5f) {
       RenderEffect.createChainEffect(
@@ -218,6 +243,7 @@ uniform half4 tinta;
 uniform float raio;
 uniform float brilho;
 uniform float perfil;
+uniform float2 luzDir;
 
 half4 main(float2 q) {
   float r = raio > 0.0 ? min(raio, min(tam.x, tam.y) * 0.5) : tam.y * 0.5;
@@ -266,9 +292,9 @@ half4 main(float2 q) {
 
   float naBorda = clamp(1.0 - dentro / max(faixa, 1.0), 0.0, 1.0);
   cor = mix(cor, tinta.rgb, tinta.a * (1.0 - 0.35 * naBorda));
-  // Brilho: três faixas suaves no aro, mais fortes onde a borda encara a luz (cima-esquerda), e
+  // Brilho: três faixas suaves no aro, mais fortes onde a borda encara a luz (`luzDir`), e
   // um fio de 1,2 px na aresta. Somado em "screen", × brilho.
-  float luz = -(n.x + n.y) * 0.7071;
+  float luz = dot(n, luzDir);
   float glint = pow(max(luz, 0.0), 3.0);
   float refl = pow(max(-luz, 0.0), 3.0);
   float d = dentro / max(faixa, 1.0);

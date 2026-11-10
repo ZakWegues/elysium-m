@@ -21,7 +21,7 @@ import { listMessages } from './src/lib/mailbox';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/theme';
 import { FOLGA_DA_BARRA, TabBar, Screen } from './src/components/TabBar';
-import { FolgaDaBarraContext } from './src/lib/folgaBarra';
+import { AlturaAvisosContext, FolgaDaBarraContext } from './src/lib/folgaBarra';
 import { AjustesProvider, AppBackground, BarraBlurProvider, BlurTargetProvider, GlassModal, SobreposicaoContext, TopoFlutuante } from './src/components/ui';
 import { CamadaEstouros, registrarToque } from './src/components/Estouros';
 import { IndicadorConexao } from './src/components/conexao/IndicadorConexao';
@@ -222,6 +222,11 @@ function AppInner() {
   // A barra de abas sai de cena com o teclado aberto ou com uma gaveta por cima.
   const barraNaTela = !keyboard.visible && sobreposicoes === 0;
   const insets = useSafeAreaInsets();
+  // 09/11: a pílula/cartão da conexão flutua acima da barra e tampava o campo do Chat; entra na folga.
+  // A pílula de "reconectando" só pisca na volta ao app: não conta, senão o campo pularia a cada volta.
+  const [alturaMedida, setAlturaAvisos] = useState(0);
+  const avisoFixo = scanning || ota.pendente || estadoConexao === 'offline' || estadoConexao === 'token' || estadoConexao === 'bloqueado';
+  const alturaAvisos = avisoFixo ? alturaMedida : 0;
 
   const refreshQueueCount = useCallback(async () => {
     setQueued((await listQueue()).length);
@@ -516,7 +521,8 @@ function AppInner() {
       onTouchStart={(e) => registrarToque(e.nativeEvent.pageX, e.nativeEvent.pageY)}>
       {/* 31/10: o alvo da barra de abas envolve fundo E telas — ela flutua por cima e
           desfoca o que passa por baixo. A folga diz às telas quanto sobrar no fim. */}
-      <FolgaDaBarraContext.Provider value={barraNaTela ? insets.bottom + FOLGA_DA_BARRA : 0}>
+      <FolgaDaBarraContext.Provider value={(barraNaTela ? insets.bottom + FOLGA_DA_BARRA : 0) + alturaAvisos}>
+      <AlturaAvisosContext.Provider value={alturaAvisos}>
       <BarraBlurProvider>
       {/* Só o fundo entra no alvo de desfoque dos cards. Incluir as telas faria cada card
           de vidro tentar desfocar uma árvore que o contém. */}
@@ -579,16 +585,19 @@ function AppInner() {
         )}
       </TelaAnimada>
       </BarraBlurProvider>
+      </AlturaAvisosContext.Provider>
       </FolgaDaBarraContext.Provider>
       {/* 01/11: busca, Ajustes e o que cada tela pedir no topo — fora do alvo, como a barra. */}
-      <TopoFlutuante />
+      {/* 09/11: some com Tarefas ou uma gaveta por cima, como a barra; a engrenagem tampava o "+" de Tarefas. */}
+      {sobreposicoes === 0 && <TopoFlutuante />}
       {/* A barra e os avisos flutuam numa camada por cima das telas. */}
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: keyboard.height }}>
       {/* Acima da TabBar de propósito: no topo brigaria com o inset de safe area
           que cada ScreenHeader já aplica. */}
       {/* Sem a barra de abas (gaveta aberta), os avisos ficavam debaixo da barra de gestos do
           Android: o recuo da área segura entra só nesse caso (08/10). */}
-      <View style={{ paddingBottom: !keyboard.visible && sobreposicoes > 0 ? insets.bottom : 0 }}>
+      <View style={{ paddingBottom: !keyboard.visible && sobreposicoes > 0 ? insets.bottom : 0 }}
+        onLayout={(e) => { const h = Math.round(e.nativeEvent.layout.height); setAlturaAvisos(a => (a === h ? a : h)); }}>
       <IndicadorConexao
         estado={estadoConexao}
         queued={queued}

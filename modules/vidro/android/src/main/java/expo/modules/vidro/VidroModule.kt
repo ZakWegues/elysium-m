@@ -35,6 +35,10 @@ class VidroModule : Module() {
       Prop("tinta") { view: VidroLiquidoView, cor: List<Double> -> view.definirTinta(cor) }
       // [centro x (dp), meia largura (dp), visível 0–1]: a gota anda de mola até lá.
       Prop("seletor") { view: VidroLiquidoView, s: List<Double> -> view.moverSeletor(s) }
+      // −1 a 1: para que lado o brilho inclina (a velocidade do seletor da barra).
+      Prop("inclina") { view: VidroLiquidoView, valor: Float -> view.definirInclina(valor) }
+      // O brilho também acompanha a inclinação do aparelho (sensor de gravidade).
+      Prop("segueAparelho") { view: VidroLiquidoView, valor: Boolean -> view.definirSegueAparelho(valor) }
     }
   }
 }

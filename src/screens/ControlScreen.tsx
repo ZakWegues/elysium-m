@@ -301,7 +301,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
       )}
 
       <View style={styles.toolbar}>
-        <Pressable
+        <Pressable hitSlop={4} accessibilityRole="button"
           onPress={() => setLive(v => !v)}
           style={[styles.pill, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
         >
@@ -309,7 +309,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
           <Text variant="caption" color={palette.primary}>{live ? 'Congelar' : 'Retomar'}</Text>
         </Pressable>
 
-        <Pressable
+        <Pressable hitSlop={4} accessibilityRole="button"
           onPress={grab}
           style={[styles.pill, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
         >
@@ -317,7 +317,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
           <Text variant="caption" color={palette.primary}>Atualizar</Text>
         </Pressable>
 
-        <Pressable
+        <Pressable hitSlop={4} accessibilityRole="button"
           onPress={tirarPrint}
           disabled={printando}
           style={[styles.pill, { borderRadius: tokens.radii.full, backgroundColor: palette.primarySoft }]}
@@ -328,7 +328,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
           <Text variant="caption" color={palette.primary}>Print</Text>
         </Pressable>
 
-        <Pressable
+        <Pressable hitSlop={4} accessibilityRole="button"
           onPress={askScreen}
           disabled={asking}
           style={[styles.pill, { borderRadius: tokens.radii.full, backgroundColor: palette.primary }]}
@@ -342,7 +342,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
         {screens.length > 1 && screens.map(s => {
           const active = (sourceId ?? screens[0]?.id) === s.id;
           return (
-            <Pressable
+            <Pressable hitSlop={4} accessibilityRole="button"
               key={s.id}
               onPress={() => setSourceId(s.id)}
               style={[
@@ -579,7 +579,7 @@ export function PainelMemoria({ pairing, onError }: { pairing: Pairing; onError:
             },
           ]}
         />
-        <Pressable accessibilityLabel="Adicionar" accessibilityRole="button"
+        <Pressable accessibilityLabel="Adicionar" accessibilityRole="button" hitSlop={4}
           onPress={add}
           style={[styles.sendBtn, { borderRadius: tokens.radii.md, backgroundColor: palette.primary }]}
         >
@@ -1287,7 +1287,7 @@ function Vazio({ icone, texto }: { icone: keyof typeof Feather.glyphMap; texto: 
 const styles = StyleSheet.create({
   centerCard: { alignItems: 'center', paddingVertical: 40 },
   toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, minHeight: 36 },
   linhaHero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconeHero: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   // Duas colunas: `gap` de 12 entre elas e cada célula com 48% cabem em qualquer largura
