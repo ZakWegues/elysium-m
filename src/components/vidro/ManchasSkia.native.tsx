@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, useWindowDimensions } from 'react-native';
 import { Canvas, Fill, Shader, Skia } from '@shopify/react-native-skia';
 import { useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated';
-import { pausaFundo, reduzirUI } from '../../lib/motion';
+import { pausaFundo, pausaToque, reduzirUI } from '../../lib/motion';
 import { corParaUniform, escalaDoFundo, INICIO_DO_FUNDO, MANCHAS_SKSL } from '../../lib/fundoSkia';
 
 /** Tem Skia aqui (APK 2.6.0+): o AppBackground troca as manchas de SVG por estas. */
@@ -21,7 +21,7 @@ export function ManchasSkia({ blobs, forca }: { blobs: readonly [string, string,
   const tempo = useSharedValue((Date.now() - INICIO_DO_FUNDO) / 1000);
   const acumulado = useSharedValue(0);
   useFrameCallback((f) => {
-    if (pausaFundo.value || reduzirUI.value) return;
+    if (pausaFundo.value || pausaToque.value || reduzirUI.value) return;
     acumulado.value += (f.timeSincePreviousFrame ?? 16) / 1000;
     if (acumulado.value < 1 / 30) return;
     tempo.value += acumulado.value;

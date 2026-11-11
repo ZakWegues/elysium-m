@@ -199,3 +199,23 @@ export function pausarFundoPor(ms: number): void {
   if (timerPausa) clearTimeout(timerPausa);
   timerPausa = setTimeout(() => { pausaFundo.value = false; timerPausa = null; }, ms);
 }
+
+/**
+ * 10/11: o fundo animado também para ENQUANTO você toca/rola, e volta a andar 1,5 s depois. Ele
+ * passa atrás de todos os vidros: cada quadro dele fazia cada vidro nativo (barra, botões, chips)
+ * se redesenhar justo na hora do gesto. `relogioFundo` (segundos) é o tempo do fundo inteiro —
+ * só anda quando nada disso está pausado (o AppBackground o move).
+ */
+export const pausaToque = makeMutable(false);
+export const relogioFundo = makeMutable(0);
+let timerToque: ReturnType<typeof setTimeout> | null = null;
+let ultimoToque = 0;
+export function mexeuNaTela(): void {
+  const agora = Date.now();
+  // Um toque que se arrasta manda dezenas de eventos por segundo: só reinicia o timer a cada 250 ms.
+  if (agora - ultimoToque < 250 && pausaToque.value) return;
+  ultimoToque = agora;
+  pausaToque.value = true;
+  if (timerToque) clearTimeout(timerToque);
+  timerToque = setTimeout(() => { pausaToque.value = false; timerToque = null; }, 1500);
+}

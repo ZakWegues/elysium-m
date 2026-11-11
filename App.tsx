@@ -32,7 +32,7 @@ import { syncChats } from './src/lib/chatSync';
 import { useCompartilharDoAndroid, useShareIntent } from './src/lib/shareIntent';
 import { FolhaCompartilhar } from './src/components/FolhaCompartilhar';
 import { pedirSobreImagem } from './src/lib/imagemParaEly';
-import { MOV, pausarFundoPor, tempo } from './src/lib/motion';
+import { MOV, mexeuNaTela, pausarFundoPor, tempo } from './src/lib/motion';
 import { ligarSincronizacaoEmPrimeiroPlano, ouvirAvisosDoPc, pedidoDaResposta, pedirPermissao } from './src/lib/notificacoes';
 import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/estadoPc';
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
@@ -62,6 +62,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 SplashScreen.setOptions({ fade: true, duration: 250 });
 setTimeout(() => SplashScreen.hide(), 5000);
 
+/** Avisa o toque (pausa o fundo) e devolve false: só observa, nunca toma o gesto de ninguém. */
+function avisarToque(): boolean {
+  mexeuNaTela();
+  return false;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -71,11 +77,14 @@ export default function App() {
         simplesmente nunca recebe o dedo, e sem erro nenhum no console.
       */}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <ThemeProvider>
-            <AppInner />
-          </ThemeProvider>
-        </SafeAreaProvider>
+        {/* 10/11: qualquer toque/rolagem pausa o fundo animado por 1,5 s (motion.ts, mexeuNaTela). */}
+        <View style={{ flex: 1 }} onStartShouldSetResponderCapture={avisarToque} onMoveShouldSetResponderCapture={avisarToque}>
+          <SafeAreaProvider>
+            <ThemeProvider>
+              <AppInner />
+            </ThemeProvider>
+          </SafeAreaProvider>
+        </View>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

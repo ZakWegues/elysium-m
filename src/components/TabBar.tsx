@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -47,6 +47,57 @@ function comElastico(v: number, maximo: number): number {
 }
 
 /**
+ * 10/11: o vidro nativo da barra num componente próprio. A gota que segue o dedo, a inclinação do
+ * brilho e a geometria mudam durante o arrasto; antes cada mudança re-renderizava a TabBar inteira
+ * (abas, rótulos, seletor) no JS — agora só este pedaço.
+ */
+const VidroDaBarra = memo(function VidroDaBarra({ alvo: alvoDoDesfoque, lente, indiceAtivo, progresso, aperto, larguraTab }: {
+  alvo: ReturnType<typeof useBlurDaBarra>;
+  lente: number;
+  indiceAtivo: number;
+  progresso: SharedValue<number>;
+  aperto: SharedValue<number>;
+  larguraTab: SharedValue<number>;
+}) {
+  /** O último valor de inclinação mandado ao JS (para não mandar o mesmo de novo). */
+  const inclinaVista = useSharedValue(0);
+  // 31/10: a gota do vidro nativo segue o seletor — o nativo anda de mola até o centro novo; aqui só
+  // se avisa a geometria (largura da aba e se a pílula está aberta ou encolhida).
+  const [geom, setGeom] = useState({ L: 0, aberta: true });
+  useAnimatedReaction(
+    () => ({ L: Math.round(larguraTab.value), aberta: rotulos.value > 0.5 }),
+    (g, antes) => { if (!antes || g.L !== antes.L || g.aberta !== antes.aberta) runOnJS(setGeom)(g); },
+  );
+  // 05/11: segurando, a gota sai do lugar e acompanha o dedo (em sextos de aba: cada passo é uma
+  // mola no nativo), mais larga e ampliando mais — o "lift" da Glisse. Solta, volta para a aba.
+  const [gotaNoDedo, setGotaNoDedo] = useState<number | null>(null);
+  useAnimatedReaction(
+    () => (aperto.value > 0.5 && rotulos.value > 0.5 ? Math.round(progresso.value * 6) / 6 : -1),
+    (v, antes) => { if (v !== antes) runOnJS(setGotaNoDedo)(v < 0 ? null : v); },
+  );
+  const posGota = gotaNoDedo ?? indiceAtivo;
+  // 09/11: segurando, o brilho inclina para onde o seletor corre (velocidade por quadro → abas/s).
+  const [inclina, setInclina] = useState(0);
+  useAnimatedReaction(
+    () => progresso.value,
+    (agora, antes) => {
+      const v = aperto.value > 0.5 && antes != null ? inclinaDoArrasto((agora - antes) * 60) : 0;
+      if (v !== inclinaVista.value) { inclinaVista.value = v; runOnJS(setInclina)(v); }
+    },
+  );
+  const seletorDoVidro: [number, number, number] = indiceAtivo < 0 || geom.L <= 0
+    ? [0, 1, 0]
+    : geom.aberta
+      ? [6 + posGota * geom.L + geom.L / 2, ((geom.L - 8) / 2) * (gotaNoDedo != null ? 1.12 : 1), gotaNoDedo != null ? 1.8 : 1]
+      : [PILULA_ENCOLHIDA / 2, (PILULA_ENCOLHIDA - 20) / 2, 1];
+
+  return (
+    <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro} inclina={inclina}
+      reserva={<GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />} />
+  );
+});
+
+/**
  * 30/10 — a barra do Nuvio (lida no código dele, `FloatingNavigationBar`, e refeita aqui):
  *
  * · pílula escura flutuante (#1C1C1E a 72% sobre desfoque), no máximo 400 de largura, com
@@ -91,8 +142,6 @@ export function TabBar({
   const aperto = useSharedValue(0);
   /** O esticão da gelatina: 1 parado, maior quando o seletor anda rápido. */
   const estica = useSharedValue(1);
-  /** O último valor de inclinação mandado ao JS (para não mandar o mesmo de novo). */
-  const inclinaVista = useSharedValue(0);
 
   const MOLA = { damping: 15, stiffness: 190, mass: 0.9 } as const;
 
@@ -117,36 +166,6 @@ export function TabBar({
       }
     },
   );
-
-  // 31/10: a gota do vidro nativo segue o seletor — o nativo anda de mola até o centro novo; aqui só
-  // se avisa a geometria (largura da aba e se a pílula está aberta ou encolhida).
-  const [geom, setGeom] = useState({ L: 0, aberta: true });
-  useAnimatedReaction(
-    () => ({ L: Math.round(larguraTab.value), aberta: rotulos.value > 0.5 }),
-    (g, antes) => { if (!antes || g.L !== antes.L || g.aberta !== antes.aberta) runOnJS(setGeom)(g); },
-  );
-  // 05/11: segurando, a gota sai do lugar e acompanha o dedo (em sextos de aba: cada passo é uma
-  // mola no nativo), mais larga e ampliando mais — o "lift" da Glisse. Solta, volta para a aba.
-  const [gotaNoDedo, setGotaNoDedo] = useState<number | null>(null);
-  useAnimatedReaction(
-    () => (aperto.value > 0.5 && rotulos.value > 0.5 ? Math.round(progresso.value * 6) / 6 : -1),
-    (v, antes) => { if (v !== antes) runOnJS(setGotaNoDedo)(v < 0 ? null : v); },
-  );
-  const posGota = gotaNoDedo ?? indiceAtivo;
-  // 09/11: segurando, o brilho inclina para onde o seletor corre (velocidade por quadro → abas/s).
-  const [inclina, setInclina] = useState(0);
-  useAnimatedReaction(
-    () => progresso.value,
-    (agora, antes) => {
-      const v = aperto.value > 0.5 && antes != null ? inclinaDoArrasto((agora - antes) * 60) : 0;
-      if (v !== inclinaVista.value) { inclinaVista.value = v; runOnJS(setInclina)(v); }
-    },
-  );
-  const seletorDoVidro: [number, number, number] = indiceAtivo < 0 || geom.L <= 0
-    ? [0, 1, 0]
-    : geom.aberta
-      ? [6 + posGota * geom.L + geom.L / 2, ((geom.L - 8) / 2) * (gotaNoDedo != null ? 1.12 : 1), gotaNoDedo != null ? 1.8 : 1]
-      : [PILULA_ENCOLHIDA / 2, (PILULA_ENCOLHIDA - 20) / 2, 1];
 
   const navegar = useCallback((i: number) => {
     const alvo = TABS[i];
@@ -221,8 +240,7 @@ export function TabBar({
               fundo) através de uma lente; a borda dobra o conteúdo e o seletor é uma gota que amplia.
               Sem Android 13 (ou no Stark): o desfoque de sempre, com tinta escura translúcida. */}
           {lente > 0
-            ? <VidroNativo alvo={alvoDoDesfoque} lente={lente} seletor={seletorDoVidro} inclina={inclina}
-                reserva={<GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />} />
+            ? <VidroDaBarra alvo={alvoDoDesfoque} lente={lente} indiceAtivo={indiceAtivo} progresso={progresso} aperto={aperto} larguraTab={larguraTab} />
             : <GlassFill intensity={55} edge={false} tintColor="rgba(22,22,26,0.5)" alvo={alvoDoDesfoque} />}
           <View style={styles.linha}>
             <Animated.View
