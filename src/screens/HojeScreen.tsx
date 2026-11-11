@@ -26,7 +26,7 @@ import { atrasada, mascaraHora, quandoTarefa, validarHora } from '../lib/tarefas
  * (`hoje.painel`) traz saudação, status, clima, agenda, listas, hábitos, metas e alertas.
  * Hábito marca com um toque (com vibração e a sequência 🔥); toque longo edita.
  *
- * 20/10, pedido do Zak: "se tem no PC tem que ter no celular, e vice-versa". As seções e a ordem
+ * 20/10, pedido do dono: "se tem no PC tem que ter no celular, e vice-versa". As seções e a ordem
  * são as do dashboard (`hoje.js`/`dashboard.html`): Despejar, Revisão e Ler o briefing no topo;
  * alertas; A Ely quer saber; Meu amanhã; Estudo; Hábitos; Lembretes e tarefas (com a agenda);
  * Rotinas; Ideia para hoje; ELYSIUM; Metas; Clima; Listas; Manchetes; Novidades do dia. Os títulos

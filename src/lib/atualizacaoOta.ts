@@ -6,7 +6,7 @@ import * as Updates from 'expo-updates';
  * Atualização pelo ar que chega de verdade (07/10).
  *
  * O `expo-updates` sozinho baixa o OTA em segundo plano na abertura e só o usa na PRÓXIMA
- * abertura a frio. No Android "fechar o app" quase nunca é abertura a frio, então o Zak
+ * abertura a frio. No Android "fechar o app" quase nunca é abertura a frio, então o dono
  * ficava dias no bundle velho — viu o botão de fone da mão livre depois de ela ter saído.
  * O app nunca chamava a API: só lia o `updateId` para mostrar em Ajustes.
  *
@@ -15,7 +15,7 @@ import * as Updates from 'expo-updates';
  *  - com uma pronta, o App mostra "Reiniciar agora" (`useUpdates().isUpdatePending`);
  *  - voltou de mais de 30 MIN fora com uma pronta pendente e nada em andamento: aplica sozinho.
  *
- * 21/10: eram 30 s, e o Zak reclamou que "minimizar cancela ou reinicia tudo" — era isto,
+ * 21/10: eram 30 s, e o dono reclamou que "minimizar cancela ou reinicia tudo" — era isto,
  * reiniciando o app no meio de uma conversa. Agora só depois de meia hora fora, e nunca com
  * resposta chegando, gravação ou modo live (`marcarOcupado`). O resto fica para o
  * "Reiniciar agora" ou a próxima abertura.

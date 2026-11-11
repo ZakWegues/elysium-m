@@ -935,7 +935,7 @@ export default function ChatScreen({
 
   // ── Pedido por voz depois do "Ely" (02/10) ────────────────────────────────
   // Era a conversa mão livre (bloco 89): gravava → respondia → voltava a ouvir, sem fim.
-  // O Zak pediu para tirar: agora "Ely" vale UM pedido — ouve, responde, fala e encerra.
+  // O dono pediu para tirar: agora "Ely" vale UM pedido — ouve, responde, fala e encerra.
   // Para continuar, diz "Ely" de novo ou segura o microfone.
   //
   // Nível em dBFS do expo-audio: fala perto do celular fica entre −30 e −10; um quarto
@@ -1109,7 +1109,7 @@ export default function ChatScreen({
   }
 
   // Sair da tela (ou trocar de conversa) cancela o pedido: microfone aberto sem ninguém
-  // olhando para a tela é exatamente o que ninguém quer. A FALA não para (08/10): o Zak
+  // olhando para a tela é exatamente o que ninguém quer. A FALA não para (08/10): o dono
   // pediu para a Ely seguir falando ao trocar de aba — quem cala é a pílula "Ely falando".
   useEffect(() => () => { turnoRef.current = false; liberarMicrofone('gravar'); }, []);
   // Com as abas vivas o Chat não desmonta ao trocar de aba — fica escondido. Escondido no

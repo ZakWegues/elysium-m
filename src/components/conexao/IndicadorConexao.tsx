@@ -10,7 +10,7 @@ import type { EstadoConexao } from '../../lib/conexao/maquina';
 import type { Descricao } from '../../lib/estadoPc';
 
 /**
- * O estado da conexão com o PC, no lugar da antiga faixa vermelha (26/10, pedido do Zak).
+ * O estado da conexão com o PC, no lugar da antiga faixa vermelha (26/10, pedido do dono).
  *
  * - Reconectando (abriu o app, voltou do fundo): uma pílula de vidro com uma aura que respira, sem
  *   texto nos primeiros 2 s — a maioria das voltas termina antes disso e a pílula só pisca.

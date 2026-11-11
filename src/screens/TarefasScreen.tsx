@@ -15,7 +15,7 @@ import { estourarNoToque } from '../components/Estouros';
 import { useAbaAtiva } from '../components/AbaViva';
 
 /**
- * Tarefas em tela cheia (fase 18, 08/10). O Zak: a lista do Hoje "não dá pra deixar em tela
+ * Tarefas em tela cheia (fase 18, 08/10). O dono: a lista do Hoje "não dá pra deixar em tela
  * cheia e tem uma parte cortada". Aqui ela ocupa a tela toda, agrupada como no Todoist
  * (Atrasadas / Hoje / Amanhã / Próximos / Sem data / Feitas), com:
  *  - quick add com prévia do que a Ely entendeu ("prova sexta 14h" → "sex 14:00 · aviso na véspera");

@@ -35,7 +35,7 @@ import {
 } from '../components/ui';
 
 /**
- * Cadência do espelhamento. Medido no PC do Zak: cada captura leva ~640 ms, e esse
+ * Cadência do espelhamento. Medido no PC do dono: cada captura leva ~640 ms, e esse
  * custo é fixo do `desktopCapturer` — não muda com o tamanho pedido. O teto real é
  * ~1,5 quadro por segundo. Isto é "dar uma olhada na tela", não vídeo.
  */

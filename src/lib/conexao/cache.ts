@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { chavePorPc } from '../pcAtivo';
 
 /**
- * Modo offline (26/10, pedido do Zak): o último estado que veio do PC fica no aparelho, por PC.
+ * Modo offline (26/10, pedido do dono): o último estado que veio do PC fica no aparelho, por PC.
  * As telas mostram o guardado na hora, buscam de novo por trás e trocam quando chega — sem o PC,
  * o app continua navegável e diz "atualizado há 3 min".
  */

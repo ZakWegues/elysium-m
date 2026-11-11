@@ -19,7 +19,7 @@ const RECOLHER_MS = 5000;
  * "Ely falando" — a pílula que segue a fala por todas as abas (08/10, substitui o
  * `BotaoInterromper` de 02/10).
  *
- * O Zak pôs a Ely para ler o resumo e trocou de aba: a tela desmontava, a fala parava, e o
+ * O dono pôs a Ely para ler o resumo e trocou de aba: a tela desmontava, a fala parava, e o
  * resumo não servia para nada. Agora a fala não depende de tela nenhuma e esta pílula mora no
  * App, por cima de tudo. Fechada é discreta (o reator girando + "Falando"); um toque abre e mostra
  * o trecho atual, Pausar ⇄ Retomar e Parar. Recolhe sozinha depois de 5 s sem toque, ou com um

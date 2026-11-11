@@ -15,7 +15,7 @@ import { TelaSalvaCheia } from '../../components/TelaNaBolha';
 import { pedidoDaTela } from '../../lib/api';
 
 /**
- * Os cards da fase 18 (08/10) no Hoje do celular — o Zak pediu o resumo "com tudo que já tá
+ * Os cards da fase 18 (08/10) no Hoje do celular — o dono pediu o resumo "com tudo que já tá
  * e mais um pouco": ouvir o resumo inteiro (a fala segue ao trocar de aba e com o app
  * minimizado), as rotinas de hoje, uma ideia para o dia e o card ELYSIUM (versões, o que
  * veio, o que testar). Treino e nutrição ficam de fora: a Ely responde quando se pergunta.

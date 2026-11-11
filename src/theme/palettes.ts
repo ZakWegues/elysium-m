@@ -108,7 +108,7 @@ type Face = {
 type Cor = { label: string; rotulo: string; face: Face };
 
 /**
- * 30/10: as três cores voltam em todas as famílias — o Zak não quis as cores do exemplo.
+ * 30/10: as três cores voltam em todas as famílias — o dono não quis as cores do exemplo.
  *
  * · Dark: a noite do ELYSIUM de antes (Campos Elísios, Éter, Crepúsculo), com aurora,
  *   manchas, feixes, traços e poeira no fundo.

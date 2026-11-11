@@ -171,7 +171,7 @@ export async function savePairing(pairing: Pairing): Promise<void> {
 
 /**
  * 31/10: grava um endereço novo SÓ se esse PC ainda é o ativo. A sonda começa com um PC e
- * termina segundos depois — se no meio o Zak trocou de PC ou desapareou, gravar ali reativava
+ * termina segundos depois — se no meio o dono trocou de PC ou desapareou, gravar ali reativava
  * (ou ressuscitava) o PC antigo.
  */
 export async function savePairingSeAtivo(pairing: Pairing): Promise<boolean> {

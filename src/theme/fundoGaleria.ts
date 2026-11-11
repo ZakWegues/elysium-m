@@ -5,7 +5,7 @@ import type { Fundo } from './fundo';
 
 /**
  * Escolhe uma imagem da galeria e guarda uma cópia na pasta do app (a do seletor é cache e
- * some). Devolve o fundo novo, ou null se o Zak desistiu. A cópia anterior é apagada.
+ * some). Devolve o fundo novo, ou null se o dono desistiu. A cópia anterior é apagada.
  */
 export async function escolherImagemDeFundo(anterior: Fundo): Promise<Fundo | null> {
   // Fora do app no seletor: sem isto, um OTA pendente poderia recarregar o app no meio.

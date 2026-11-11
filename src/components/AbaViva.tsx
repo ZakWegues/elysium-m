@@ -40,7 +40,7 @@ export function useAoReativar(fn: () => void): void {
     antes.current = ativa;
     if (!voltou) return;
     // 31/10: depois da transição de 180 ms da troca de aba — RPC, setState e AsyncStorage no meio
-    // dela eram o engasgo que o Zak sentia ao trocar de aba.
+    // dela eram o engasgo que o dono sentia ao trocar de aba.
     const t = setTimeout(() => atual.current(), 220);
     return () => clearTimeout(t);
   }, [ativa]);

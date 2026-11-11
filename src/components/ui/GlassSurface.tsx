@@ -38,7 +38,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 /**
  * 🔴 AS DUAS FAMÍLIAS SÃO DUAS LINGUAGENS, E ISTO É ONDE ELAS DIVERGEM (bloco 70).
  *
- * O Zak, 18/09: "o tema Liquid Glass do mobile simplesmente não tem Liquid Glass, é só um
+ * O dono, 18/09: "o tema Liquid Glass do mobile simplesmente não tem Liquid Glass, é só um
  * blur; e nos temas do ELYSIUM está muito zoado — zere o Liquid Glass e deixe no máximo um
  * blur extremamente levinho". Então:
  *
@@ -53,7 +53,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  *   é View e LinearGradient — nada por quadro, nada de custo novo.
  */
 /**
- * 🔴 Bloco 128 (01/10): o Zak pediu de novo, agora sem meio-termo — "tire totalmente o
+ * 🔴 Bloco 128 (01/10): o dono pediu de novo, agora sem meio-termo — "tire totalmente o
  * liquid glass dos temas ELYSIUM, deixe só um levíssimo blur". O bloco 70 tinha deixado o
  * fio especular nas arestas, a borda de vidro e o reflexo do modal; tudo isso sai na noite.
  * Sobra um desfoque fixo e mínimo e a tinta quase sólida da paleta.
@@ -72,7 +72,7 @@ export const VIDRO_BOTAO = {
 } as const;
 
 /**
- * 30/10 — o vidro sem véu branco (o Zak: "leitoso, parece tinta branca por cima"):
+ * 30/10 — o vidro sem véu branco (o dono: "leitoso, parece tinta branca por cima"):
  *
  * · **Dark** e **Stark**: painel quase sólido da cor do tema, com um desfoque mínimo (a
  *   noite do ELYSIUM de antes).
@@ -227,7 +227,7 @@ export function GlassCircle({
         {
           width: size,
           height: size,
-          // 04/11: redondo (o Zak pediu os botões redondos, como os da Glisse).
+          // 04/11: redondo (o dono pediu os botões redondos, como os da Glisse).
           borderRadius: raio,
           ...VIDRO_BOTAO,
           ...(lente ? { backgroundColor: 'transparent' } : null),

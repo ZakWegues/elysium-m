@@ -8,7 +8,7 @@ import { CantosHud } from './Ornamentos';
  * desfoque real. Ver o comentário de `GlassFill`: seis cards de vidro na mesma tela eram
  * seis recapturas por quadro de rolagem, e é isso que fazia a Início engasgar.
  *
- * 30/10: na Glass todo card é vidro; cantos de 16 (o Zak não quer arredondamento demais).
+ * 30/10: na Glass todo card é vidro; cantos de 16 (o dono não quer arredondamento demais).
  */
 export function Card({ glass = false, blur = false, style, children, ...rest }: ViewProps & { glass?: boolean; blur?: boolean }) {
   const { palette, tokens } = useTheme();

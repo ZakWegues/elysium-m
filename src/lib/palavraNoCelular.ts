@@ -7,7 +7,7 @@ import { acharPalavra } from './palavraCasa';
 /**
  * "Elysium" no celular, com o app aberto (bloco 129).
  *
- * O Zak instalou a 1.7.0, disse "Elysium" e nada aconteceu: o celular nunca teve palavra
+ * O dono instalou a 1.7.0, disse "Elysium" e nada aconteceu: o celular nunca teve palavra
  * de ativação, só a mão livre por botão. Escolha dele: ouvir com o app na tela (Início ou
  * Chat), sem serviço em segundo plano nem notificação fixa.
  *
@@ -120,7 +120,7 @@ export function usePalavraNoCelular({
   const jaContou = useRef(new Set<string>());
   const diag = useRef<DiagPalavra>({ sessoes: 0, disparos: 0, erros: {} });
   /**
-   * 02/10: depois da OTA o log mostrou UMA sessão e nenhum evento "start" — e o Zak via o
+   * 02/10: depois da OTA o log mostrou UMA sessão e nenhum evento "start" — e o dono via o
    * teclado bugado. Suspeita: o reconhecedor num liga-desliga sem fim. Estes números saem
    * num resumo a cada 30 s, e sessão que morre em menos de 3 s sem ouvir nada freia o
    * religamento (2 s, 4 s… até 30 s) em vez de tentar de novo em meio segundo.
@@ -166,7 +166,7 @@ export function usePalavraNoCelular({
   }
 
   /**
-   * Permissão pelo gravador (expo-audio), não pelo módulo de fala: no celular do Zak o
+   * Permissão pelo gravador (expo-audio), não pelo módulo de fala: no celular do dono o
    * `requestPermissionsAsync` do expo-speech-recognition simplesmente não responde ("erro ao
    * iniciar: sem resposta" a cada 30 s no log de 02/10). A permissão é a mesma (microfone).
    */

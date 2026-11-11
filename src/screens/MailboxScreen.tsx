@@ -301,7 +301,7 @@ export default function MailboxScreen({
    * contrato do mailbox (§16, C15).
    */
   function handleLongPress(message: MailboxMessage) {
-    // Fase 23: copiar e compartilhar (o Zak pediu nas duas conversas).
+    // Fase 23: copiar e compartilhar (o dono pediu nas duas conversas).
     // O Alert do Android mostra no máximo 3 botões: com texto, "Mais…" leva a favoritar/apagar.
     const texto = message.text ?? '';
     const titulo = message.text ?? message.attachment?.name ?? 'Sem conteúdo';

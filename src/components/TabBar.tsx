@@ -25,7 +25,7 @@ export const FOLGA_DA_BARRA = 78;
 /** Ajustes não está aqui: virou gaveta, e gaveta não é destino de navegação. */
 export type Screen = 'home' | 'chat' | 'hoje' | 'control' | 'conversations';
 
-/** Só destinos de verdade. Quatro, como o Zak pediu: Início, Chat, PC e Hoje. */
+/** Só destinos de verdade. Quatro, como o dono pediu: Início, Chat, PC e Hoje. */
 const TABS: { screen: Screen; label: string; icon: keyof typeof Feather.glyphMap }[] = [
   { screen: 'home', label: 'Início', icon: 'home' },
   { screen: 'chat', label: 'Chat', icon: 'message-circle' },

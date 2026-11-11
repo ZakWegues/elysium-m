@@ -13,7 +13,7 @@ import { partesDaFala, trechoParaMostrar } from './divisaoFala';
  *
  * Antes era sempre o `expo-speech` — a voz do Android, bem pior que a neural que o PC usa.
  * Agora o celular pede o MP3 ao PC (`GET /api/tts`) e toca; é a mesma voz que sai na caixa
- * de som do PC, escolhida em Ajustes → Voz lá. 25/10: é a ÚNICA voz — o Zak não quer a do
+ * de som do PC, escolhida em Ajustes → Voz lá. 25/10: é a ÚNICA voz — o dono não quer a do
  * Android ("travada e sem sentimento"). Sem PC, sem rede ou síntese acima de 8 s, a resposta
  * fica só em texto.
  *
@@ -23,7 +23,7 @@ import { partesDaFala, trechoParaMostrar } from './divisaoFala';
  * A promessa só resolve quando a fala TERMINA (bloco 89): o pedido por voz e o botão Interromper precisam
  * saber a hora de voltar a ouvir — antes disso o microfone gravaria a própria resposta.
  *
- * 08/10 — o Zak pediu três coisas que mudaram este arquivo:
+ * 08/10 — o dono pediu três coisas que mudaram este arquivo:
  * 1. **Trocar de aba não para a fala.** Ninguém mais chama `pararDeFalar()` ao sair de uma
  *    tela; quem para é o botão (a pílula `FalaFlutuante`) ou uma fala nova.
  * 2. **Pausar e retomar.** Texto longo vai em partes (`divisaoFala.ts`); a voz do PC pausa o

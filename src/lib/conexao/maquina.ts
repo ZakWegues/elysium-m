@@ -1,5 +1,5 @@
 /**
- * A máquina de estados da conexão com o PC (26/10, pedido do Zak: "acabar com os falsos 'PC fora
+ * A máquina de estados da conexão com o PC (26/10, pedido do dono: "acabar com os falsos 'PC fora
  * do ar'"). Pura — o hook `useConnection` só alimenta eventos e lê o estado.
  *
  * O falso alarme vinha de duas coisas: a 1ª sonda que falhava já virava "offline", e a volta do

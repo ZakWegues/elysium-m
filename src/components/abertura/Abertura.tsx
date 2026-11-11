@@ -7,7 +7,7 @@ import { Text } from '../ui';
 import { reduzirUI } from '../../lib/motion';
 
 /**
- * A abertura (26/10, pedido do Zak): enquanto o app conecta ao PC, os pontos da esfera da Ely
+ * A abertura (26/10, pedido do dono): enquanto o app conecta ao PC, os pontos da esfera da Ely
  * vêm de longe e se juntam numa esfera que gira; quando a conexão sai (ou no teto de 2,5 s), ela
  * encolhe e some, e o app aparece por baixo sem corte. Cobre a carência inicial da conexão — a
  * pessoa vê a Ely se formando, não um "Procurando o PC…".

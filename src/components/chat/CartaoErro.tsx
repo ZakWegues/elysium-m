@@ -8,7 +8,7 @@ import { MOV } from '../../lib/motion';
 export type AcaoErro = 'refazer' | 'depois' | 'cancelar';
 
 /**
- * Erro no chat como cartão com saída (26/10, pedido do Zak): antes era texto vermelho solto, e as
+ * Erro no chat como cartão com saída (26/10, pedido do dono): antes era texto vermelho solto, e as
  * mensagens mandavam "tocar em Refazer" num botão que não existia na bolha. Aqui cada erro tem
  * título curto, o detalhe apagado e só botões que funcionam.
  */

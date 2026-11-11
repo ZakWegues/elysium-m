@@ -12,7 +12,7 @@ import type { PropsVidroNativo } from './VidroNativo';
  * é false e a TabBar fica com o desfoque de sempre.
  *
  * 01/11: a `reserva` (o desfoque de sempre) fica por baixo até o nativo dizer que está desenhando —
- * na 2.7.0 a view nativa não achou o alvo no aparelho do Zak e a barra ficou transparente. Assim a
+ * na 2.7.0 a view nativa não achou o alvo no aparelho do dono e a barra ficou transparente. Assim a
  * barra nunca fica sem vidro, e o estado vai para o log do PC.
  */
 const modulo = requireOptionalNativeModule<{ suporte(): string; estado?(): string }>('Vidro');

@@ -14,7 +14,7 @@
 const VARIACOES = /(?:^|\s)(?:(?:ei|ok|oi|fala)\s)?(?:[eia]l[iy][sz][iy]?[uo]m?|e l[iy][sz][iy][uo]m?)(?=\s|$)/;
 
 /**
- * "Ely" (02/10): o Zak trocou o nome do assistente para Ely (o app continua ELYSIUM). O
+ * "Ely" (02/10): o dono trocou o nome do assistente para Ely (o app continua ELYSIUM). O
  * ditado escreve "Ely", "Eli", "Elly", "Ellie". Por ser curta, só vale no COMEÇO da frase
  * ou depois de "ei/oi/ok/fala" — "a Eli ligou" no meio de uma conversa não dispara. E nunca
  * "ele"/"eles" (o "e" final é o que separa "Eli" de "ele").

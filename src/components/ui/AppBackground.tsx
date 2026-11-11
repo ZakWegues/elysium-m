@@ -15,7 +15,7 @@ import { ManchasSkia, TEM_SKIA } from '../vidro/ManchasSkia';
 /**
  * Fundo do app — fase 23.1: PORTE CAMADA A CAMADA do `css/fundo.css` do desktop.
  *
- * O Zak: "o desktop ainda tá bizarramente melhor que o mobile… plano de fundo, animações e
+ * O dono: "o desktop ainda tá bizarramente melhor que o mobile… plano de fundo, animações e
  * muito mais devem ser compartilhados igualmente". A versão anterior inventava um fundo
  * próprio: manchas nas cores PRIMÁRIA e DE ACENTO (fortes — no Stark viravam bolhas laranja)
  * feitas de sete círculos empilhados, que aparecem como ANÉIS. Agora é o mesmo desenho do PC:
@@ -238,7 +238,7 @@ function useVivo(): boolean {
 }
 
 /**
- * 30/10: papéis de parede próprios, para quem quer cor atrás do vidro. Pedido do Zak: "mais
+ * 30/10: papéis de parede próprios, para quem quer cor atrás do vidro. Pedido do dono: "mais
  * informação e mais cores para quando eu passe a parte de liquid glass". São estáticos (um
  * SVG só, nada por quadro): várias manchas de cor fortes se sobrepondo, como uma malha.
  */
@@ -277,7 +277,7 @@ export function AppBackground() {
   const k = Math.max(0.42, Math.min(1, width / 1024)) * 1.25;
   const lado = Math.max(width, height) * 1.4;
 
-  // Fundo escolhido pelo Zak: papel colorido ou uma imagem da galeria, com um véu escuro leve
+  // Fundo escolhido pelo dono: papel colorido ou uma imagem da galeria, com um véu escuro leve
   // para o texto continuar lendo. A poeira continua por cima.
   if (fundo.tipo !== 'animado') {
     return (

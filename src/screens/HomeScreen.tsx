@@ -471,7 +471,7 @@ export default function HomeScreen({
       <ScreenHeader
         flutuante
         right={
-          // 08/10: o microfone que mostrava a escuta do "Ely" saiu do topo — o Zak o lia como a
+          // 08/10: o microfone que mostrava a escuta do "Ely" saiu do topo — o dono o lia como a
           // mão livre que ele pediu para tirar. O estado da escuta continua em Ajustes → Voz.
           // 01/11: o ponto do PC virou o anel da busca (a frase do estado segue no conteúdo).
           <GlassCircle accessibilityLabel={`Buscar (PC ${online ? 'online' : 'offline'})`} size={40} anel={online ? palette.success : palette.error}

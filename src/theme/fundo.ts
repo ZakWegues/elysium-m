@@ -1,6 +1,6 @@
 /**
  * 30/10: o fundo do app pode ser o animado do tema, um papel de parede colorido ou uma imagem
- * da galeria (pedido do Zak). Os papéis são várias manchas de cor fortes se sobrepondo, para o
+ * da galeria (pedido do dono). Os papéis são várias manchas de cor fortes se sobrepondo, para o
  * vidro da Glass ter cor e forma atrás.
  */
 export const PAPEIS = {

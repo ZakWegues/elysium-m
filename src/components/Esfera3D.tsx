@@ -18,7 +18,7 @@ import { useAbaAtiva } from './AbaViva';
  * âmbar pensando. Com o chat vazio fica inteira no meio da tela; com conversa, maior e apagada
  * atrás do texto.
  *
- * 22.1 (14/10, pedido do Zak): sem toque nela e sem os efeitos de "nascer"/digitar — ela é
+ * 22.1 (14/10, pedido do dono): sem toque nela e sem os efeitos de "nascer"/digitar — ela é
  * fundo, não botão. Fica só a reação à voz e a calma da noite (22h–6h).
  *
  * ~240 pontos numa esfera de Fibonacci, girados e projetados NUM WORKLET (thread de UI, sem
