@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { loadPairing, Pairing } from './pairing';
 import { callRpc, Entrega, Reminder } from './rpc';
 import { registrarEncerramentoPc, type MotivoEncerramento } from './estadoPc';
+import { abrirTelaMandada, idDaTelaMandada, telasSalvasMudaram } from './telasMandadas';
 
 /**
  * Notificações LOCAIS do celular — o que chega mesmo sem push pela nuvem (bloco 72).
@@ -170,6 +171,7 @@ export async function mostrarEntrega(e: Entrega): Promise<void> {
  * se deve ser confirmada ao PC. Lembrete já espelhado no aparelho: confirma sem mostrar.
  */
 export async function receberEntrega(e: Entrega, pairing?: Pairing | null): Promise<void> {
+  avisarTelaMandada(e);
   if (!(await notificacoesAtivas())) return;
   const vistas = await lerLista(CHAVE_VISTAS());
   if (!vistas.includes(e.id)) {
@@ -183,6 +185,17 @@ export async function receberEntrega(e: Entrega, pairing?: Pairing | null): Prom
   }
 }
 
+/**
+ * 12/11: "Mandar pro celular" no PC (ref `tela:<id>`): a lista das Telas salvas relê e, com o app
+ * na frente, a tela já abre (quem mandou quer ver). Sem o app na frente, o toque no aviso abre.
+ */
+function avisarTelaMandada(e: Entrega): void {
+  const id = idDaTelaMandada(e.ref);
+  if (!id) return;
+  telasSalvasMudaram();
+  if (AppState.currentState === 'active') abrirTelaMandada(id);
+}
+
 /** Puxa a fila do PC. Devolve quantas entregas novas mostrou. */
 export async function buscarEntregas(pairing: Pairing): Promise<number> {
   if (!(await notificacoesAtivas())) return 0;
@@ -193,6 +206,7 @@ export async function buscarEntregas(pairing: Pairing): Promise<number> {
   let novas = 0;
   for (const e of entregas) {
     if (vistas.includes(e.id)) continue;
+    avisarTelaMandada(e);
     const jaNoAparelho = e.tipo === 'lembrete' && e.ref && espelhados.includes(e.ref);
     if (!jaNoAparelho) { await mostrarEntrega(e); novas++; }
     vistas.push(e.id);

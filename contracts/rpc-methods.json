@@ -437,6 +437,14 @@
       "destructive": false
     },
     {
+      "method": "pc.ajustes",
+      "destructive": false
+    },
+    {
+      "method": "pc.ajustes.set",
+      "destructive": false
+    },
+    {
       "method": "pc.estado",
       "destructive": false
     },

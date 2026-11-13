@@ -1,5 +1,6 @@
 import { AlturaAvisosContext, useFolgaDaBarra } from '../lib/folgaBarra';
 import { CartaoErro, textoDoErro } from '../components/chat/CartaoErro';
+import { telasSalvasMudaram } from '../lib/telasMandadas';
 import { limiaresDaGravacao } from '../lib/silencio';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, FlatList, Linking, Pressable, ScrollView, Share, StyleProp, StyleSheet, TextInput, ToastAndroid, View, ViewStyle } from 'react-native';
@@ -556,7 +557,7 @@ export default function ChatScreen({
         const t = atual.current.messages.find((m) => m.id === id)?.tela;
         if (!t?.programa) return;
         callRpc(pairingRef.current, 'telas.salvas.salvar', { programa: t.programa, ...(t.estado ? { estado: t.estado } : {}) })
-          .then((r) => { haptica.sucesso(); Alert.alert('Tela salva', `“${r.tela.titulo}” está no Hoje → Telas salvas (aqui e no PC).`); })
+          .then((r) => { haptica.sucesso(); telasSalvasMudaram(); Alert.alert('Tela salva', `“${r.tela.titulo}” está no Hoje → Telas salvas (aqui e no PC).`); })
           .catch((e) => Alert.alert('Não consegui salvar', errMessage(e)));
       },
       falhou: semTela,

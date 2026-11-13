@@ -38,6 +38,8 @@ import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/esta
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
 import { urlDoWidget } from './src/lib/chaveWidget';
+import { aoAbrirTelaMandada, abrirTelaMandada, idDaTelaMandada } from './src/lib/telasMandadas';
+import { TelaMandada } from './src/screens/hoje/CardsFase18';
 import * as QuickActions from 'expo-quick-actions';
 import * as SplashScreen from 'expo-splash-screen';
 import { callRpc } from './src/lib/rpc';
@@ -130,6 +132,16 @@ function AppInner() {
         setPerguntaPendente(pedido); setModoChat('ia'); setScreen('chat');
         return;
       }
+      // 12/11: aviso "Tela do PC" — abre a tela direto.
+      const idTela = idDaTelaMandada((c.data as { ref?: unknown } | null)?.ref);
+      if (idTela) {
+        const chave = `${r.notification.request.identifier}:${r.notification.date}`;
+        if (respostaTratada.current === chave) return;
+        respostaTratada.current = chave;
+        N.clearLastNotificationResponseAsync().catch(() => {});
+        abrirTelaMandada(idTela);
+        return;
+      }
       abrirCaixa(c.data);
     };
     import('expo-notifications').then((N) => {
@@ -140,6 +152,9 @@ function AppInner() {
     return () => tirar?.();
   }, []);
   const [playerOpen, setPlayerOpen] = useState(false);
+  /** 12/11: a tela que o PC mandou, aberta por cima de qualquer aba. */
+  const [telaMandada, setTelaMandada] = useState<string | null>(null);
+  useEffect(() => aoAbrirTelaMandada(setTelaMandada), []);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [mailboxUnread, setMailboxUnread] = useState(0);
   const [settingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -633,6 +648,7 @@ function AppInner() {
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
+      {telaMandada && pairing ? <TelaMandada pairing={pairing} id={telaMandada} onFechar={() => setTelaMandada(null)} /> : null}
 
       {/* Boas-vindas, uma vez, depois do primeiro pareamento. Por cima de tudo. */}
       {onboarding && <OnboardingScreen onDone={() => setOnboarding(false)} />}

@@ -13,6 +13,8 @@ import { useTheme } from '../../theme';
 import { Card, Text } from '../../components/ui';
 import { TelaSalvaCheia } from '../../components/TelaNaBolha';
 import { pedidoDaTela } from '../../lib/api';
+import { aoMudarTelasSalvas } from '../../lib/telasMandadas';
+import { useAoReativar } from '../../components/AbaViva';
 
 /**
  * Os cards da fase 18 (08/10) no Hoje do celular — o dono pediu o resumo "com tudo que já tá
@@ -250,11 +252,16 @@ export function CardTelasSalvas({ pairing }: { pairing: Pairing }) {
   const [aberta, setAberta] = useState<{ id: string; programa: string; estado?: Record<string, unknown> } | null>(null);
   const [abrindo, setAbrindo] = useState<string | null>(null);
 
+  // 12/11: relê quando uma tela chega do PC, quando uma é salva aqui e quando o Hoje volta à vista
+  // (antes lia uma vez só, ao montar: a tela mandada não aparecia até reiniciar o app).
+  const [versao, setVersao] = useState(0);
+  useEffect(() => aoMudarTelasSalvas(() => setVersao((v) => v + 1)), []);
+  useAoReativar(() => setVersao((v) => v + 1));
   useEffect(() => {
     let vivo = true;
     callRpc(pairing, 'telas.salvas.listar').then((r) => { if (vivo) setTelas(r.telas); }).catch(() => { /* PC antigo */ });
     return () => { vivo = false; };
-  }, [pairing]);
+  }, [pairing, versao]);
 
   if (!telas.length) return null;
 
@@ -287,5 +294,27 @@ export function CardTelasSalvas({ pairing }: { pairing: Pairing }) {
           onPedido={(rota, params) => pedidoDaTela(pairing, rota, params)} />
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * 12/11: a tela que o PC mandou ("Mandar pro celular"), aberta pelo id — pelo toque no aviso ou
+ * na hora em que chega com o app aberto. Por cima de qualquer aba; mexer guarda o estado no PC.
+ */
+export function TelaMandada({ pairing, id, onFechar }: { pairing: Pairing; id: string; onFechar: () => void }) {
+  const [tela, setTela] = useState<{ programa: string; estado?: Record<string, unknown> } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setTela(null);
+    callRpc(pairing, 'telas.salvas.obter', { id })
+      .then(({ tela: t }) => { if (vivo) setTela({ programa: t.programa, ...(t.estado ? { estado: t.estado } : {}) }); })
+      .catch((e) => { if (vivo) { Alert.alert('Não abriu a tela', errMessage(e)); onFechar(); } });
+    return () => { vivo = false; };
+  }, [pairing, id]);
+  if (!tela) return null;
+  return (
+    <TelaSalvaCheia programa={tela.programa} estado={tela.estado} onFechar={onFechar}
+      onEstado={(vars) => { void callRpc(pairing, 'telas.salvas.estado', { id, estado: vars }).catch(() => {}); }}
+      onPedido={(rota, params) => pedidoDaTela(pairing, rota, params)} />
   );
 }

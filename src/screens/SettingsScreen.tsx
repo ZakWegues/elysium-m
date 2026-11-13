@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as Application from 'expo-application';
+import { SecaoAjustesPc } from './ajustes/SecaoAjustesPc';
 import AvisoAtualizacao from '../components/AvisoAtualizacao';
 import { versaoInstalada } from '../lib/atualizacao';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -48,7 +49,7 @@ const FAMILIA_OPTIONS: { value: FamiliaEscolha; label: string; icon: keyof typeo
  * "Desparear" no fim de tudo. Agora a gaveta abre num hub; cada azulejo mostra o valor que
  * está valendo e abre a seção, com uma seta para voltar.
  */
-type Secao = 'aparencia' | 'voz' | 'conversa' | 'modos' | 'memoria' | 'avisos' | 'pareamento' | 'sobre';
+type Secao = 'pc' | 'aparencia' | 'voz' | 'conversa' | 'modos' | 'memoria' | 'avisos' | 'pareamento' | 'sobre';
 
 export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pairing: Pairing; onUnpair: () => void; onTrocarPc: (id: string) => void; onAdicionarPc: () => void }) {
   const { palette, tokens, familiaResolvida, name } = useTheme();
@@ -59,6 +60,8 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
 
   const cor = getPalette(name, familiaResolvida);
   const azulejos: { id: Secao; titulo: string; icone: keyof typeof Feather.glyphMap; resumo: string }[] = [
+    // 12/11: os Ajustes do PC (Cérebro, sem censura, voz do PC…) — primeiro, que é o que mais se procura.
+    { id: 'pc', titulo: 'Ajustes do PC', icone: 'cpu', resumo: 'Cérebro, sem censura, voz do PC' },
     { id: 'aparencia', titulo: 'Aparência', icone: 'droplet', resumo: cor.rotulo.startsWith(ROTULO_FAMILIA[familiaResolvida]) ? cor.rotulo : `${ROTULO_FAMILIA[familiaResolvida]} · ${cor.rotulo}` },
     { id: 'voz', titulo: 'Voz', icone: 'volume-2', resumo: 'Voz neural do PC' },
     { id: 'conversa', titulo: 'Jeito de responder', icone: 'message-circle', resumo: 'Tamanho e instruções' },
@@ -96,6 +99,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
         <Feather name="chevron-left" size={18} color={palette.primary} />
         <Text variant="label" color={palette.primary}>{azulejos.find(a => a.id === secao)?.titulo}</Text>
       </Pressable>
+      {secao === 'pc' && <SecaoAjustesPc pairing={pairing} />}
       {secao === 'aparencia' && <SecaoAparencia />}
       {secao === 'voz' && <VozSection />}
       {secao === 'conversa' && <SecaoConversa pairing={pairing} />}

@@ -42,6 +42,8 @@ export type RpcMethod =
   | 'perfil.set'
   | 'hermes.status'
   | 'hermes.set'
+  | 'pc.ajustes'
+  | 'pc.ajustes.set'
   | 'groq.modelos'
   | 'ui.gerar'
   | 'hoje.painel'
@@ -557,6 +559,9 @@ export type RpcResults = {
   /** 22/10: gera uma tela inteligente sob pedido (bancada; o chat usa o frame `ui` do stream). */
   'ui.gerar': { tela: { programa: string; tentativas: number; ms: number; provedor: string; modelo: string | null; declaracoes: number } | null; registro: unknown[] };
   'hermes.set': EstadoHermes;
+  /** 12/11: os Ajustes do PC (esquema + valores) e a gravação de um campo. */
+  'pc.ajustes': { grupos: GrupoAjustesPc[] };
+  'pc.ajustes.set': { grupos: GrupoAjustesPc[] };
   'hoje.painel': PainelHoje;
   'habitos.list': { habitos: Habito[]; metas: Meta[] };
   'habitos.save': { habito: Habito };
@@ -824,6 +829,14 @@ export type RpcOptions = {
   confirmed?: boolean;
   timeoutMs?: number;
 };
+
+/** 12/11: um campo dos Ajustes do PC, como o PC manda (ajustesRemotos.ts). */
+export type CampoAjustePc = { chave: string; rotulo: string; dica?: string; valor: unknown } & (
+  | { tipo: 'bool' }
+  | { tipo: 'select'; opcoes: [string, string][] }
+  | { tipo: 'texto'; max: number }
+  | { tipo: 'faixa'; min: number; max: number; passo: number; unidade: string });
+export type GrupoAjustesPc = { grupo: string; nota?: string; campos: CampoAjustePc[] };
 
 export async function callRpc<M extends RpcMethod>(
   pairing: Pairing,
