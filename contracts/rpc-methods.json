@@ -33,6 +33,10 @@
       "destructive": false
     },
     {
+      "method": "bolota.marcar",
+      "destructive": false
+    },
+    {
       "method": "cartoes.criar",
       "destructive": false
     },

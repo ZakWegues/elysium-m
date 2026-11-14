@@ -24,6 +24,7 @@ export type RpcMethod =
   | 'update.install'
   | 'storage.info'
   | 'system.saude'
+  | 'bolota.marcar'
   | 'foco.status'
   | 'diag.registrar'
   | 'memory.sugestoes'
@@ -538,6 +539,8 @@ export type RpcResults = {
   'update.install': { ok: boolean; mensagem: string };
   'storage.info': Armazenamento;
   'system.saude': { itens: ItemSaude[] };
+  /** 14/11: a bolota do PC marca na tela dele ("circula o YouTube no PC"). */
+  'bolota.marcar': { marcou: number; fala: string };
   'foco.status': EstadoFoco;
   'diag.registrar': { registradas: number };
   'resumo.dia': { texto: string };

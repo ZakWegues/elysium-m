@@ -1212,6 +1212,9 @@ export default function ChatScreen({
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: semCabecalho ? folgaTopo : tokens.spacing.lg, gap: tokens.spacing.sm }}
         onContentSizeChange={aoCrescerConteudo}
+        // 14/11 (o dono: "os 3 pontinhos ficam numa faixa que corta a tela"): a pílula vai DENTRO da
+        // lista, logo depois da última mensagem, e rola junto — sem faixa de lado a lado.
+        ListFooterComponent={sending && !escrevendoId ? <BolhaPensando /> : null}
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
           deslocamento.current = contentOffset.y;
@@ -1320,7 +1323,6 @@ export default function ChatScreen({
         }}
       />
 
-      {sending && !escrevendoId && <BolhaPensando />}
       {sending && conexao === 'reconectando' && (
         <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingBottom: 6 }}>Reconectando ao PC… a resposta continua de onde parou.</Text>
       )}
@@ -1517,7 +1519,7 @@ function BolhaPensando() {
   const { palette, tokens } = useTheme();
 
   return (
-    <View style={{ paddingHorizontal: tokens.spacing.lg, paddingBottom: tokens.spacing.sm }}>
+    <View style={{ alignSelf: 'flex-start' }}>
       <AnimatedReanimated.View
         entering={FadeInDown.duration(MOV.base).reduceMotion(ReduceMotion.System)}
         style={[

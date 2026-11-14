@@ -49,6 +49,7 @@ import { aoMudarPalavra, DiagPalavra, palavraLigada, usePalavraNoCelular } from 
 import { useMicrofoneLivre } from './src/lib/microfone';
 import { ComandosIa } from './src/components/ComandosIa';
 import { FalaFlutuante } from './src/components/FalaFlutuante';
+import { BolotaDoApp } from './src/components/BolotaDoApp';
 import { AbaViva } from './src/components/AbaViva';
 import { Aba, abasMontadas, mesmasAbas } from './src/lib/abas';
 import { AvisoOta } from './src/components/AvisoOta';
@@ -645,6 +646,8 @@ function AppInner() {
       </View>
       {/* Fase 22: no Chat a esfera já mostra a fala — a pílula só aparece nas outras abas. */}
       {screen !== 'chat' && <FalaFlutuante />}
+      {/* 14/11: a bolota da Ely (como a do PC) por cima das abas; no Chat já tem a esfera dele. */}
+      {screen !== 'chat' && pairing && !telaMandada ? <BolotaDoApp pairing={pairing} onAbrirChat={() => setScreen('chat')} /> : null}
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
