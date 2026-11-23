@@ -30,7 +30,6 @@ type PropsNativas = {
   perfil: number;
   inclina: number;
   segueAparelho: boolean;
-  semMovimento: boolean;
   style: object;
   pointerEvents: 'none';
 };
@@ -81,7 +80,6 @@ export function VidroNativo({ alvo, lente, seletor = [0, 0, 0], raio = 0, brilho
         perfil={perfil}
         inclina={inclina}
         segueAparelho={segueAparelho && segueNosAjustes && !movimentoReduzido()}
-        semMovimento={movimentoReduzido()}
         seletor={seletor}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"

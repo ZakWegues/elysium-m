@@ -37,8 +37,6 @@ class VidroModule : Module() {
       Prop("seletor") { view: VidroLiquidoView, s: List<Double> -> view.moverSeletor(s) }
       // −1 a 1: para que lado o brilho inclina (a velocidade do seletor da barra).
       Prop("inclina") { view: VidroLiquidoView, valor: Float -> view.definirInclina(valor) }
-      // "Reduzir movimento": a gota vai direto para o lugar, sem mola nem esticão.
-      Prop("semMovimento") { view: VidroLiquidoView, valor: Boolean -> view.definirSemMovimento(valor) }
       // O brilho também acompanha a inclinação do aparelho (sensor de gravidade).
       Prop("segueAparelho") { view: VidroLiquidoView, valor: Boolean -> view.definirSegueAparelho(valor) }
     }
