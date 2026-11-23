@@ -16,9 +16,11 @@ export function useAbaAtiva(): boolean {
 }
 
 export function AbaViva({ ativa, children }: { ativa: boolean; children: ReactNode }) {
+  // 23/11: aba dentro de aba (IA e PC no Chat): só está à vista se a de fora também estiver.
+  const pai = useContext(AbaAtivaContext);
   return (
     <View style={[StyleSheet.absoluteFill, !ativa && styles.escondida]} pointerEvents={ativa ? 'auto' : 'none'}>
-      <AbaAtivaContext.Provider value={ativa}>{children}</AbaAtivaContext.Provider>
+      <AbaAtivaContext.Provider value={ativa && pai}>{children}</AbaAtivaContext.Provider>
     </View>
   );
 }

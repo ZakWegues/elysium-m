@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
+import { BackHandler, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, ReduceMotion } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { Pairing } from '../lib/pairing';
@@ -8,6 +8,7 @@ import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
 import { GlassCircle, ScreenHeader, Text, VIDRO_BOTAO } from '../components/ui';
 import { VidroNativo, VIDRO_NATIVO } from '../components/vidro/VidroNativo';
+import { AbaViva, useAbaAtiva } from '../components/AbaViva';
 import ChatScreen from './ChatScreen';
 import MailboxScreen from './MailboxScreen';
 import MailboxHistorico from './MailboxHistorico';
@@ -63,6 +64,18 @@ export default function ChatHub({
 }) {
   const { palette, tokens } = useTheme();
   const [modo, setModo] = useState<'ia' | 'pc'>(modoInicial ?? 'ia');
+  const ativa = useAbaAtiva();
+  // 23/11 (o dono: "se eu troco para PC, ela para de pensar"): o lado que sai fica montado e
+  // escondido. Antes a troca desmontava o Chat, que fechava a conexão e o PC descartava a resposta.
+  // O PC só monta na primeira visita.
+  const [pcMontado, setPcMontado] = useState(modoInicial === 'pc');
+  useEffect(() => {
+    if (modo === 'pc') setPcMontado(true);
+    Keyboard.dismiss();
+  }, [modo]);
+  /** Uma resposta da IA chegou com ele no lado PC: acende o ponto no "IA". */
+  const [respondeuFora, setRespondeuFora] = useState(false);
+  useEffect(() => { if (modo === 'ia') setRespondeuFora(false); }, [modo]);
   useEffect(() => { if (pedidoVoz?.n) setModo('ia'); }, [pedidoVoz?.n]);
   // O Chat continua montado entre as abas (08/10): o lado pedido de fora vale a cada pedido.
   useEffect(() => { if (pedidoModo && modoInicial) setModo(modoInicial); }, [pedidoModo]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -91,13 +104,12 @@ export default function ChatHub({
   }, []);
   // 31/10: Voltar do Android fecha o histórico em vez de sair do app.
   useEffect(() => {
-    if (!historicoPcAberto) return;
+    if (!historicoPcAberto || !ativa) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { setHistoricoPcAberto(false); return true; });
     return () => sub.remove();
-  }, [historicoPcAberto]);
+  }, [historicoPcAberto, ativa]);
 
-  if (historicoPcAberto) {
-    return (
+  const historicoPc = historicoPcAberto ? (
       <MailboxHistorico
         pairing={pairing}
         sessionId={mailboxSessionId}
@@ -110,11 +122,11 @@ export default function ChatHub({
         }}
         onFechar={() => setHistoricoPcAberto(false)}
       />
-    );
-  }
+  ) : null;
 
   return (
     <View style={{ flex: 1 }}>
+      <AbaViva ativa={!historicoPcAberto}>
       <ScreenHeader
         flutuante
         // Os dois cantos são o mesmo objeto: círculo de vidro, ícone fino em cor de
@@ -128,14 +140,15 @@ export default function ChatHub({
             <Feather name="clock" size={17} color={palette.textMuted} />
           </GlassCircle>
         }
-        center={<SwitchModo modo={modo} onTroca={setModo} temNovidade={(naoLidos ?? 0) > 0} />}
+        center={<SwitchModo modo={modo} onTroca={setModo} temNovidade={(naoLidos ?? 0) > 0} novidadeIa={respondeuFora} />}
       />
 
-      {/* As duas telas continuam inteiras; o que muda é qual delas está montada e que
-          nenhuma desenha mais o próprio cabeçalho. */}
+      {/* As duas telas continuam inteiras e vivas; muda qual delas está à vista, e nenhuma desenha
+          mais o próprio cabeçalho. */}
       <View style={{ flex: 1 }}>
-        {modo === 'ia' ? (
+        <AbaViva ativa={modo === 'ia'}>
           <ChatScreen
+            onRespondeu={() => { if (modo !== 'ia') setRespondeuFora(true); }}
             perguntaPendente={perguntaPendente}
             onPerguntaEnviada={onPerguntaEnviada}
             falaDaEly={falaDaEly}
@@ -149,16 +162,20 @@ export default function ChatHub({
             onOpenConversations={onOpenConversations}
             semCabecalho
           />
-        ) : (
+        </AbaViva>
+        {pcMontado ? (
+          <AbaViva ativa={modo === 'pc'}>
           <MailboxScreen
             pairing={pairing}
             onUnpair={onUnpair}
             sessionId={mailboxSessionId}
             semCabecalho
           />
-        )}
+          </AbaViva>
+        ) : null}
       </View>
-
+      </AbaViva>
+      {historicoPc}
     </View>
   );
 }
@@ -168,11 +185,13 @@ export default function ChatHub({
  * percorre a distância, e é esse percurso que diz de onde você veio.
  */
 function SwitchModo({
-  modo, onTroca, temNovidade,
+  modo, onTroca, temNovidade, novidadeIa,
 }: {
   modo: 'ia' | 'pc';
   onTroca: (m: 'ia' | 'pc') => void;
   temNovidade: boolean;
+  /** Resposta da IA que chegou enquanto ele estava no PC. */
+  novidadeIa: boolean;
 }) {
   const { palette, tokens, familiaResolvida } = useTheme();
   // 01/11: a pílula também é vidro líquido nativo, e a gota da lente segue o polegar.
@@ -228,7 +247,7 @@ function SwitchModo({
           hitSlop={{ top: 8, bottom: 8 }}
           accessibilityRole="tab"
           accessibilityState={{ selected: modo === m }}
-          accessibilityLabel={m === 'ia' ? 'Conversar com a IA' : `Recados do PC${temNovidade && modo !== 'pc' ? ', com novidade' : ''}`}
+          accessibilityLabel={m === 'ia' ? `Conversar com a IA${novidadeIa && modo !== 'ia' ? ', resposta nova' : ''}` : `Recados do PC${temNovidade && modo !== 'pc' ? ', com novidade' : ''}`}
         >
           <Feather
             name={m === 'ia' ? 'cpu' : 'monitor'}
@@ -238,7 +257,7 @@ function SwitchModo({
           <Text variant="caption" color={modo === m ? palette.primary : palette.textMuted}>
             {m === 'ia' ? 'IA' : 'PC'}
           </Text>
-          {m === 'pc' && temNovidade && modo !== 'pc' && (
+          {modo !== m && (m === 'pc' ? temNovidade : novidadeIa) && (
             <View style={[styles.pontinho, { backgroundColor: palette.accent }]} />
           )}
         </Pressable>

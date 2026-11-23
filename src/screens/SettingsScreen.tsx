@@ -26,6 +26,7 @@ import { falaAntecipadaLigada, lerRespostasEscritas, ligarFalaAntecipada, ligarL
 import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoCelular';
 import { trocarModo, useModo } from '../lib/modo';
 import { ligarBrilhoSegueAparelho, useBrilhoSegueAparelho } from '../lib/brilhoAparelho';
+import { mudarBolota, useAjusteDaBolota } from '../lib/bolotaAjuste';
 import { VIDRO_NATIVO } from '../components/vidro/VidroNativo';
 import { confirmDestructive } from '../lib/confirm';
 import type { ModoDaLista } from '../lib/rpc';
@@ -455,6 +456,7 @@ function SecaoPareamento({ pairing, onUnpair, onTrocarPc, onAdicionarPc }: { pai
 function SecaoAparencia() {
   const { name, palette, tokens, familia, familiaResolvida, setTheme, setFamilia } = useTheme();
   const segue = useBrilhoSegueAparelho();
+  const bolota = useAjusteDaBolota();
   return (
     <View style={{ gap: tokens.spacing.lg }}>
       <View style={{ gap: tokens.spacing.sm }}>
@@ -550,6 +552,17 @@ function SecaoAparencia() {
           <VidroSwitch value={segue} onValueChange={ligarBrilhoSegueAparelho} accessibilityLabel="Brilho segue o celular" />
         </View>
       )}
+
+      <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+        <Feather name="circle" size={17} color={bolota.estado !== 'desligada' ? palette.primary : palette.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body">Bolota da Ely</Text>
+          <Text variant="caption" color={palette.textMuted}>
+            Arraste até o canto superior esquerdo para guardar; segure ali para soltar.
+          </Text>
+        </View>
+        <VidroSwitch value={bolota.estado !== 'desligada'} onValueChange={(v) => mudarBolota({ estado: v ? 'solta' : 'desligada' })} accessibilityLabel="Bolota da Ely" />
+      </View>
 
     </View>
   );

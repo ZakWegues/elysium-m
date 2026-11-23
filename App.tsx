@@ -647,7 +647,8 @@ function AppInner() {
       {/* Fase 22: no Chat a esfera já mostra a fala — a pílula só aparece nas outras abas. */}
       {screen !== 'chat' && <FalaFlutuante />}
       {/* 14/11: a bolota da Ely (como a do PC) por cima das abas; no Chat já tem a esfera dele. */}
-      {screen !== 'chat' && pairing && !telaMandada ? <BolotaDoApp pairing={pairing} onAbrirChat={() => setScreen('chat')} /> : null}
+      {/* 23/11: no Chat ela só se esconde; desmontar cortava a resposta que estava chegando. */}
+      {pairing ? <BolotaDoApp pairing={pairing} visivel={screen !== 'chat' && !telaMandada} onAbrirChat={() => setScreen('chat')} /> : null}
       <StatusBar style="auto" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />

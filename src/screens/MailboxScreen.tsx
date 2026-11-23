@@ -2,7 +2,7 @@ import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import { TextoComLinks } from '../components/TextoComLinks';
-import { useAbaAtiva } from '../components/AbaViva';
+import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import Feather from '@expo/vector-icons/Feather';
@@ -65,6 +65,10 @@ export default function MailboxScreen({
   const fetchingImages = useRef<Set<string>>(new Set());
   const listRef = useRef<FlatList<MailboxMessage>>(null);
 
+  const ativa = useAbaAtiva();
+  const ativaRef = useRef(ativa);
+  ativaRef.current = ativa;
+
   const refresh = useCallback(async () => {
     try {
       const items = await listMessages(pairing, sessionId ?? null);
@@ -81,7 +85,8 @@ export default function MailboxScreen({
         .catch(err => console.warn('[caixa] falha ao gravar cache', err));
 
       const unreadFromPc = items.filter((m) => m.from === 'pc' && !m.readAt);
-      if (unreadFromPc.length > 0) {
+      // 23/11: escondida (ele está na IA ou em outra aba) não marca como lido o que ele não viu.
+      if (unreadFromPc.length > 0 && ativaRef.current) {
         await Promise.all(
           unreadFromPc.map((m) =>
             ackMessage(pairing, m.id).catch((err) => console.warn('[mailbox] falha ao confirmar leitura', m.id, err))
@@ -117,7 +122,7 @@ export default function MailboxScreen({
   useEffect(() => aoChegarRecado(() => { refresh(); }), [refresh]);
 
   // Com o Chat escondido (abas vivas), a Caixa não consulta o PC a cada minuto à toa.
-  const ativa = useAbaAtiva();
+  useAoReativar(() => { void refresh(); });
   useEffect(() => {
     if (!ativa) return;
     const interval = setInterval(refresh, POLL_INTERVAL_MS);

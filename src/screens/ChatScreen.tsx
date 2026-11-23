@@ -69,6 +69,7 @@ export default function ChatScreen({
   onSessionChange,
   onOpenConversations,
   semCabecalho,
+  onRespondeu,
   perguntaPendente,
   onPerguntaEnviada,
   falaDaEly,
@@ -96,6 +97,8 @@ export default function ChatScreen({
   onOpenConversations: () => void;
   /** Dentro do ChatHub o cabeçalho é do hub, com o switch IA ↔ PC. */
   semCabecalho?: boolean;
+  /** Um pedido terminou (23/11): o hub avisa quando ele está do outro lado. */
+  onRespondeu?: () => void;
 }) {
   const { palette, tokens } = useTheme();
   const folgaDaBarra = useFolgaDaBarra();
@@ -969,6 +972,11 @@ export default function ChatScreen({
   useEffect(() => {
     definirFaseDaBolota(ouvindoAgora ? 'ouvindo' : pensandoVoz || faseVoz === 'pensando' || sending ? 'pensando' : null);
   }, [ouvindoAgora, pensandoVoz, faseVoz, sending]);
+  const mandavaAntes = useRef(false);
+  useEffect(() => {
+    if (mandavaAntes.current && !sending) onRespondeu?.();
+    mandavaAntes.current = sending;
+  }, [sending]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => definirFaseDaBolota(null), []);
 
   const turnoRef = useRef(false);
