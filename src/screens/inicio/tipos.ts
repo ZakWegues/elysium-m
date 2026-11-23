@@ -65,6 +65,8 @@ export type DefCard = {
   icone: keyof typeof Feather.glyphMap;
   /** Chaves de dado que este card consome — só o que os visíveis pedem é buscado. */
   precisa: (keyof Dados)[];
+  /** A altura escolhida é o mínimo: o conteúdo varia e não pode ser cortado. */
+  cresce?: boolean;
   corpo: (c: Ctx) => React.ReactNode;
 };
 

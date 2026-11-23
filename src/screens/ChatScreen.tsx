@@ -35,7 +35,7 @@ import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
 import CameraAsk from './CameraAsk';
-import { conversaParaContinuar, deriveTitle, Fonte, listSessions, saveSession, StoredMessage } from '../lib/chatHistoryStore';
+import { conversaParaContinuar, deriveTitle, Fonte, listSessions, MusicasDaResposta, saveSession, StoredMessage } from '../lib/chatHistoryStore';
 import { syncChats } from '../lib/chatSync';
 import { MOV } from '../lib/motion';
 import { useTheme } from '../theme';
@@ -46,6 +46,8 @@ import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
 import { RespostasRapidas } from '../components/RespostasRapidas';
 import { PreAquecerTelas, TelaNaBolha, type AcoesTela } from '../components/TelaNaBolha';
 import { aplicarUi, telaVisivel } from '../lib/telas';
+import { comecarGravacao } from '../lib/gravador';
+import { MusicasNaBolha } from '../components/musica/MusicasNaBolha';
 import { diagTela, ligarDiagTela } from '../lib/telaDiag';
 import { mandarArquivoParaPc } from '../lib/shareIntent';
 import { LIMITE_ENVIO_PARA_O_PC } from '../lib/anexos';
@@ -477,7 +479,7 @@ export default function ChatScreen({
    * e os seguintes só trocam o texto dela — a bolha é a mesma, então nada pula. Devolve
    * uma função que recebe o texto acumulado.
    */
-  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[], semCensura?: boolean) => void; comecou: () => boolean; parcial: () => string } {
+  function bolhaEmPedacos(): { onChunk: (parcial: string) => void; fechar: (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[], semCensura?: boolean, musicas?: MusicasDaResposta) => void; comecou: () => boolean; parcial: () => string } {
     const id = `reply-${Date.now()}`;
     let criada = false;
     let ultimo = '';
@@ -491,9 +493,9 @@ export default function ChatScreen({
       }
       setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: parcial } : m)));
     };
-    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[], semCensura?: boolean) => {
+    const fechar = (texto: string, fontes?: Fonte[], local?: boolean, rapidas?: Rapidas, pedidoId?: string, desfazer?: string, memoria?: string[], semCensura?: boolean, musicas?: MusicasDaResposta) => {
       setEscrevendoId(null);
-      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(semCensura ? { semCensura: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}), ...(memoria?.length ? { memoria } : {}) };
+      const extra = { ...(fontes?.length ? { fontes } : {}), ...(local ? { local: true } : {}), ...(semCensura ? { semCensura: true } : {}), ...(rapidas ? { rapidas } : {}), ...(pedidoId ? { pedidoId } : {}), ...(desfazer ? { desfazer: { rotulo: desfazer, ate: Date.now() + DESFAZER_MS } } : {}), ...(memoria?.length ? { memoria } : {}), ...(musicas ? { musicas } : {}) };
       if (criada) setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: texto, ...extra } : m)));
       else setMessages((prev) => [...prev, { id, from: 'reply', text: texto, ts: Date.now(), ...extra }]);
     };
@@ -640,6 +642,7 @@ export default function ChatScreen({
       let local = false;
       let semCensura = false;
       let rapidas: Rapidas | undefined;
+      let musicas: MusicasDaResposta | undefined;
       let pedidoId: string | undefined;
       let desfazer: string | undefined;
       let memoria: string[] | undefined;
@@ -662,6 +665,7 @@ export default function ChatScreen({
         pedidoId = r.id;
         desfazer = r.desfazer;
         memoria = r.memoria;
+        musicas = r.musicas;
       } catch (wsErr) {
         // 21/10: só cai no HTTP se a conexão NEM ABRIU (o comando não chegou ao PC). Com o
         // comando já enviado, mandar de novo rodaria duas vezes — a retomada cuida da queda.
@@ -672,7 +676,7 @@ export default function ChatScreen({
         reply = await sendCommand(pairing, text, 'texto');
       }
       if (paradoRef.current) return;
-      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer, memoria, semCensura);
+      bolha.fechar(reply, fontes, local, rapidas, pedidoId, desfazer, memoria, semCensura, musicas);
       // Resposta escrita pode ser longa: a voz lê só o começo (o resto está na tela).
       if (await lerRespostasEscritas()) speakReply(paraFala(reply));
     } catch (err) {
@@ -763,7 +767,8 @@ export default function ChatScreen({
   }
 
   async function handleRecordStart() {
-    if (enviandoRef.current || recording || turnoRef.current) return;
+    // 23/11: dois toques seguidos preparavam o gravador duas vezes.
+    if (enviandoRef.current || recording || turnoRef.current || preparandoRef.current) return;
     soltouRef.current = false;
     inicioGravacaoRef.current = 0;
     if (micStatus === 'pedir') { void prepararMicrofone(true); return; }
@@ -779,21 +784,17 @@ export default function ChatScreen({
     // Chave própria ('segurar'): o fim de um pedido por voz soltava a 'gravar' no meio
     // desta gravação e o reconhecedor voltava a disputar o microfone.
     ocuparMicrofone('segurar');
-    await new Promise((r) => setTimeout(r, 150));
+    preparandoRef.current = true;
     try {
-      await recorder.prepareToRecordAsync();
+      await new Promise((r) => setTimeout(r, 150));
+      await comecarGravacao(recorder);
     } catch (err) {
       liberarMicrofone('segurar');
-      pushError(`Falha ao preparar gravação: ${errMessage(err)}`);
+      diagTela(`gravador: ${errMessage(err).slice(0, 120)}`);
+      pushError('Não consegui abrir o microfone. Tente de novo.');
       return;
-    }
-
-    try {
-      recorder.record();
-    } catch (err) {
-      liberarMicrofone('segurar');
-      pushError(`Falha ao iniciar gravação: ${errMessage(err)}`);
-      return;
+    } finally {
+      preparandoRef.current = false;
     }
 
     // Soltou antes de a gravação começar: era um toque, não fala.
@@ -882,13 +883,13 @@ export default function ChatScreen({
       bolhaAtualRef.current = bolha;
       // A transcrição chega ANTES do primeiro pedaço, então a bolha "me" entra na ordem
       // certa — antes da resposta que vai começar a ser escrita logo depois.
-      const { reply, rapidas, id, desfazer, memoria } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
+      const { reply, rapidas, id, desfazer, memoria, musicas } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
       });
       if (paradoRef.current) { fala?.abortar(); return null; }
       // Com o id, a tela que o PC mandar depois (pedido de tela por voz) acha esta bolha.
-      bolha.fechar(reply, undefined, false, rapidas, id, desfazer, memoria);
+      bolha.fechar(reply, undefined, false, rapidas, id, desfazer, memoria, false, musicas);
       return { reply, transcricao, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       // Erro no meio: o que já foi dito fica, e a voz para junto com a resposta.
@@ -980,6 +981,7 @@ export default function ChatScreen({
   useEffect(() => () => definirFaseDaBolota(null), []);
 
   const turnoRef = useRef(false);
+  const preparandoRef = useRef(false);
   // Fase 21: modo live — conversa contínua. O ref é o que os laços leem; o estado, a faixa.
   const liveRef = useRef(false);
   const [live, setLiveEstado] = useState(false);
@@ -997,8 +999,7 @@ export default function ChatScreen({
    * Os níveis e o motivo de parar voltam junto para o diagnóstico (bloco 116).
    */
   async function gravarAteSilencio(): Promise<{ uri: string | null; niveis: number[]; inicio: number; primeiraFalaEm: number | null; fim: number; motivo: MotivoParada }> {
-    await recorder.prepareToRecordAsync();
-    recorder.record();
+    await comecarGravacao(recorder);
     const inicio = Date.now();
     let falou = false;
     let ultimaVoz = 0;
@@ -1036,9 +1037,9 @@ export default function ChatScreen({
       const conn = await ensureVoiceConnection();
       const bolha = bolhaEmPedacos();
       bolhaAtualRef.current = bolha;
-      const { reply, rapidas } = await conn.sendText(texto, (parcial) => { bolha.onChunk(parcial); ant.aoPedaco(parcial); });
+      const { reply, rapidas, musicas } = await conn.sendText(texto, (parcial) => { bolha.onChunk(parcial); ant.aoPedaco(parcial); });
       if (paradoRef.current) { fala?.abortar(); return null; }
-      bolha.fechar(reply, undefined, false, rapidas);
+      bolha.fechar(reply, undefined, false, rapidas, undefined, undefined, undefined, false, musicas);
       return { reply, fala, jaFalado: ant.jaFalado() };
     } catch (err) {
       fala?.abortar();
@@ -1300,6 +1301,8 @@ export default function ChatScreen({
             {item.from === 'reply' && telaVisivel(item.tela, item.ts) ? (
               <TelaNaBolha key={`tela-${item.id}`} tela={item.tela!} id={item.id} acoes={acoesTela} />
             ) : null}
+            {/* 23/11: as músicas sugeridas, com trecho, joinha e tocar aqui ou no PC. */}
+            {item.from === 'reply' && item.musicas?.itens.length ? <MusicasNaBolha pairing={pairing} musicas={item.musicas} /> : null}
             {/* 31/10: o que da memória do PC esta resposta usou. */}
             {item.from === 'reply' && item.memoria?.length ? (
               <Text variant="caption" color={palette.textMuted} numberOfLines={1} style={styles.lembrei}>
@@ -1315,7 +1318,7 @@ export default function ChatScreen({
               </Pressable>
             ) : null}
             {/* 23/10: "Ver como tela" na última resposta longa que ainda não tem tela (como no PC). */}
-            {item.from === 'reply' && !item.tela && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
+            {item.from === 'reply' && !item.tela && !item.musicas && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
               <Pressable onPress={() => { haptica.leve(); void telaDaResposta(item); }} accessibilityRole="button" accessibilityLabel="Ver esta resposta como tela" hitSlop={6}
                 style={({ pressed }) => [styles.verTela, { borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
                 <Feather name="layout" size={12} color={palette.textMuted} />
@@ -1567,7 +1570,7 @@ function hostDe(url: string): string {
 }
 
 const styles = StyleSheet.create({
-  verTela: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', marginTop: 2 },
+  verTela: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', marginTop: 6, marginBottom: 8 },
 lembrei: { alignSelf: 'flex-start', maxWidth: '88%', marginTop: 2, marginLeft: 4, fontSize: 11 },
   fontes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   selo: { marginTop: 4, fontSize: 10, letterSpacing: 1 },

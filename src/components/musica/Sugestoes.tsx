@@ -12,7 +12,7 @@ import { FolhaMusica, type AbaDaMusica } from './FolhaMusica';
 const MOMENTOS: [MomentoMusical, string][] = [['geral', 'Tudo'], ['foco', 'Foco'], ['treino', 'Treino'], ['noite', 'Noite']];
 
 /** Uma música: a capa toca o trecho, o texto toca a música aqui, e os polegares ensinam. */
-export function LinhaDeMusica({ pairing, m, semTocar, comMotivo }: { pairing: Pairing; m: MusicaSugerida; semTocar?: boolean; comMotivo?: boolean }) {
+export function LinhaDeMusica({ pairing, m, semTocar, comMotivo, estreita }: { pairing: Pairing; m: MusicaSugerida; semTocar?: boolean; comMotivo?: boolean; /** Meio-card: só a capa e o nome cabem. */ estreita?: boolean }) {
   const { palette, tokens } = useTheme();
   const { previa, notas } = useMusica();
   const nota = notas[m.id];
@@ -31,13 +31,13 @@ export function LinhaDeMusica({ pairing, m, semTocar, comMotivo }: { pairing: Pa
         </View>
       </Pressable>
       <Pressable style={{ flex: 1 }} disabled={semTocar} onPress={() => { haptica.leve(); void tocarSugestao(pairing, m, 'celular'); }} accessibilityRole="button" accessibilityLabel={`Tocar ${m.titulo} no celular`}>
-        <Text variant="body" numberOfLines={1}>{m.titulo}</Text>
+        <Text variant="body" numberOfLines={2}>{m.titulo}</Text>
         <Text variant="caption" color={palette.textMuted} numberOfLines={1}>{m.artista}</Text>
         {comMotivo && m.motivo ? <Text variant="caption" color={palette.textMuted} numberOfLines={2} style={{ opacity: 0.75 }}>{m.motivo}</Text> : null}
       </Pressable>
-      {botao('thumbs-up', 'Gostei', nota === 1, () => void avaliar(pairing, m, 1))}
-      {botao('thumbs-down', 'Não gostei', nota === -1, () => void avaliar(pairing, m, -1))}
-      {semTocar ? null : botao('monitor', 'Tocar no PC', false, () => void tocarSugestao(pairing, m, 'pc'))}
+      {estreita ? null : botao('thumbs-up', 'Gostei', nota === 1, () => void avaliar(pairing, m, 1))}
+      {estreita ? null : botao('thumbs-down', 'Não gostei', nota === -1, () => void avaliar(pairing, m, -1))}
+      {semTocar || estreita ? null : botao('monitor', 'Tocar no PC', false, () => void tocarSugestao(pairing, m, 'pc'))}
     </View>
   );
 }
@@ -48,9 +48,10 @@ export function Sugestoes({ pairing, quantas = 3, completa }: { pairing: Pairing
   const s = useMusica();
   useCarregarSugestoes(pairing);
   const [folha, setFolha] = useState<AbaDaMusica | null>(null);
+  const [estreita, setEstreita] = useState(false);
 
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 6 }} onLayout={(ev) => setEstreita(ev.nativeEvent.layout.width < 230)}>
       {s.pronto === false ? (
         <View style={styles.vazio}>
           <Text variant="caption" color={palette.textMuted} style={{ flex: 1 }}>Conte do que você gosta e eu sugiro músicas novas.</Text>
@@ -83,7 +84,7 @@ export function Sugestoes({ pairing, quantas = 3, completa }: { pairing: Pairing
           </View>
           {s.itens.length ? (
             <View style={[{ gap: tokens.spacing.xs }, s.carregando && { opacity: 0.5 }]}>
-              {s.itens.slice(0, completa ? undefined : quantas).map((m) => <LinhaDeMusica key={m.id} pairing={pairing} m={m} comMotivo={completa} />)}
+              {s.itens.slice(0, completa ? undefined : quantas).map((m) => <LinhaDeMusica key={m.id} pairing={pairing} m={m} comMotivo={completa} estreita={estreita} />)}
             </View>
           ) : (
             <Text variant="caption" color={palette.textMuted}>{s.carregando || s.pronto === null && !s.erro ? 'Procurando…' : s.erro ? 'Não consegui falar com o PC agora.' : 'Sem sugestões agora.'}</Text>
@@ -96,13 +97,13 @@ export function Sugestoes({ pairing, quantas = 3, completa }: { pairing: Pairing
 }
 
 const styles = StyleSheet.create({
-  linha: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48 },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 48 },
   capa: { width: 42, height: 42, overflow: 'hidden' },
   capaIcone: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.28)' },
   capaTocando: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  botao: { width: 32, height: 36, alignItems: 'center', justifyContent: 'center' },
+  botao: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
   cab: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  momentos: { flexDirection: 'row', gap: 4 },
+  momentos: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   chip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999 },
   vazio: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 });

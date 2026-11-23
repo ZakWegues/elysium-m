@@ -520,13 +520,14 @@ export default function HomeScreen({
                 ativo={editando && !fixos.includes(id)}
                 largura={t?.col ?? 1}
                 alturaFixa={t?.alt ?? null}
+                cresce={CARDS[id].cresce}
                 onMover={mover}
                 onArrastando={setArrastando}
                 onRedimensionar={(alt, col) => redimensionar(id, alt, col)}
                 onFimRedimensionar={fimDoRedimensionamento}
               >
                 {Alca => (
-                  <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt ? 1 : undefined }}>
+                  <Card glass style={{ gap: tokens.spacing.sm, flex: t?.alt && !CARDS[id].cresce ? 1 : undefined }}>
                     <View style={styles.cabecalho}>
                       <Feather name={CARDS[id].icone} size={14} color={palette.textMuted} />
                       <Text variant="label" color={palette.textMuted}>{CARDS[id].titulo}</Text>

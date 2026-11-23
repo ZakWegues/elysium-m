@@ -36,7 +36,7 @@ import { partesDaFala, trechoParaMostrar } from './divisaoFala';
  */
 
 // 25/10: sem voz do aparelho para cair, o prazo cobre a 1ª síntese do dia (abre a conexão).
-const PRAZO_MS = 15000;
+const PRAZO_MS = 25000;
 
 let player: AudioPlayer | null = null;
 /** Resolve a fala em curso quando alguém interrompe — ninguém fica esperando para sempre. */
@@ -291,6 +291,12 @@ async function baixarParte(texto: string, pairing: Pairing): Promise<File> {
   return arquivo;
 }
 
+/** Uma falha de rede ou da voz não pode levar o resto da fala junto (23/11): tenta de novo uma vez. */
+async function baixarComNovaTentativa(texto: string, pairing: Pairing): Promise<File> {
+  try { return await baixarParte(texto, pairing); }
+  catch { await new Promise((r) => setTimeout(r, 1200)); return baixarParte(texto, pairing); }
+}
+
 async function falarAgora(fonte: FontePartes, pairing: Pairing | null, minha: number): Promise<void> {
   if (!pairing) return;
   try {
@@ -299,15 +305,22 @@ async function falarAgora(fonte: FontePartes, pairing: Pairing | null, minha: nu
     // Numa lista, "existe" é já; no fluxo (fala antecipada), é quando a frase fecha.
     const pedir = () => fonte.proxima().then((texto) => {
       if (texto === null) return null;
-      const arquivo = baixarParte(texto, pairing);
+      const arquivo = baixarComNovaTentativa(texto, pairing);
       // Uma falha baixando a PRÓXIMA não pode virar rejeição solta enquanto esta toca.
       arquivo.catch(() => {});
       return { texto, arquivo };
     });
     let parte = await pedir();
-    let n = 0;
+    let n = 0, falhas = 0;
     while (parte) {
-      const arquivo = await parte.arquivo;
+      const arquivo: File | null = await parte.arquivo.catch(() => null);
+      if (!arquivo) {
+        // Pula só este trecho. Dois seguidos: o PC sumiu, o resto fica só em texto.
+        if (minha !== geracao || ++falhas >= 2) return;
+        parte = await pedir();
+        continue;
+      }
+      falhas = 0;
       // Interrompida (ou trocada por outra fala) durante o download: não toca.
       if (minha !== geracao) { try { arquivo.delete(); } catch { /* cache */ } return; }
       const seguinte = pedir();

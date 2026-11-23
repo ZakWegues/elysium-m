@@ -16,7 +16,8 @@ export function frasesDe(texto: string): string[] {
     .replace(/\r/g, '')
     .split(/\n+|(?<=[.!?…])\s+/)
     .map(f => f.trim())
-    .filter(Boolean);
+    // Sem letra nem número ("---", "•") não há o que falar — e o PC recusava a parte.
+    .filter(f => /[\p{L}\p{N}]/u.test(f));
 }
 
 /**
@@ -24,7 +25,7 @@ export function frasesDe(texto: string): string[] {
  * (texto sem pontuação) é cortada no último espaço antes dele — melhor uma pausa no meio da
  * frase que a fala cortada.
  */
-export function partesDaFala(texto: string, max = 1400): string[] {
+export function partesDaFala(texto: string, max = 600): string[] {
   const partes: string[] = [];
   let atual = '';
   const fechar = () => { if (atual) partes.push(atual); atual = ''; };

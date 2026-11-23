@@ -15,10 +15,11 @@ import { receberMailboxNovo } from './mailboxAviso';
 import { AuthError } from './http';
 import { marcarRecusa, marcarVivo, recusaDoErro } from './conexao/sinais';
 
-import type { Fonte } from './chatHistoryStore';
+import type { Fonte, MusicasDaResposta } from './chatHistoryStore';
+import { lerMusicas } from './musicasDaResposta';
 
 /** `id`: o do pedido de texto — a tela inteligente (frame `ui`) chega depois com ele. */
-type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; semCensura?: boolean; rapidas?: Rapidas; id?: string; /** 31/10: rótulo da ação reversível ("Desfazer"). */ desfazer?: string; /** 31/10: o que da memória do PC a resposta usou. */ memoria?: string[] };
+type StreamResult = { transcript?: string; reply: string; fontes?: Fonte[]; local?: boolean; semCensura?: boolean; rapidas?: Rapidas; id?: string; /** 31/10: rótulo da ação reversível ("Desfazer"). */ desfazer?: string; /** 31/10: o que da memória do PC a resposta usou. */ memoria?: string[]; /** 23/11: músicas sugeridas nesta resposta. */ musicas?: MusicasDaResposta };
 
 /**
  * Recebe a resposta ACUMULADA a cada pedaço que o PC manda — o texto inteiro até agora,
@@ -43,6 +44,8 @@ type Pending = {
   /** A conexão caiu no meio e o pedido espera a retomada. */
   aguardandoRetomada: boolean;
   caiuEm: number;
+  /** 23/11: já perguntou ao PC por esta resposta depois do silêncio? */
+  cobrado?: boolean;
   resolve: (result: StreamResult) => void;
   reject: (err: Error) => void;
   transcript?: string;
@@ -154,6 +157,11 @@ export function openVoiceConnection(
     p.timeout = setTimeout(() => {
       // Com a conexão caída, quem decide é a espera da retomada, não a inatividade.
       if (p.aguardandoRetomada) return;
+      // 23/11: antes de desistir, pergunta ao PC por esta resposta — ele pode ainda estar nela.
+      if (p.id && !p.cobrado && ws?.readyState === WebSocket.OPEN) {
+        p.cobrado = true;
+        try { ws.send(JSON.stringify({ type: 'retomar', id: p.id })); rearmar(p); return; } catch { /* desiste */ }
+      }
       console.error('[voice-ws] PC parou de responder');
       settlePending((x) => x.reject(new Error('O PC parou de responder no meio.')));
     }, INATIVIDADE_MS);
@@ -230,7 +238,7 @@ export function openVoiceConnection(
   }
 
   function tratarMensagem(event: MessageEvent) {
-    let data: { abrir?: unknown; desfazer?: unknown; memoria?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
+    let data: { abrir?: unknown; desfazer?: unknown; memoria?: unknown; musicas?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -242,6 +250,9 @@ export function openVoiceConnection(
 
     if (data.type === 'pong') {
       suportaPong = true;
+    } else if (data.type === 'andamento') {
+      // 23/11: o PC ainda está trabalhando nesta resposta (pesquisa longa, modelo lento).
+      if (pending && data.id === pending.id) rearmar(pending);
     } else if (data.type === 'transcript') {
       if (pending) {
         pending.transcript = data.text;
@@ -273,7 +284,7 @@ export function openVoiceConnection(
     } else if (data.type === 'reply') {
       // 23/11: "abre o YouTube" pedido daqui — abre uma vez, com o pedido ainda pendente.
       if (data.abrir && pending && doPedido(data.id)) abrirDaResposta(data.abrir, avisarAbrir);
-      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, ...(data.semCensura === true ? { semCensura: true } : {}), rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}), ...lerMemoria(data.memoria) }));
+      if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, ...(data.semCensura === true ? { semCensura: true } : {}), rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}), ...lerMemoria(data.memoria), ...lerMusicas(data.musicas) }));
     } else if (data.type === 'ui') {
       const f = lerUi(data);
       if (f) {

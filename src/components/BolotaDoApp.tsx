@@ -3,6 +3,7 @@ import { Animated as RNAnimated, Keyboard, PanResponder, Pressable, StyleSheet, 
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import { prepararGravador } from '../lib/gravador';
 import { useTheme } from '../theme';
 import { Text } from './ui';
 import { svgDaEsfera } from '../lib/esferaLogica';
@@ -139,12 +140,11 @@ export function BolotaDoApp({ pairing, visivel, onAbrirChat }: { pairing: Pairin
     const minha = ++geracao.current;
     const perm = await requestRecordingPermissionsAsync().catch(() => null);
     if (!perm?.granted) { ToastAndroid.show('Preciso do microfone para ouvir.', ToastAndroid.SHORT); return; }
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).catch(() => {});
     ocuparMicrofone('bolota');
     try {
-      await recorder.prepareToRecordAsync();
+      await prepararGravador(recorder);
       // Guardou ou saiu enquanto o microfone abria: não grava.
-      if (geracao.current !== minha) { liberarMicrofone('bolota'); return; }
+      if (geracao.current !== minha) { recorder.stop().catch(() => {}); liberarMicrofone('bolota'); return; }
       recorder.record();
       haptica.medio();
       if (timerSome.current) clearTimeout(timerSome.current);

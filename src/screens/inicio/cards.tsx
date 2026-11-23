@@ -33,7 +33,7 @@ export const CARDS: Record<string, DefCard> = {
     corpo: ({ dados }) => <Metricas frame={dados.telemetria} />,
   },
   musica: {
-    titulo: 'Tocando', icone: 'music', precisa: [],
+    titulo: 'Tocando', icone: 'music', precisa: [], cresce: true,
     corpo: ({ pairing, abrirPlayer }) => (
       <View style={{ gap: 12 }}>
         <SpotifyBar pairing={pairing} onOpen={abrirPlayer} semCard />

@@ -83,6 +83,14 @@ export function FolhaMusica({ pairing, abaInicial = 'sugestoes', onFechar }: { p
     callRpc(pairing, 'gostos.marcar', { tipo: 'artista', nome, valor }).then(gostosMudaram).catch(falhou);
   }
 
+  function esquecer(a: NonNullable<EstadoDosGostos['aprendidos']>[number]) {
+    const g = agora.current;
+    if (!g) return;
+    haptica.leve();
+    guardar({ ...g, aprendidos: (g.aprendidos ?? []).filter((x) => x !== a) });
+    callRpc(pairing, 'gostos.marcar', a.tipo === 'musica' ? { tipo: 'musica', musica: a.id, titulo: a.nome, artista: a.artista, valor: null } : { tipo: 'artista', nome: a.nome, valor: null }).then(gostosMudaram).catch(falhou);
+  }
+
   const lista = achados ?? (estilo ? artistas[estilo] : undefined);
   const contas = gostos ? Object.values(gostos.respostas) : [];
   const ordem = gostos ? [...gostos.estilos].sort((a, b) => (b.valor ?? 0) - (a.valor ?? 0)) : [];
@@ -166,13 +174,28 @@ export function FolhaMusica({ pairing, abaInicial = 'sugestoes', onFechar }: { p
               )}
               <Text variant="caption" color={palette.textMuted}>{contas.filter((v) => v === 1).length} de que gosta, {contas.filter((v) => v === -1).length} de que não gosta.</Text>
             </>
-          ) : musicas === null ? carregando : musicas.length === 0 ? (
-            <Text variant="caption" color={palette.textMuted}>Marque antes alguns artistas.</Text>
           ) : (
+            <>
+              {gostos.aprendidos?.length ? (
+                <>
+                  <Text variant="caption" color={palette.textMuted}>Aprendi com você</Text>
+                  <View style={styles.chips}>
+                    {gostos.aprendidos.map((a) => (
+                      <Pressable key={`${a.tipo}${a.id ?? a.nome}`} onPress={() => esquecer(a)} accessibilityRole="button" accessibilityLabel={`Esquecer ${a.nome}`} style={[styles.chip, styles.aprendido, { borderColor: palette.border }]}>
+                        <Text variant="caption" numberOfLines={1} style={[{ flexShrink: 1 }, a.valor === -1 && styles.riscado]}>{a.artista ? `${a.nome}, ${a.artista}` : a.nome}</Text>
+                        <Feather name="x" size={13} color={palette.textMuted} />
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+              {musicas === null ? carregando : musicas.length === 0 ? <Text variant="caption" color={palette.textMuted}>Marque antes alguns artistas.</Text> : (
             <>
               <Text variant="caption" color={palette.textMuted}>Ouça um trecho na capa e diga se gosta.</Text>
               {musicas.map((m) => <LinhaDeMusica key={m.id} pairing={pairing} m={m} semTocar />)}
               {acao('refresh-cw', 'Outras músicas', maisMusicas)}
+            </>
+              )}
             </>
           )}
         </ScrollView>
@@ -189,6 +212,7 @@ const styles = StyleSheet.create({
   acao: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 7, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
+  aprendido: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, maxWidth: '100%' },
   riscado: { textDecorationLine: 'line-through' },
   campo: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15 },
   grade: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },

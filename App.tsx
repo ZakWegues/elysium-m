@@ -530,7 +530,7 @@ function AppInner() {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>
         <ActivityIndicator color={palette.primary} />
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </View>
     );
   }
@@ -539,7 +539,7 @@ function AppInner() {
     return (
       <>
         <PairingScreen onPaired={handlePaired} onCancel={pairing ? () => setAdicionandoPc(false) : undefined} />
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </>
     );
   }
@@ -661,7 +661,7 @@ function AppInner() {
       {/* 14/11: a bolota da Ely (como a do PC) por cima das abas; no Chat já tem a esfera dele. */}
       {/* 23/11: no Chat ela só se esconde; desmontar cortava a resposta que estava chegando. */}
       {pairing ? <BolotaDoApp pairing={pairing} visivel={screen !== 'chat' && !telaMandada} onAbrirChat={() => setScreen('chat')} /> : null}
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
 
       <SpotifyPlayer pairing={pairing} visible={playerOpen} onClose={() => setPlayerOpen(false)} />
       {telaMandada && pairing ? <TelaMandada pairing={pairing} id={telaMandada} onFechar={() => setTelaMandada(null)} /> : null}

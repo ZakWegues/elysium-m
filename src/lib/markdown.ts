@@ -87,7 +87,8 @@ export function parseMarkdown(md: string): Bloco[] {
       blocos.push({ tipo: 'codigo', linguagem: cerca[1], texto: corpo.join('\n') });
       continue;
     }
-    if (!linha.trim()) { fecharParagrafo(); continue; }
+    // 23/11: a régua ("---") só separa; aparecia crua na bolha.
+    if (!linha.trim() || /^\s*([-*_])(?:\s*\1){2,}\s*$/.test(linha)) { fecharParagrafo(); continue; }
     // Tabela (02/10): a Ely gera tabela no chat escrito (comparações, horários), e sem isto
     // ela chegava como um parágrafo de barras. Precisa da linha "|---|---|" logo abaixo.
     if (linha.includes('|') && i + 1 < linhas.length && ehSeparadorDeTabela(linhas[i + 1])) {

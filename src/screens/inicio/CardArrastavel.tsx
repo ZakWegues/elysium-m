@@ -7,7 +7,7 @@ import { ENTRA, LAYOUT, SAI, tempo } from '../../lib/motion';
 
 /** O card que se arrasta e se redimensiona (bloco 81: saiu do HomeScreen, sem mudar). */
 export default function CardArrastavel({
-  indice, ativo, largura, alturaFixa, onMover, onArrastando, onRedimensionar, onFimRedimensionar, children,
+  indice, ativo, largura, alturaFixa, cresce, onMover, onArrastando, onRedimensionar, onFimRedimensionar, children,
 }: {
   indice: number;
   ativo: boolean;
@@ -15,6 +15,8 @@ export default function CardArrastavel({
   largura: number;
   /** Altura travada pelo usuário, em px, ou `null` para acompanhar o conteúdo. */
   alturaFixa: number | null;
+  /** 23/11: a altura escolhida vira o mínimo — conteúdo que cresce não é cortado. */
+  cresce?: boolean;
   onMover: (de: number, para: number) => void;
   onArrastando: (v: boolean) => void;
   onRedimensionar: (alt: number | null, col: number) => void;
@@ -138,7 +140,8 @@ export default function CardArrastavel({
 
   const estilo = useAnimatedStyle(() => ({
     transform: [{ translateY: y.value }],
-    height: travada.value ? altViva.value : undefined,
+    height: travada.value && !cresce ? altViva.value : undefined,
+    minHeight: travada.value && cresce ? altViva.value : undefined,
   }));
 
   /**
@@ -169,14 +172,14 @@ export default function CardArrastavel({
           // React saber o tamanho do card, e no estilo animado para o gesto poder mexer
           // nela sem passar pelo React. Fora do gesto os dois valores são o mesmo, e é isso
           // que impede o `layout={LAYOUT}` de interpolar a altura de volta para a medida.
-          ...(alturaFixa !== null ? { height: alturaFixa } : {}),
+          ...(alturaFixa !== null ? (cresce ? { minHeight: alturaFixa } : { height: alturaFixa }) : {}),
         },
         estilo,
       ]}
     >
       {/* `overflow: hidden` é o que faz a altura travada valer: sem ele o conteúdo
           transborda o card em vez de ser cortado, e o card "não redimensiona". */}
-      <View style={{ flex: alturaFixa !== null ? 1 : undefined, overflow: 'hidden' }}>
+      <View style={{ flex: alturaFixa !== null && !cresce ? 1 : undefined, overflow: 'hidden' }}>
         {children(Alca)}
       </View>
 

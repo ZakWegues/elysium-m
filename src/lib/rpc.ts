@@ -304,6 +304,8 @@ export type EstadoDosGostos = {
   gosta: string[];
   naoGosta: string[];
   respostas: Record<string, 1 | -1 | 0>;
+  /** O que a Ely aprendeu pela conversa (PC 2.59+). */
+  aprendidos?: { tipo: 'artista' | 'musica'; nome: string; artista?: string; id?: number; valor: 1 | -1 }[];
   pronto: boolean;
 };
 
