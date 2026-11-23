@@ -26,6 +26,7 @@ import TrackpadFullscreen from './TrackpadFullscreen';
 import { BarraMidia } from '../components/BarraMidia';
 import { MiniTrackpad } from '../components/MiniTrackpad';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
+import { Sugestoes } from '../components/musica/Sugestoes';
 import { useAbaAtiva } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import {
@@ -127,6 +128,8 @@ export default function ControlScreen({
 
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}
         <SpotifyBar pairing={pairing} onOpen={() => setPlayerOpen(true)} />
+
+        <Card glass><Sugestoes pairing={pairing} quantas={3} /></Card>
 
         <BarraMidia pairing={pairing} onError={handleError} />
 

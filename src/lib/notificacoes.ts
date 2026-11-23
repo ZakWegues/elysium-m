@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { loadPairing, Pairing } from './pairing';
 import { callRpc, Entrega, Reminder } from './rpc';
 import { registrarEncerramentoPc, type MotivoEncerramento } from './estadoPc';
+import { abrirUmaVez, alvoDoRef, tratarEntregaDeAbrir } from './abrirNoCelular';
 import { abrirTelaMandada, idDaTelaMandada, telasSalvasMudaram } from './telasMandadas';
 
 /**
@@ -110,7 +111,15 @@ async function lerAvisosDoPc(): Promise<void> {
 export function ouvirAvisosDoPc(): () => void {
   let sub: { remove(): void } | undefined;
   let parado = false;
-  modulo().then(N => { if (N && !parado) sub = N.addNotificationReceivedListener(n => aplicarAvisoDoPc(n.request.content.data)); }).catch(() => {});
+  modulo().then(N => {
+    if (N && !parado) sub = N.addNotificationReceivedListener(n => {
+      aplicarAvisoDoPc(n.request.content.data);
+      // 23/11: o push de abrir chegou com o app na frente — abre na hora.
+      const ref = (n.request.content.data as { ref?: unknown } | null)?.ref;
+      const alvo = alvoDoRef(ref);
+      if (alvo && AppState.currentState === 'active') abrirUmaVez(String(ref), alvo);
+    });
+  }).catch(() => {});
   lerAvisosDoPc();
   const app = AppState.addEventListener('change', s => { if (s === 'active') lerAvisosDoPc(); });
   return () => { parado = true; sub?.remove(); app.remove(); };
@@ -172,11 +181,12 @@ export async function mostrarEntrega(e: Entrega): Promise<void> {
  */
 export async function receberEntrega(e: Entrega, pairing?: Pairing | null): Promise<void> {
   avisarTelaMandada(e);
-  if (!(await notificacoesAtivas())) return;
+  const deAbrir = tratarEntregaDeAbrir(e.ref, e.em);
+  if (!deAbrir && !(await notificacoesAtivas())) return;
   const vistas = await lerLista(CHAVE_VISTAS());
   if (!vistas.includes(e.id)) {
     const espelhados = e.tipo === 'lembrete' && e.ref ? await lerLista(CHAVE_ESPELHADOS()) : [];
-    if (!(e.ref && espelhados.includes(e.ref))) await mostrarEntrega(e);
+    if (!(e.ref && espelhados.includes(e.ref)) && deAbrir !== 'aberta' && deAbrir !== 'velha') await mostrarEntrega(e);
     vistas.push(e.id);
     await gravarLista(CHAVE_VISTAS(), vistas.slice(-MAX_VISTAS));
   }
@@ -196,6 +206,11 @@ function avisarTelaMandada(e: Entrega): void {
   if (AppState.currentState === 'active') abrirTelaMandada(id);
 }
 
+/** 23/11: o pedido de abrir respondeu com o app no fundo — vira notificação, e o toque abre. */
+export function avisarAbrir(titulo: string, ref: string): void {
+  void mostrarEntrega({ id: `abrir-${Date.now()}`, tipo: 'aviso', titulo, corpo: 'Toque para abrir.', em: Date.now(), ref });
+}
+
 /** Puxa a fila do PC. Devolve quantas entregas novas mostrou. */
 export async function buscarEntregas(pairing: Pairing): Promise<number> {
   if (!(await notificacoesAtivas())) return 0;
@@ -207,7 +222,8 @@ export async function buscarEntregas(pairing: Pairing): Promise<number> {
   for (const e of entregas) {
     if (vistas.includes(e.id)) continue;
     avisarTelaMandada(e);
-    const jaNoAparelho = e.tipo === 'lembrete' && e.ref && espelhados.includes(e.ref);
+    const deAbrir = tratarEntregaDeAbrir(e.ref, e.em);
+    const jaNoAparelho = (e.tipo === 'lembrete' && e.ref && espelhados.includes(e.ref)) || deAbrir === 'aberta' || deAbrir === 'velha';
     if (!jaNoAparelho) { await mostrarEntrega(e); novas++; }
     vistas.push(e.id);
   }

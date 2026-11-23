@@ -11,6 +11,7 @@ import { errMessage } from '../../lib/errors';
 import { falar, pararDeFalar, useFala } from '../../lib/falar';
 import { useTheme } from '../../theme';
 import { SpotifyBar } from '../SpotifyPlayer';
+import { Sugestoes } from '../../components/musica/Sugestoes';
 import { MetricBar, Text, VIDRO_BOTAO, FundoVidro } from '../../components/ui';
 import type { DefCard } from './tipos';
 
@@ -33,7 +34,12 @@ export const CARDS: Record<string, DefCard> = {
   },
   musica: {
     titulo: 'Tocando', icone: 'music', precisa: [],
-    corpo: ({ pairing, abrirPlayer }) => <SpotifyBar pairing={pairing} onOpen={abrirPlayer} semCard />,
+    corpo: ({ pairing, abrirPlayer }) => (
+      <View style={{ gap: 12 }}>
+        <SpotifyBar pairing={pairing} onOpen={abrirPlayer} semCard />
+        <Sugestoes pairing={pairing} quantas={3} />
+      </View>
+    ),
   },
   clima: {
     titulo: 'Lá fora', icone: 'cloud', precisa: ['clima'],

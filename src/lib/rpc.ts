@@ -148,6 +148,17 @@ export type RpcMethod =
   | 'spotify.playSearch'
   | 'spotify.shuffle'
   | 'spotify.repeat'
+  | 'gostos.get'
+  | 'gostos.artistas'
+  | 'gostos.buscar'
+  | 'gostos.musicas'
+  | 'gostos.marcar'
+  | 'gostos.sugestoes'
+  | 'gostos.previa'
+  | 'musica.tocar'
+  | 'musica.passar'
+  | 'musica.fila'
+  | 'musica.playlist'
   | 'chat.list'
   | 'chat.get'
   | 'chat.save'
@@ -285,6 +296,17 @@ export type Rotina = {
 };
 
 /** Uma entrega da fila do PC para este celular (rotina executada, lembrete disparado). */
+/** 23/11: gostos e sugestões de música (a conta é do PC, gostos.ts). */
+export type MomentoMusical = 'geral' | 'foco' | 'treino' | 'noite';
+export type MusicaSugerida = { id: number; titulo: string; artista: string; capa: string | null; motivo: string };
+export type EstadoDosGostos = {
+  estilos: { id: string; nome: string; valor: 1 | -1 | 0 | null }[];
+  gosta: string[];
+  naoGosta: string[];
+  respostas: Record<string, 1 | -1 | 0>;
+  pronto: boolean;
+};
+
 export type Entrega = {
   id: string;
   tipo: 'rotina' | 'lembrete' | 'aviso';
@@ -679,6 +701,17 @@ export type RpcResults = {
   'spotify.playSearch': { playing: { track: string; artist: string } };
   'spotify.shuffle': { ok: true };
   'spotify.repeat': { ok: true };
+  'gostos.get': EstadoDosGostos;
+  'gostos.artistas': { artistas: { nome: string; foto: string | null }[] };
+  'gostos.buscar': { artistas: { nome: string; foto: string | null }[] };
+  'gostos.musicas': { musicas: MusicaSugerida[] };
+  'gostos.marcar': { ok: true; pronto: boolean };
+  'gostos.sugestoes': { pronto: boolean; momento: MomentoMusical; itens: MusicaSugerida[] };
+  'gostos.previa': { url: string | null };
+  'musica.tocar': { fala: string; abrir: unknown };
+  'musica.passar': { fala: string; abrir: unknown };
+  'musica.fila': { total: number };
+  'musica.playlist': { nome: string; total: number };
   /** `deleted`: ids apagados NO PC que este aparelho ainda precisa aplicar. */
   'chat.list': { sessions: SyncedChatSession[]; deleted?: string[] };
   'chat.get': { session: SyncedChatSession | null };

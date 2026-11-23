@@ -68,7 +68,7 @@ export async function flushQueue(
 
   for (const item of items) {
     try {
-      const reply = await sendCommand(pairing, item.text);
+      const reply = await sendCommand(pairing, item.text, 'voz', false);
       await removeFromQueue(item.id);
       onResult(item, reply);
       sent += 1;

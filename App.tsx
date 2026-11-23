@@ -38,6 +38,7 @@ import { carregarEstadoPc, descreverEstadoPc, useEstadoPc } from './src/lib/esta
 import { registrarTarefa } from './src/lib/tarefaSegundoPlano';
 import { useDeepLinks } from './src/lib/deepLinks';
 import { urlDoWidget } from './src/lib/chaveWidget';
+import { abrirUmaVez, alvoDoRef } from './src/lib/abrirNoCelular';
 import { aoAbrirTelaMandada, abrirTelaMandada, idDaTelaMandada } from './src/lib/telasMandadas';
 import { TelaMandada } from './src/screens/hoje/CardsFase18';
 import * as QuickActions from 'expo-quick-actions';
@@ -141,6 +142,17 @@ function AppInner() {
         respostaTratada.current = chave;
         N.clearLastNotificationResponseAsync().catch(() => {});
         abrirTelaMandada(idTela);
+        return;
+      }
+      // 23/11: "Abrir YouTube" — o toque abre o app ou a música.
+      const refDeAbrir = (c.data as { ref?: unknown } | null)?.ref;
+      const alvo = alvoDoRef(refDeAbrir);
+      if (alvo) {
+        const chave = `${r.notification.request.identifier}:${r.notification.date}`;
+        if (respostaTratada.current === chave) return;
+        respostaTratada.current = chave;
+        N.clearLastNotificationResponseAsync().catch(() => {});
+        abrirUmaVez(String(refDeAbrir), alvo);
         return;
       }
       abrirCaixa(c.data);

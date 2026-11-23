@@ -9,6 +9,8 @@ import { callRpc, NowPlaying } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { useTheme } from '../theme';
 import { Text } from '../components/ui';
+import { FolhaMusica } from '../components/musica/FolhaMusica';
+import { passarPara } from '../lib/musica';
 
 /** Cor da marca do Spotify — a mesma nos dois apps, independente do tema escolhido. */
 const SPOTIFY_GREEN = '#1db954';
@@ -158,6 +160,7 @@ export default function SpotifyPlayer({
   const insets = useSafeAreaInsets();
   const { connected, now, error, poll, send, setNow } = useSpotify(pairing, visible);
   const [connecting, setConnecting] = useState(false);
+  const [folha, setFolha] = useState(false);
 
   const seekWidth = useRef(0);
 
@@ -211,6 +214,9 @@ export default function SpotifyPlayer({
         <View style={[styles.header, { paddingHorizontal: tokens.spacing.lg }]}>
           <Feather name="music" size={18} color={SPOTIFY_GREEN} />
           <Text variant="label" style={{ flex: 1 }}>Spotify</Text>
+          <Pressable accessibilityLabel="Sugestões e meus gostos" accessibilityRole="button" onPress={() => setFolha(true)} hitSlop={10} style={{ marginRight: 14 }}>
+            <Feather name="compass" size={22} color={palette.textMuted} />
+          </Pressable>
           <Pressable accessibilityLabel="Fechar o player" accessibilityRole="button" onPress={onClose} hitSlop={12}>
             <Feather name="chevron-down" size={26} color={palette.textMuted} />
           </Pressable>
@@ -330,12 +336,19 @@ export default function SpotifyPlayer({
             )}
 
             {now.device && (
-              <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center' }}>
-                Tocando em {now.device}
-              </Text>
+              <View style={styles.aparelho}>
+                <Text variant="caption" color={palette.textMuted}>Tocando em {now.device}</Text>
+                <Pressable onPress={() => { void passarPara(pairing, 'celular').then(() => setTimeout(poll, 800)); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="Continuar neste celular">
+                  <Feather name="smartphone" size={16} color={palette.textMuted} />
+                </Pressable>
+                <Pressable onPress={() => { void passarPara(pairing, 'pc').then(() => setTimeout(poll, 800)); }} hitSlop={8} accessibilityRole="button" accessibilityLabel="Continuar no PC">
+                  <Feather name="monitor" size={16} color={palette.textMuted} />
+                </Pressable>
+              </View>
             )}
           </View>
         )}
+        {folha ? <FolhaMusica pairing={pairing} onFechar={() => setFolha(false)} /> : null}
       </View>
     </Modal>
   );
@@ -353,6 +366,7 @@ const styles = StyleSheet.create({
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   playBtn: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   repeatOne: { position: 'absolute', top: -4, right: -6, fontSize: 9, fontWeight: '700' },
+  aparelho: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   volRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   volStep: { flex: 1, height: 5 },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8 },

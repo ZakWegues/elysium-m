@@ -5,7 +5,8 @@ import { File as FSFile } from 'expo-file-system';
 import { errMessage } from './errors';
 import { Pairing } from './pairing';
 import { openAuthedWebSocket, streamUrl } from './ws';
-import { receberEntrega } from './notificacoes';
+import { avisarAbrir, receberEntrega } from './notificacoes';
+import { abrirDaResposta } from './abrirNoCelular';
 import type { Entrega } from './rpc';
 import { receberFrameEstado } from './estadoPc';
 import { receberFrameModo } from './modo';
@@ -163,7 +164,7 @@ export function openVoiceConnection(
     try {
       // PC antigo ignora os campos novos: o comando roda igual, só que no curto de sempre.
       // `telas`: este app desenha telas inteligentes (Fase 4) — PC antigo ignora.
-      ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer, telas: p.canal === 'texto' }));
+      ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer, telas: p.canal === 'texto', abre: true }));
       p.enviado = true;
     } catch (err) {
       console.warn('[voice-ws] envio falhou, tenta ao reconectar', errMessage(err));
@@ -229,7 +230,7 @@ export function openVoiceConnection(
   }
 
   function tratarMensagem(event: MessageEvent) {
-    let data: { desfazer?: unknown; memoria?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
+    let data: { abrir?: unknown; desfazer?: unknown; memoria?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -270,6 +271,8 @@ export function openVoiceConnection(
         pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'reply') {
+      // 23/11: "abre o YouTube" pedido daqui — abre uma vez, com o pedido ainda pendente.
+      if (data.abrir && pending && doPedido(data.id)) abrirDaResposta(data.abrir, avisarAbrir);
       if (doPedido(data.id)) settlePending((p) => p.resolve({ transcript: p.transcript, reply: data.reply ?? p.parcial, fontes: Array.isArray(data.fontes) ? data.fontes : undefined, local: data.local === true, ...(data.semCensura === true ? { semCensura: true } : {}), rapidas: lerRapidas(data.rapidas), id: p.id, ...(typeof data.desfazer === 'string' && data.desfazer ? { desfazer: data.desfazer.slice(0, 200) } : {}), ...lerMemoria(data.memoria) }));
     } else if (data.type === 'ui') {
       const f = lerUi(data);
@@ -379,7 +382,7 @@ export function openVoiceConnection(
 
         try {
           if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('sem conexão');
-          ws.send(JSON.stringify({ type: 'audio', id: p.id, telas: true }));
+          ws.send(JSON.stringify({ type: 'audio', id: p.id, telas: true, abre: true }));
           ws.send(bytes);
           console.log('[voice-ws] áudio enviado', bytes.byteLength, 'bytes');
         } catch (err) {

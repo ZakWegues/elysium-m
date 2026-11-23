@@ -181,6 +181,34 @@
       "destructive": false
     },
     {
+      "method": "gostos.artistas",
+      "destructive": false
+    },
+    {
+      "method": "gostos.buscar",
+      "destructive": false
+    },
+    {
+      "method": "gostos.get",
+      "destructive": false
+    },
+    {
+      "method": "gostos.marcar",
+      "destructive": false
+    },
+    {
+      "method": "gostos.musicas",
+      "destructive": false
+    },
+    {
+      "method": "gostos.previa",
+      "destructive": false
+    },
+    {
+      "method": "gostos.sugestoes",
+      "destructive": false
+    },
+    {
       "method": "groq.modelos",
       "destructive": false
     },
@@ -410,6 +438,22 @@
     },
     {
       "method": "modos.set",
+      "destructive": false
+    },
+    {
+      "method": "musica.fila",
+      "destructive": false
+    },
+    {
+      "method": "musica.passar",
+      "destructive": false
+    },
+    {
+      "method": "musica.playlist",
+      "destructive": false
+    },
+    {
+      "method": "musica.tocar",
       "destructive": false
     },
     {

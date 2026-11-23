@@ -1,5 +1,7 @@
 import { baseUrl, Pairing } from './pairing';
 import { cabecalhoAssinado } from './assinatura';
+import { abrirDaResposta } from './abrirNoCelular';
+import { avisarAbrir } from './notificacoes';
 import {
   AuthError, fetchWithTimeout, COMMAND_TIMEOUT_MS,
 } from './http';
@@ -9,7 +11,7 @@ import {
 export { AuthError } from './http';
 
 
-export async function sendCommand(pairing: Pairing, text: string, canal: 'voz' | 'texto' = 'voz'): Promise<string> {
+export async function sendCommand(pairing: Pairing, text: string, canal: 'voz' | 'texto' = 'voz', abre = true): Promise<string> {
   const url = `${baseUrl(pairing)}/api/command`;
   const res = await fetchWithTimeout(
     url,
@@ -19,7 +21,7 @@ export async function sendCommand(pairing: Pairing, text: string, canal: 'voz' |
         'Content-Type': 'application/json',
         ...cabecalhoAssinado(pairing.token, 'POST', url),
       },
-      body: JSON.stringify({ text, canal }),
+      body: JSON.stringify({ text, canal, abre }),
     },
     COMMAND_TIMEOUT_MS
   );
@@ -30,6 +32,8 @@ export async function sendCommand(pairing: Pairing, text: string, canal: 'voz' |
     throw new Error(`servidor respondeu ${res.status}`);
   }
   const data = await res.json();
+  // 23/11: o pedido era de abrir algo neste celular.
+  if (data.abrir) abrirDaResposta(data.abrir, avisarAbrir);
   return data.reply as string;
 }
 
