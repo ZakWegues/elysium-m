@@ -68,11 +68,11 @@ const VidroDaBarra = memo(function VidroDaBarra({ alvo: alvoDoDesfoque, lente, i
     () => ({ L: Math.round(larguraTab.value), aberta: rotulos.value > 0.5 }),
     (g, antes) => { if (!antes || g.L !== antes.L || g.aberta !== antes.aberta) runOnJS(setGeom)(g); },
   );
-  // 05/11: segurando, a gota sai do lugar e acompanha o dedo (em sextos de aba: cada passo é uma
-  // mola no nativo), mais larga e ampliando mais — o "lift" da Glisse. Solta, volta para a aba.
+  // 05/11: segurando, a gota sai do lugar e acompanha o dedo (em doze avos de aba: o nativo
+  // alisa os passos com a mola dele), mais larga e ampliando mais — o "lift" da Glisse. Solta, volta para a aba.
   const [gotaNoDedo, setGotaNoDedo] = useState<number | null>(null);
   useAnimatedReaction(
-    () => (aperto.value > 0.5 && rotulos.value > 0.5 ? Math.round(progresso.value * 6) / 6 : -1),
+    () => (aperto.value > 0.5 && rotulos.value > 0.5 ? Math.round(progresso.value * 12) / 12 : -1),
     (v, antes) => { if (v !== antes) runOnJS(setGotaNoDedo)(v < 0 ? null : v); },
   );
   const posGota = gotaNoDedo ?? indiceAtivo;

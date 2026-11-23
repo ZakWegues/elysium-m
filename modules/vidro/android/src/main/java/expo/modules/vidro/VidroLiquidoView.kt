@@ -1,6 +1,5 @@
 package expo.modules.vidro
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.RenderEffect
@@ -11,7 +10,6 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
-import android.view.animation.OvershootInterpolator
 import eightbitlab.com.blurview.AcessoAoAlvo
 import eightbitlab.com.blurview.BlurTarget
 import expo.modules.kotlin.AppContext
@@ -39,7 +37,18 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private var raio = 0f
   private var brilho = 1f
   private var perfil = 0f
-  private var animacao: ValueAnimator? = null
+  private var alvoX = 0f
+  private var alvoMeia = 1f
+  private var alvoVisivel = 0f
+  private var velX = 0f
+  private var velMeia = 0f
+  private var segurada = false
+  private var semMovimento = false
+  /** Quanto da lente da gota aparece (0–1): acende segurando ou correndo entre as abas. */
+  private var forcaGota = 0f
+  private var quadro = 0L
+  private var larguraVista = 0
+  private var mudouLargura = 0L
   /** 09/11: a luz gira com o arrasto (−1 a 1, vem do JS) e, se ligado, com a inclinação do aparelho. */
   private var inclinaAlvo = 0f
   private var inclinaAtual = 0f
@@ -49,6 +58,9 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private val dele = IntArray(2)
   private val no: RenderNode? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) RenderNode("vidro-liquido") else null
   private val shader: RuntimeShader? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) RuntimeShader(LENTE_AGSL) else null
+  private val noGota: RenderNode? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) RenderNode("vidro-gota") else null
+  // Se o shader da gota for recusado no aparelho, a barra fica só com o vidro de antes.
+  private val shaderGota: RuntimeShader? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) runCatching { RuntimeShader(GOTA_AGSL) }.getOrNull() else null
 
   init {
     setWillNotDraw(false)
@@ -81,30 +93,80 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     invalidate()
   }
 
-  /** A gota vai de mola (com um passadinho, como o seletor da barra) até o centro novo. */
+  /**
+   * 23/11: a gota anda por uma mola integrada a cada quadro. Antes cada passo do dedo recomeçava
+   * uma animação de 420 ms, e a gota chegava sempre atrasada. Segurada, a mola é dura e crítica
+   * (cola no dedo); solta, é a mesma mola da barra (TabBar), e as duas andam juntas.
+   */
   fun moverSeletor(s: List<Double>) {
     if (s.size < 3) return
-    val alvoX = s[0].toFloat()
-    val alvoMeia = s[1].toFloat()
-    val alvoVis = s[2].toFloat()
-    animacao?.cancel()
-    if (selVisivel == 0f && selCentro == 0f) {
-      selCentro = alvoX; selMeia = alvoMeia; selVisivel = alvoVis; invalidate(); return
+    alvoX = s[0].toFloat()
+    alvoMeia = s[1].toFloat()
+    val visivel = s[2].toFloat()
+    val primeira = selVisivel == 0f && selCentro == 0f
+    segurada = visivel > 1f
+    alvoVisivel = visivel
+    if (primeira || semMovimento) {
+      selCentro = alvoX; selMeia = alvoMeia; selVisivel = visivel
+      velX = 0f; velMeia = 0f
     }
-    val (x0, m0, v0) = Triple(selCentro, selMeia, selVisivel)
-    animacao = ValueAnimator.ofFloat(0f, 1f).apply {
-      duration = 420
-      interpolator = OvershootInterpolator(1.1f)
-      addUpdateListener {
-        val f = it.animatedValue as Float
-        selCentro = x0 + (alvoX - x0) * f
-        // No meio do caminho a gota estica (fica mais larga) e volta.
-        selMeia = m0 + (alvoMeia - m0) * f + 10f * kotlin.math.sin(Math.PI * f.coerceIn(0f, 1f)).toFloat()
-        selVisivel = v0 + (alvoVis - v0) * f.coerceIn(0f, 1f)
-        invalidate()
-      }
-      start()
+    invalidate()
+  }
+  fun definirSemMovimento(valor: Boolean) { semMovimento = valor }
+
+  /** Um quadro da mola da gota (dp e dp/s). Devolve se ainda precisa de outro quadro. */
+  private fun passoDaGota(): Boolean {
+    val agora = System.nanoTime()
+    var resta = if (quadro == 0L) 1f / 60f else ((agora - quadro) / 1e9f).coerceIn(0.001f, 0.05f)
+    val rigidez = if (segurada) 900f else 211f
+    val atrito = if (segurada) 60f else 17f
+    // Passos de até 8 ms: a mola dura não dispara num quadro longo.
+    while (resta > 0f) {
+      val dt = minOf(resta, 0.008f)
+      velX += (rigidez * (alvoX - selCentro) - atrito * velX) * dt
+      selCentro += velX * dt
+      velMeia += (211f * (alvoMeia - selMeia) - 22f * velMeia) * dt
+      selMeia += velMeia * dt
+      resta -= dt
     }
+    selVisivel += (alvoVisivel - selVisivel) * 0.2f
+    // A lente acende segurando ou correndo, depressa, e apaga devagar. A barra mudando de tamanho
+    // (encolher, abrir) também move a gota, mas ali não é troca de aba.
+    if (width != larguraVista) { larguraVista = width; mudouLargura = agora }
+    val mudando = agora - mudouLargura < 350_000_000L
+    val acesa = if (alvoVisivel > 0f && !mudando && (segurada || kotlin.math.abs(velX) > 60f)) 1f else 0f
+    forcaGota += (acesa - forcaGota) * (if (acesa > forcaGota) 0.35f else 0.14f)
+    val parada = kotlin.math.abs(alvoX - selCentro) < 0.1f && kotlin.math.abs(velX) < 1f &&
+      kotlin.math.abs(alvoMeia - selMeia) < 0.1f && kotlin.math.abs(velMeia) < 1f &&
+      kotlin.math.abs(alvoVisivel - selVisivel) < 0.01f && kotlin.math.abs(acesa - forcaGota) < 0.01f
+    if (parada) {
+      selCentro = alvoX; selMeia = alvoMeia; selVisivel = alvoVisivel; forcaGota = acesa
+      velX = 0f; velMeia = 0f; quadro = 0L
+      return false
+    }
+    quadro = agora
+    return true
+  }
+
+  /** A gota acesa, por cima do vidro da barra: lente sobre o conteúdo SEM desfoque. */
+  private fun desenharGota(canvas: Canvas, conteudo: RenderNode) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || forcaGota < 0.01f || lente <= 0f) return
+    val n = noGota ?: return
+    val s = shaderGota ?: return
+    n.setPosition(0, 0, width, height)
+    val gravacao = n.beginRecording(width, height)
+    gravacao.translate((dele[0] - meu[0]).toFloat(), (dele[1] - meu[1]).toFloat())
+    gravacao.drawRenderNode(conteudo)
+    n.endRecording()
+    val estica = if (semMovimento) 0f else (kotlin.math.abs(velX) / 1800f).coerceAtMost(0.35f)
+    val meiaAltura = (height / 2f - 6f * densidade) * (if (segurada) 1.1f else 1f) * (1f - estica * 0.35f)
+    s.setFloatUniform("tam", width.toFloat(), height.toFloat())
+    s.setFloatUniform("dens", densidade)
+    s.setFloatUniform("lente", lente * densidade)
+    s.setFloatUniform("gota", selCentro * densidade, selMeia * densidade * (1f + estica), meiaAltura, forcaGota.coerceIn(0f, 1f))
+    s.setFloatUniform("vel", if (semMovimento) 0f else (velX / 900f).coerceIn(-1f, 1f))
+    n.setRenderEffect(RenderEffect.createRuntimeShaderEffect(s, "conteudo"))
+    canvas.drawRenderNode(n)
   }
 
   private fun resolverAlvo() {
@@ -162,7 +224,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   override fun onDetachedFromWindow() {
     observador?.takeIf { it.isAlive }?.removeOnPreDrawListener(aCadaQuadro)
     observador = null
-    animacao?.cancel()
+    quadro = 0L
     Inclinacao.sair(this)
     super.onDetachedFromWindow()
   }
@@ -193,6 +255,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     gravacao.drawRenderNode(conteudo)
     n.endRecording()
 
+    if (passoDaGota()) postInvalidateOnAnimation()
     s.setFloatUniform("tam", width.toFloat(), height.toFloat())
     s.setFloatUniform("dens", densidade)
     s.setFloatUniform("lente", lente * densidade)
@@ -216,6 +279,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     } else RenderEffect.createRuntimeShaderEffect(s, "conteudo")
     n.setRenderEffect(efeito)
     canvas.drawRenderNode(n)
+    desenharGota(canvas, conteudo)
     if (!estado.startsWith("desenhando")) estado = "desenhando ${width}x${height}"
   }
 
@@ -307,6 +371,57 @@ half4 main(float2 q) {
   a = clamp(a * brilho, 0.0, 1.0);
   cor = half3(1.0) - (half3(1.0) - cor) * half3(1.0 - a);
   return half4(cor, 1.0);
+}
+"""
+
+    /**
+     * 23/11: a gota do seletor, quando segurada ou correndo. `gota` = centro x, meia largura, meia
+     * altura (px) e força (0–1). O aro dobra o fundo com força, o miolo amplia, e `vel` (−1 a 1)
+     * arrasta o fundo no sentido do movimento. O conteúdo chega nítido: entortar o já desfocado
+     * quase não se via.
+     */
+    const val GOTA_AGSL = """
+uniform shader conteudo;
+uniform float2 tam;
+uniform float dens;
+uniform float lente;
+uniform float4 gota;
+uniform float vel;
+
+half4 main(float2 q) {
+  float2 c = float2(gota.x, tam.y * 0.5);
+  float r = max(min(gota.y, gota.z), 1.0);
+  float2 h = max(float2(gota.y, gota.z) - float2(r), float2(0.0));
+  float2 rel = q - c;
+  float2 d0 = abs(rel) - h;
+  float dentro = r - length(max(d0, float2(0.0))) - min(max(d0.x, d0.y), 0.0);
+  if (dentro < 0.0) return half4(0.0);
+
+  float2 n;
+  if (d0.x > 0.0 && d0.y > 0.0) n = normalize(d0);
+  else if (d0.x > d0.y) n = float2(1.0, 0.0);
+  else n = float2(0.0, 1.0);
+  n *= float2(rel.x < 0.0 ? -1.0 : 1.0, rel.y < 0.0 ? -1.0 : 1.0);
+
+  float t = clamp(1.0 - dentro / (r * 0.6), 0.0, 1.0);
+  float arco = 1.0 - sqrt(max(1.0 - t * t, 0.0));
+  float2 desl = -n * arco * min(lente, r * 0.95);
+  desl -= rel * 0.16 * (1.0 - arco);
+  desl.x -= vel * 14.0 * dens * (0.35 + 0.65 * t);
+
+  half4 cr = conteudo.eval(q + desl * 1.10);
+  half4 cg = conteudo.eval(q + desl * 1.05);
+  half4 cb = conteudo.eval(q + desl);
+  half3 cor = half3(cr.r, cg.g, cb.b);
+  cor = mix(cor, half3(0.09), half(0.16));
+
+  float glint = pow(max(dot(n, float2(-0.7071, -0.7071)), 0.0), 3.0);
+  float refl = pow(max(dot(n, float2(0.7071, 0.7071)), 0.0), 3.0);
+  float brilho = t * t * (0.05 + 0.22 * glint + 0.1 * refl);
+  if (dentro < 1.22 * dens) brilho += 0.2 * (0.35 + 0.65 * glint);
+  cor = half3(1.0) - (half3(1.0) - cor) * half3(1.0 - clamp(brilho, 0.0, 1.0));
+  float a = gota.w * clamp(dentro / dens, 0.0, 1.0);
+  return half4(cor * half(a), half(a));
 }
 """
   }
