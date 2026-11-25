@@ -32,7 +32,8 @@ export function botoesDasRapidas(r: Rapidas | undefined, sugestoes: string[] = [
   } else {
     for (const s of sugestoes) out.push({ rotulo: s, valor: s, tipo: 'sugestao' });
   }
-  for (const p of r?.prontas ?? []) out.push({ rotulo: p, valor: p, tipo: 'pronta' });
+  // 25/11: já está no celular.
+  for (const p of (r?.prontas ?? []).filter((x) => !/\bno celular\b/i.test(x))) out.push({ rotulo: p, valor: p, tipo: 'pronta' });
   if (r?.pergunta) out.push({ rotulo: 'Outra resposta…', valor: '', tipo: 'outra' });
   return out;
 }

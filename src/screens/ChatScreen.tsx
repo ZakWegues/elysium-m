@@ -46,6 +46,10 @@ import { botoesDasRapidas, type Rapidas } from '../lib/respostasRapidas';
 import { RespostasRapidas } from '../components/RespostasRapidas';
 import { PreAquecerTelas, TelaNaBolha, type AcoesTela } from '../components/TelaNaBolha';
 import { aplicarUi, telaVisivel } from '../lib/telas';
+import { CampoDeMensagem } from '../components/chat/CampoDeMensagem';
+import { IrAoFim } from '../components/chat/IrAoFim';
+import { SumirNoTopo } from '../components/chat/SumirNoTopo';
+import { rotuloDaHora, separaAntes } from '../lib/campoDeMensagem';
 import { comecarGravacao } from '../lib/gravador';
 import { MusicasNaBolha } from '../components/musica/MusicasNaBolha';
 import { diagTela, ligarDiagTela } from '../lib/telaDiag';
@@ -119,6 +123,7 @@ export default function ChatScreen({
   const [nomeDono, setNomeDono] = useState('');
   useEffect(() => { AsyncStorage.getItem(CHAVE_NOME).then(n => { if (n) setNomeDono(n); }).catch(() => {}); }, []);
   const [draft, setDraft] = useState('');
+  const [alturaCampo, setAlturaCampo] = useState(0);
   // 21/10: o rascunho sobrevive se o Android fechar o app no fundo.
   const rascunhoLido = useRef(false);
   useEffect(() => { AsyncStorage.getItem('elysium_rascunho').then(r => { if (r) setDraft(d => d || r); }).catch(() => {}).finally(() => { rascunhoLido.current = true; }); }, []);
@@ -225,7 +230,9 @@ export default function ChatScreen({
   const soltouRef = useRef(false);
 
   function pushError(text: string) {
-    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text, ts: Date.now() }]);
+    // 25/11: sempre o cartão, com título curto — o texto técnico solto em vermelho saiu.
+    const t = textoDoErro(text);
+    setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text: t.titulo, ts: Date.now(), erro: { ...t, acoes: [] } }]);
   }
 
   // Carrega uma conversa diferente quando o usuário escolhe outra na tela de Conversas
@@ -315,7 +322,7 @@ export default function ChatScreen({
     try {
       perm = pedir ? await requestRecordingPermissionsAsync() : await getRecordingPermissionsAsync();
     } catch (err) {
-      if (!cancelado()) { setMicStatus('denied'); pushError(`Falha na permissão: ${errMessage(err)}`); }
+      if (!cancelado()) { setMicStatus('denied'); pushError('Não consegui pedir a permissão do microfone.'); }
       return false;
     }
     if (cancelado()) return false;
@@ -323,7 +330,7 @@ export default function ChatScreen({
     try {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     } catch (err) {
-      if (!cancelado()) { setMicStatus('denied'); pushError(`Falha ao preparar o áudio: ${errMessage(err)}`); }
+      if (!cancelado()) { setMicStatus('denied'); pushError('Não consegui preparar o áudio.'); }
       return false;
     }
     if (!cancelado()) setMicStatus('ready');
@@ -398,6 +405,14 @@ export default function ChatScreen({
    */
   const jaAncorou = useRef(false);
   const coladoNoFim = useRef(true);
+  /** 25/11: longe do fim (botão de descer) e se chegou algo enquanto isso. */
+  const [longe, setLonge] = useState(false);
+  const [novas, setNovas] = useState(false);
+  const quantasVi = useRef(0);
+  useEffect(() => {
+    if (messages.length > quantasVi.current && jaAncorou.current && !coladoNoFim.current) setNovas(true);
+    quantasVi.current = messages.length;
+  }, [messages.length]);
   /** Onde a lista está (a roda do mouse em cima de uma tela, na prévia web, rola a partir daqui). */
   const deslocamento = useRef(0);
   useEffect(() => { ligarDiagTela(() => pairingRef.current); }, []);
@@ -821,7 +836,7 @@ export default function ChatScreen({
     try {
       await recorder.stop();
     } catch (err) {
-      pushError(`Falha ao parar gravação: ${errMessage(err)}`);
+      pushError('Não consegui fechar a gravação. Tente de novo.');
       return;
     } finally {
       liberarMicrofone('segurar');
@@ -832,7 +847,7 @@ export default function ChatScreen({
     if (curta) { ToastAndroid.show('Segure o microfone enquanto fala.', ToastAndroid.SHORT); return; }
     const uri = recorder.uri;
     if (!uri) {
-      pushError('Falha ao ler o áudio gravado: uri vazia após stop()');
+      pushError('Não consegui ler o áudio. Tente de novo.');
       return;
     }
     const r = await enviarAudio(uri);
@@ -873,7 +888,9 @@ export default function ChatScreen({
   async function enviarAudio(uri: string): Promise<{ reply: string; transcricao: string; fala: FalaAntecipada | null; jaFalado: string } | null> {
     setSending(true);
     setPensandoVoz(true);
-    setMessages((prev) => [...prev, { id: `me-audio-${Date.now()}`, from: 'me', text: '🎤 (áudio)', ts: Date.now() }]);
+    // 25/11: uma bolha só — a do áudio vira a transcrição quando ela chega.
+    const idAudio = `me-audio-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: idAudio, from: 'me', text: '🎤 (áudio)', ts: Date.now(), voz: true }]);
     let transcricao = '';
     const fala = (await falaAntecipadaLigada()) ? abrirFalaAntecipada(pairing) : null;
     const ant = antecipador(fala);
@@ -885,7 +902,7 @@ export default function ChatScreen({
       // certa — antes da resposta que vai começar a ser escrita logo depois.
       const { reply, rapidas, id, desfazer, memoria, musicas } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
-        setMessages((prev) => [...prev, { id: `transcript-${Date.now()}`, from: 'me', text: transcript, ts: Date.now() }]);
+        setMessages((prev) => prev.map((m) => (m.id === idAudio ? { ...m, text: transcript } : m)));
       });
       if (paradoRef.current) { fala?.abortar(); return null; }
       // Com o id, a tela que o PC mandar depois (pedido de tela por voz) acha esta bolha.
@@ -902,6 +919,19 @@ export default function ChatScreen({
       setPensandoVoz(false);
       bolhaAtualRef.current = null;
     }
+  }
+
+  /** A pergunta de uma resposta, se dá para mandar de novo (áudio só com a transcrição). */
+  function perguntaDe(item: StoredMessage): string | null {
+    const i = messages.findIndex(m => m.id === item.id);
+    const p = [...messages.slice(0, i)].reverse().find(m => m.from === 'me');
+    return p && !p.text.startsWith('🎤') && !p.text.startsWith('📎') && !p.text.startsWith('📷') && !p.text.startsWith('🖼️') ? p.text : null;
+  }
+  function refazer(item: StoredMessage) {
+    const p = perguntaDe(item);
+    if (!p || sending) return;
+    setMessages(prev => prev.filter(m => m.id !== item.id));
+    void handleSend(p, { refazer: true });
   }
 
   // ── Ações da bolha (bloco 130): copiar, ouvir, refazer ─────────────────────
@@ -925,15 +955,10 @@ export default function ChatScreen({
     const ouvir = { text: 'Ouvir', onPress: () => { falar(textoPuro(item.text), pairing); } };
     // Refazer só a última resposta, e só se a pergunta dela foi digitada (áudio não tem texto para reenviar).
     const ultima = [...messages].reverse().find(m => m.from === 'reply');
-    const indice = messages.findIndex(m => m.id === item.id);
-    const pergunta = [...messages.slice(0, indice)].reverse().find(m => m.from === 'me');
-    const podeRefazer = ultima?.id === item.id && pergunta && !pergunta.text.startsWith('🎤') && !pergunta.text.startsWith('📎') && !sending;
+    const podeRefazer = ultima?.id === item.id && !!perguntaDe(item) && !sending;
     // O Alert do Android mostra até 3 botões: Copiar, Compartilhar e (Refazer | Ouvir).
     const botoes = podeRefazer
-      ? [copiar, compartilhar, { text: 'Refazer', onPress: () => {
-          setMessages(prev => prev.filter(m => m.id !== item.id));
-          handleSend(pergunta!.text, { refazer: true });
-        } }]
+      ? [copiar, compartilhar, { text: 'Refazer', onPress: () => refazer(item) }]
       : [copiar, compartilhar, ouvir];
     Alert.alert('Resposta', undefined, botoes, { cancelable: true });
   }
@@ -1030,7 +1055,7 @@ export default function ChatScreen({
   /** Pedido falado que já veio em texto (colado no "Ely"): mesma conversa, sem gravar. */
   async function enviarTextoFalado(texto: string): Promise<{ reply: string; fala: FalaAntecipada | null; jaFalado: string } | null> {
     setSending(true);
-    setMessages((prev) => [...prev, { id: `me-voz-${Date.now()}`, from: 'me', text: texto, ts: Date.now() }]);
+    setMessages((prev) => [...prev, { id: `me-voz-${Date.now()}`, from: 'me', text: texto, ts: Date.now(), voz: true }]);
     const fala = (await falaAntecipadaLigada()) ? abrirFalaAntecipada(pairing) : null;
     const ant = antecipador(fala);
     try {
@@ -1096,7 +1121,7 @@ export default function ChatScreen({
       // Minimizado sem a gravação no fundo (APK antigo, ou o Android recusou): o live para limpo,
       // com o porquê, em vez de um erro técnico.
       if (liveRef.current && AppState.currentState !== 'active') pushError('O Android não deixou ouvir com o app minimizado. Abra o app e diga "modo live" para continuar.');
-      else pushError(`Voz: ${errMessage(err)}`);
+      else pushError(errMessage(err));
     } finally {
       turnoRef.current = false;
       setFaseVoz(null);
@@ -1189,7 +1214,7 @@ export default function ChatScreen({
       {/* Fase 21: a esfera 3D no fundo da conversa — parada, gira e respira; com voz, se mexe.
           22.1: só fundo (sem toque). Chat vazio = ela sozinha no meio, como no PC. */}
       {/* 09/11: o aviso de conexão empurra o campo para cima; a esfera e a saudação sobem junto. */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { bottom: alturaAvisos }]}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { bottom: alturaAvisos + Math.max(0, alturaCampo - folgaDaBarra - 70) }]}>
         <Esfera3D vazio={messages.length === 0} titulo={nomeDono ? `${saudacao()}, ${nomeDono}.` : `${saudacao()}.`} dica="Pergunte, peça, mande abrir. Segure o microfone para falar." />
       </View>
       {/* 31/10: "Continuar do PC" — a conversa que acabou de acontecer lá, a um toque. */}
@@ -1227,17 +1252,23 @@ export default function ChatScreen({
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
           deslocamento.current = contentOffset.y;
-          coladoNoFim.current =
-            contentSize.height - layoutMeasurement.height - contentOffset.y < 80;
+          const falta = contentSize.height - layoutMeasurement.height - contentOffset.y;
+          coladoNoFim.current = falta < 80;
+          setLonge(falta > 420);
+          if (falta < 80) setNovas(false);
         }}
         scrollEventThrottle={64}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
+          const hora = separaAntes(item.ts, messages[index - 1]?.ts) ? (
+            <Text variant="caption" color={palette.textMuted} style={styles.hora}>{rotuloDaHora(item.ts)}</Text>
+          ) : null;
           // Fase 23.1: as bolhas do PC. A minha é translúcida na cor do tema (18% + borda de
           // 35%), não um bloco sólido; a da Ely é a superfície com borda fina. Renascença: a
           // minha vai no pigmento, em itálico, e a da Ely ganha a moldura dourada.
           if (item.from === 'error' && item.erro) {
             const erro = item.erro;
             return (
+              <>{hora}
               <CartaoErro titulo={erro.titulo} detalhe={erro.detalhe} acoes={erro.acoes} fila={!!erro.filaId}
                 onAcao={(a) => {
                   // O cartão sai da conversa; a ação decide o que vem no lugar.
@@ -1245,7 +1276,7 @@ export default function ChatScreen({
                   if (a === 'refazer' && erro.pergunta) void handleSend(erro.pergunta, { refazer: true });
                   else if (a === 'depois' && erro.pergunta) void enqueueCommand(erro.pergunta).then((q) => setMessages((prev) => [...prev, { id: `queued-${Date.now()}`, from: 'error', text: 'Guardado.', ts: Date.now(), erro: { titulo: 'Guardei para mandar depois', detalhe: 'Mando sozinho assim que o PC responder.', acoes: ['cancelar'], filaId: q.id } }]));
                   else if (a === 'cancelar' && erro.filaId) void removeFromQueue(erro.filaId);
-                }} />
+                }} /></>
             );
           }
           const minha = item.from === 'me';
@@ -1254,8 +1285,10 @@ export default function ChatScreen({
           // 29/10: o rabinho das bolhas do design — canto de baixo menor do lado de quem fala.
           const raio = palette.familia === 'glass' ? 26 : palette.familia === 'dark' ? 20 : tokens.radii.lg;
           const ponta = palette.familia === 'glass' ? 8 : palette.familia === 'dark' ? 6 : tokens.radii.lg;
+          const ultima = messages[messages.length - 1]?.id === item.id;
           return (
             <>
+            {hora}
             <BolhaEntrando
               style={[
                 styles.bubble,
@@ -1274,7 +1307,12 @@ export default function ChatScreen({
               {/* Bloco 130: a resposta vem em markdown no chat digitado; toque longo = ações.
                   Fase 22: deslizar a bolha da Ely para a esquerda = ouvir de novo; toque duplo = copiar. */}
               <Pressable onLongPress={() => acoesDaBolha(item)} delayLongPress={350}>
-                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : <TextoComLinks texto={item.text} cor={color} />}
+                {item.from === 'reply' ? <Markdown texto={item.text} cor={color} /> : item.voz && item.text !== '🎤 (áudio)' ? (
+                  <View style={styles.falada}>
+                    <Feather name="mic" size={12} color={palette.textMuted} style={{ marginTop: 5 }} />
+                    <View style={{ flexShrink: 1 }}><TextoComLinks texto={item.text} cor={color} /></View>
+                  </View>
+                ) : <TextoComLinks texto={item.text} cor={color} />}
               </Pressable>
               {/* Fase 18: a nuvem falhou e o cérebro do PC respondeu — pode ser menos preciso. */}
               {item.local ? (
@@ -1317,13 +1355,21 @@ export default function ChatScreen({
                 <Text variant="caption" color={palette.textMuted}>Desfazer</Text>
               </Pressable>
             ) : null}
-            {/* 23/10: "Ver como tela" na última resposta longa que ainda não tem tela (como no PC). */}
-            {item.from === 'reply' && !item.tela && !item.musicas && !sending && item.text.length > 80 && messages[messages.length - 1]?.id === item.id ? (
-              <Pressable onPress={() => { haptica.leve(); void telaDaResposta(item); }} accessibilityRole="button" accessibilityLabel="Ver esta resposta como tela" hitSlop={6}
-                style={({ pressed }) => [styles.verTela, { borderColor: palette.border, opacity: pressed ? 0.7 : 1 }]}>
-                <Feather name="layout" size={12} color={palette.textMuted} />
-                <Text variant="caption" color={palette.textMuted}>Ver como tela</Text>
-              </Pressable>
+            {/* 25/11: copiar, ouvir, refazer e (23/10) ver como tela, discretos, na última resposta. */}
+            {item.from === 'reply' && ultima && !sending ? (
+              <View style={styles.acoesResposta}>
+                {([
+                  ['copy', 'Copiar', () => { Clipboard.setStringAsync(textoPuro(item.text)).catch(() => {}); ToastAndroid?.show('Copiado.', ToastAndroid.SHORT); }, true],
+                  ['volume-2', 'Ouvir', () => { void falar(textoPuro(item.text), pairing); }, true],
+                  ['rotate-cw', 'Refazer', () => refazer(item), !!perguntaDe(item)],
+                  ['layout', 'Ver como tela', () => { void telaDaResposta(item); }, !item.tela && !item.musicas && item.text.length > 80],
+                ] as const).filter((a) => a[3]).map(([icone, rotulo, acao]) => (
+                  <Pressable key={icone} onPress={() => { haptica.leve(); acao(); }} hitSlop={6} accessibilityRole="button" accessibilityLabel={rotulo}
+                    style={({ pressed }) => [styles.acaoResposta, pressed && { opacity: 0.5 }]}>
+                    <Feather name={icone} size={15} color={palette.textMuted} />
+                  </Pressable>
+                ))}
+              </View>
             ) : null}
             {/* 22/10: respostas rápidas embaixo da última resposta (somem quando ele responde). */}
             {item.from === 'reply' && !sending && messages[messages.length - 1]?.id === item.id ? (
@@ -1333,6 +1379,9 @@ export default function ChatScreen({
           );
         }}
       />
+
+      {semCabecalho && messages.length ? <SumirNoTopo altura={folgaTopo} /> : null}
+      <IrAoFim visivel={longe} novas={novas} acima={alturaCampo + 12} aoTocar={() => { coladoNoFim.current = true; setNovas(false); listRef.current?.scrollToEnd({ animated: true }); }} />
 
       {sending && conexao === 'reconectando' && (
         <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingBottom: 6 }}>Reconectando ao PC… a resposta continua de onde parou.</Text>
@@ -1407,7 +1456,7 @@ export default function ChatScreen({
           inteira por quadro é o custo que este bloco foi tirar da rolagem. Os BOTÕES é
           que viram vidro de verdade — são três regiões de 44 px, fixas. */}
       {/* 31/10: a faixa vai até o fim da tela; a barra de abas flutua por cima da folga. */}
-      <View style={{ overflow: 'hidden', paddingBottom: folgaDaBarra }}>
+      <View style={{ overflow: 'hidden', paddingBottom: folgaDaBarra }} onLayout={(e) => setAlturaCampo(e.nativeEvent.layout.height)}>
         <GlassFill intensity={40} strong edge={false} blur={false} />
         <View
           style={[
@@ -1416,65 +1465,56 @@ export default function ChatScreen({
           ]}
         >
         {/* Fase 22: câmera, anexo, modos e presets moram atrás do "+". */}
-        <GlassCircle size={40} ativo={maisAberto} onPress={() => { haptica.leve(); setMaisAberto(v => !v); }} accessibilityLabel="Mais opções">
-          <Feather name={maisAberto ? 'x' : 'plus'} size={20} color={palette.primary} />
-        </GlassCircle>
-        <TextInput
+        <CampoDeMensagem
           ref={inputRef}
-          style={[
-            styles.input,
-            {
-              borderColor: palette.border,
-              borderRadius: tokens.radii.full,
-              paddingHorizontal: tokens.spacing.lg,
-              color: palette.text,
-            },
-          ]}
-          value={draft}
-          onChangeText={(t) => { if (!t) editandoRef.current = null; setDraft(t); }}
+          valor={draft}
+          aoMudar={(t) => { if (!t) editandoRef.current = null; setDraft(t); }}
+          aoEnviar={() => { if (!sending) void handleSend(); }}
           placeholder="Converse com a Ely…"
-          placeholderTextColor={palette.textMuted}
-          onSubmitEditing={() => handleSend()}
-          returnKeyType="send"
-          editable={!sending}
-          // Fase 18: cresce até 5 linhas — mensagem longa ficava escondida numa linha só.
-          // Enter continua enviando (submitBehavior); a quebra vem do texto colado.
-          multiline
-          submitBehavior="submit"
-          maxLength={4000}
-        />
-        <GlassCircle
-          size={40}
-          ativo={recording}
-          pulsando={recording}
-          onPressIn={handleRecordStart}
-          onPressOut={handleRecordStop}
-          disabled={sending || (micStatus !== 'ready' && micStatus !== 'pedir') || faseVoz !== null}
-          accessibilityLabel={micStatus === 'pedir' ? 'Permitir o microfone' : 'Segure para falar'}
-        >
-          <Feather
-            name="mic"
-            size={20}
-            color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
-          />
-        </GlassCircle>
-        {sending ? (
-          <GlassCircle size={40} ativo onPress={pararResposta} accessibilityLabel="Parar a resposta">
-            <Feather name="square" size={17} color={palette.error} />
-          </GlassCircle>
-        ) : draft.trim() ? (
-          <GlassCircle size={40} ativo onPress={() => handleSend()} accessibilityLabel="Enviar">
-            <Feather name="arrow-up" size={20} color={palette.primary} />
-          </GlassCircle>
-        ) : (
-          // Fase 22: o LIVE é um botão — aceso (com anel) enquanto a conversa contínua está ligada.
-          <View style={[styles.anelLive, live && { borderColor: palette.primary }]}>
-            <GlassCircle size={40} ativo={live} pulsando={live} onPress={alternarLive}
-              disabled={micStatus !== 'ready'} accessibilityLabel={live ? 'Sair do modo live' : 'Modo live: conversa contínua'}>
-              <Feather name="activity" size={19} color={live ? palette.primary : palette.textMuted} />
+          larguraEsquerda={50}
+          larguraDireita={102}
+          esquerda={(
+            <GlassCircle size={40} ativo={maisAberto} onPress={() => { haptica.leve(); setMaisAberto(v => !v); }} accessibilityLabel="Mais opções">
+              <Feather name={maisAberto ? 'x' : 'plus'} size={20} color={palette.primary} />
             </GlassCircle>
-          </View>
-        )}
+          )}
+          direita={(
+            <>
+              <GlassCircle
+                size={40}
+                ativo={recording}
+                pulsando={recording}
+                onPressIn={handleRecordStart}
+                onPressOut={handleRecordStop}
+                disabled={sending || (micStatus !== 'ready' && micStatus !== 'pedir') || faseVoz !== null}
+                accessibilityLabel={micStatus === 'pedir' ? 'Permitir o microfone' : 'Segure para falar'}
+              >
+                <Feather
+                  name="mic"
+                  size={20}
+                  color={recording ? palette.error : micStatus !== 'ready' ? palette.textMuted : palette.primary}
+                />
+              </GlassCircle>
+              {sending ? (
+                <GlassCircle size={40} ativo onPress={pararResposta} accessibilityLabel="Parar a resposta">
+                  <Feather name="square" size={17} color={palette.error} />
+                </GlassCircle>
+              ) : draft.trim() ? (
+                <GlassCircle size={40} ativo onPress={() => handleSend()} accessibilityLabel="Enviar">
+                  <Feather name="arrow-up" size={20} color={palette.primary} />
+                </GlassCircle>
+              ) : (
+                // Fase 22: o LIVE é um botão — aceso (com anel) enquanto a conversa contínua está ligada.
+                <View style={[styles.anelLive, live && { borderColor: palette.primary }]}>
+                  <GlassCircle size={40} ativo={live} pulsando={live} onPress={alternarLive}
+                    disabled={micStatus !== 'ready'} accessibilityLabel={live ? 'Sair do modo live' : 'Modo live: conversa contínua'}>
+                    <Feather name="activity" size={19} color={live ? palette.primary : palette.textMuted} />
+                  </GlassCircle>
+                </View>
+              )}
+            </>
+          )}
+        />
         </View>
       </View>
 
@@ -1601,17 +1641,14 @@ lembrei: { alignSelf: 'flex-start', maxWidth: '88%', marginTop: 2, marginLeft: 4
   chipModo: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1 },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
     borderTopWidth: 1,
   },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    paddingVertical: 10,
-    // Até ~5 linhas; depois rola dentro do campo.
-    maxHeight: 120,
-  },
+  hora: { alignSelf: 'center', fontSize: 11, marginTop: 8, marginBottom: 2 },
+  falada: { flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  acoesResposta: { flexDirection: 'row', gap: 2, marginTop: 2, marginBottom: 6, marginLeft: 2 },
+  acaoResposta: { width: 34, height: 30, alignItems: 'center', justifyContent: 'center' },
 
 });
 

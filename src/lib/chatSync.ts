@@ -1,5 +1,7 @@
 import { Pairing } from './pairing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { callRpc } from './rpc';
+import { chavePorPc } from './pcAtivo';
 import {
   ChatSession, clearTombstones, listSessions, purgeDeleted, readTombstones, replaceAll,
 } from './chatHistoryStore';
@@ -10,7 +12,7 @@ import {
  * ## Quem manda
  *
  * O PC é a autoridade. O celular empurra o que mudou, o PC aplica a regra de retenção
- * (5 não favoritadas + favoritas), e o celular adota a lista devolvida. Se os dois
+ * (40 não favoritadas + favoritas), e o celular adota a lista devolvida. Se os dois
  * lados podassem por conta própria, cada um devolveria ao outro exatamente o que o
  * outro acabou de apagar, e conversa apagada reapareceria sozinha.
  *
@@ -48,6 +50,13 @@ export function syncChats(pairing: Pairing): Promise<SyncResult> {
   return inFlight;
 }
 
+const CHAVE_SINCRONIZADAS = () => chavePorPc('elysium_chat_sincronizadas');
+/** Renomear e favoritar não sobem o `updatedAt`: entram na marca. */
+const marcaDaConversa = (s: Pick<ChatSession, 'updatedAt' | 'favorite' | 'title' | 'messages'>) => `${s.updatedAt}|${s.favorite ? 1 : 0}|${s.title}|${s.messages.length}`;
+async function lerSincronizadas(): Promise<Record<string, string>> {
+  try { return JSON.parse(await AsyncStorage.getItem(CHAVE_SINCRONIZADAS()) ?? '{}') as Record<string, string>; } catch { return {}; }
+}
+
 async function run(pairing: Pairing): Promise<SyncResult> {
   try {
     // 1. Exclusões primeiro. Se fossem depois do envio, uma conversa apagada aqui
@@ -65,13 +74,17 @@ async function run(pairing: Pairing): Promise<SyncResult> {
     // 2. Empurra o que existe aqui. O PC resolve o conflito por `updatedAt`, então
     //    mandar uma versão velha é inofensivo: ele mantém a dele.
     const local = await listSessions();
-    for (const session of local) {
+    // 25/11: só o que mudou desde a última vez — com 40 conversas, mandar todas pesava.
+    const ja = await lerSincronizadas();
+    const mudaram = local.filter((s) => ja[s.id] !== marcaDaConversa(s));
+    for (const session of mudaram) {
       await callRpc(pairing, 'chat.save', { session });
     }
 
     // 3. Adota o resultado, e aplica o que o PC apagou.
     const { sessions, deleted: apagadasNoPc } = await callRpc(pairing, 'chat.list');
     await replaceAll(sessions);
+    await AsyncStorage.setItem(CHAVE_SINCRONIZADAS(), JSON.stringify(Object.fromEntries(sessions.map((s) => [s.id, marcaDaConversa(s)])))).catch(() => {});
     const aplicadas = await purgeDeleted(apagadasNoPc ?? []);
 
     // 4. Só agora o PC pode soltar a lápide dele. Confirmar antes de gravar deixaria uma
@@ -82,7 +95,7 @@ async function run(pairing: Pairing): Promise<SyncResult> {
     }
 
     return {
-      status: 'synced', sessions, pushed: local.length,
+      status: 'synced', sessions, pushed: mudaram.length,
       deleted: confirmed.length + aplicadas.length,
     };
   } catch {

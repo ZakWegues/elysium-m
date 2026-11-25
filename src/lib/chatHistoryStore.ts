@@ -1,20 +1,20 @@
 import type { Rapidas } from './respostasRapidas';
 import type { MusicaSugerida } from './rpc';
 import type { TelaDaMensagem } from './telas';
+import { cabem } from './campoDeMensagem';
 import { chavePorPc } from './pcAtivo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = () => chavePorPc('elysium_chat_sessions');
 /** Ids apagados aqui que ainda não foram propagados ao PC. */
 const TOMBSTONE_KEY = () => chavePorPc('elysium_chat_deleted');
-const MAX_NON_FAVORITE_SESSIONS = 5;
 
 export type Fonte = { titulo: string; url: string };
 /** `fontes`: as páginas que a busca na web leu para essa resposta (bloco 131). */
 /** `local` (fase 18): a nuvem falhou e quem respondeu foi o cérebro do PC — selo "modo local". */
 export type MusicasDaResposta = { itens: MusicaSugerida[]; aprendi: string[] };
 
-export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; fontes?: Fonte[]; local?: boolean; /** 05/11: escrita pelo modelo do PC no modo sem censura. */ semCensura?: boolean;  /** 31/10: a resposta fez algo reversível — o "Desfazer" fica até `ate`. */ desfazer?: { rotulo: string; ate: number }; /** 31/10: o que da memória do PC a resposta usou ("Lembrei: …"). */ memoria?: string[]; /** 22/10: botões de resposta da última mensagem. */ rapidas?: Rapidas; sugestoes?: string[]; /** 22/10: id do pedido (a tela chega com ele) e a tela inteligente da resposta. */ pedidoId?: string; tela?: TelaDaMensagem; /** 23/11: músicas sugeridas, com trecho e botões de tocar, e o que ela anotou. */ musicas?: MusicasDaResposta;  /** 26/10: erro como cartão com ações (CartaoErro). */ erro?: { titulo: string; detalhe?: string; acoes: ('refazer' | 'depois' | 'cancelar')[]; pergunta?: string; filaId?: string } };
+export type StoredMessage = { id: string; from: 'me' | 'reply' | 'error'; text: string; ts: number; /** 25/11: veio falada (a transcrição é o texto). */ voz?: boolean; fontes?: Fonte[]; local?: boolean; /** 05/11: escrita pelo modelo do PC no modo sem censura. */ semCensura?: boolean;  /** 31/10: a resposta fez algo reversível — o "Desfazer" fica até `ate`. */ desfazer?: { rotulo: string; ate: number }; /** 31/10: o que da memória do PC a resposta usou ("Lembrei: …"). */ memoria?: string[]; /** 22/10: botões de resposta da última mensagem. */ rapidas?: Rapidas; sugestoes?: string[]; /** 22/10: id do pedido (a tela chega com ele) e a tela inteligente da resposta. */ pedidoId?: string; tela?: TelaDaMensagem; /** 23/11: músicas sugeridas, com trecho e botões de tocar, e o que ela anotou. */ musicas?: MusicasDaResposta;  /** 26/10: erro como cartão com ações (CartaoErro). */ erro?: { titulo: string; detalhe?: string; acoes: ('refazer' | 'depois' | 'cancelar')[]; pergunta?: string; filaId?: string } };
 
 export type ChatSession = {
   id: string;
@@ -90,10 +90,9 @@ export async function saveSession(session: ChatSession): Promise<void> {
   const favorites = sessions.filter((s) => s.favorite);
   const nonFavorites = sessions
     .filter((s) => !s.favorite)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, MAX_NON_FAVORITE_SESSIONS);
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 
-  await writeAll([...favorites, ...nonFavorites]);
+  await writeAll([...favorites, ...cabem(nonFavorites)]);
 }
 
 export async function deleteSession(id: string): Promise<void> {
@@ -135,7 +134,8 @@ export async function clearTombstones(ids: string[]): Promise<void> {
  * que o outro acabou de apagar.
  */
 export async function replaceAll(sessions: ChatSession[]): Promise<void> {
-  await writeAll(sessions);
+  const recentes = sessions.filter((s) => !s.favorite).sort((a, b) => b.updatedAt - a.updatedAt);
+  await writeAll([...sessions.filter((s) => s.favorite), ...cabem(recentes)]);
 }
 
 /**

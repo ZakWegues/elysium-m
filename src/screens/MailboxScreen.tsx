@@ -1,6 +1,10 @@
 import { useFolgaDaBarra } from '../lib/folgaBarra';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, Share, StyleSheet, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CampoDeMensagem } from '../components/chat/CampoDeMensagem';
+import { IrAoFim } from '../components/chat/IrAoFim';
+import { SumirNoTopo } from '../components/chat/SumirNoTopo';
 import { TextoComLinks } from '../components/TextoComLinks';
 import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
 import * as DocumentPicker from 'expo-document-picker';
@@ -56,6 +60,14 @@ export default function MailboxScreen({
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
+  // 25/11: o rascunho do lado PC também sobrevive ao app fechado.
+  const rascunhoLido = useRef(false);
+  useEffect(() => { AsyncStorage.getItem('elysium_rascunho_pc').then((r) => { if (r) setDraft((d) => d || r); }).catch(() => {}).finally(() => { rascunhoLido.current = true; }); }, []);
+  useEffect(() => {
+    if (!rascunhoLido.current) return;
+    const t = setTimeout(() => { AsyncStorage.setItem('elysium_rascunho_pc', draft).catch(() => {}); }, 400);
+    return () => clearTimeout(t);
+  }, [draft]);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -147,6 +159,8 @@ export default function MailboxScreen({
    * para baixo — decidimos se acompanhamos.
    */
   const jaAncorou = useRef(false);
+  const [longe, setLonge] = useState(false);
+  const [alturaCampo, setAlturaCampo] = useState(0);
   /** O dedo está por perto do fim? Só então a lista acompanha mensagem nova. */
   const coladoNoFim = useRef(true);
   /**
@@ -416,6 +430,7 @@ export default function MailboxScreen({
           // 80 px de tolerância: quem parou a rolagem um dedo acima do fim ainda quer
           // acompanhar; quem subiu para reler, não.
           coladoNoFim.current = faltando < 80;
+          setLonge(faltando > 420);
           // Voltou ao fim de verdade: a âncora volta a valer como se a tela tivesse
           // acabado de abrir.
           if (faltando < 8) usuarioArrastou.current = false;
@@ -491,8 +506,11 @@ export default function MailboxScreen({
         }}
       />
 
+      {semCabecalho && ordered.length ? <SumirNoTopo altura={folgaTopo} /> : null}
+      <IrAoFim visivel={longe} novas={false} acima={alturaCampo + 12} aoTocar={() => { usuarioArrastou.current = false; listRef.current?.scrollToEnd({ animated: true }); }} />
+
       {/* Mesmo desenho do lado da IA: barra em tinta chapada, botões em vidro real. */}
-      <View style={{ overflow: 'hidden', paddingBottom: folgaDaBarra }}>
+      <View style={{ overflow: 'hidden', paddingBottom: folgaDaBarra }} onLayout={(e) => setAlturaCampo(e.nativeEvent.layout.height)}>
         <GlassFill intensity={40} strong edge={false} blur={false} />
         <View
           style={[
@@ -517,31 +535,37 @@ export default function MailboxScreen({
           </View>
         ))}
         <View style={styles.composerRow}>
-          <GlassCircle accessibilityLabel="Colar da área de transferência" onPress={handlePaste}>
-            <Feather name="clipboard" size={20} color={palette.primary} />
-          </GlassCircle>
-          <GlassCircle accessibilityLabel="Anexar arquivo" onPress={handleAttach}>
-            <Feather name="paperclip" size={20} color={palette.primary} />
-          </GlassCircle>
-          <TextInput
-            style={[styles.input, { borderColor: palette.border, borderRadius: tokens.radii.full, color: palette.text }]}
-            value={draft}
-            onChangeText={setDraft}
+          <CampoDeMensagem
+            valor={draft}
+            aoMudar={setDraft}
+            aoEnviar={() => { if (!sending && (draft.trim() || attachments.length)) void handleSend(); }}
             placeholder="Link ou nota…"
-            placeholderTextColor={palette.textMuted}
-            editable={!sending}
-          />
-          <GlassCircle accessibilityLabel="Enviar"
-            ativo
-            onPress={handleSend}
-            disabled={sending || (!draft.trim() && !attachments.length)}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color={palette.primary} />
-            ) : (
-              <Feather name="arrow-up" size={20} color={palette.primary} />
+            larguraEsquerda={102}
+            larguraDireita={52}
+            esquerda={(
+              <>
+                <GlassCircle accessibilityLabel="Colar da área de transferência" onPress={handlePaste}>
+                  <Feather name="clipboard" size={20} color={palette.primary} />
+                </GlassCircle>
+                <GlassCircle accessibilityLabel="Anexar arquivo" onPress={handleAttach}>
+                  <Feather name="paperclip" size={20} color={palette.primary} />
+                </GlassCircle>
+              </>
             )}
-          </GlassCircle>
+            direita={(
+              <GlassCircle accessibilityLabel="Enviar"
+                ativo
+                onPress={handleSend}
+                disabled={sending || (!draft.trim() && !attachments.length)}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color={palette.primary} />
+                ) : (
+                  <Feather name="arrow-up" size={20} color={palette.primary} />
+                )}
+              </GlassCircle>
+            )}
+          />
         </View>
         </View>
       </View>
@@ -557,12 +581,6 @@ const styles = StyleSheet.create({
   previewLoading: { alignItems: 'center', justifyContent: 'center' },
   imageFavorite: { position: 'absolute', top: 8, right: 8 },
   composer: { borderTopWidth: 1, gap: 8 },
-  composerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   attachmentChip: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
 });
