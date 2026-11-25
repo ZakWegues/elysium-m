@@ -26,6 +26,7 @@ import { AjustesProvider, AppBackground, BarraBlurProvider, BlurTargetProvider, 
 import { CamadaEstouros, registrarToque } from './src/components/Estouros';
 import { IndicadorConexao } from './src/components/conexao/IndicadorConexao';
 import { useConnection } from './src/lib/useConnection';
+import { enderecoMudou } from './src/lib/notificacoesLidas';
 import { useKeyboard } from './src/lib/useKeyboard';
 import { flushQueue, listQueue } from './src/lib/commandQueue';
 import { syncChats } from './src/lib/chatSync';
@@ -153,6 +154,15 @@ function AppInner() {
         respostaTratada.current = chave;
         N.clearLastNotificationResponseAsync().catch(() => {});
         abrirUmaVez(String(refDeAbrir), alvo);
+        return;
+      }
+      // 25/11: a Ely puxou conversa (ou terminou uma tarefa) — o toque abre o Chat com a fala dela.
+      if (typeof refDeAbrir === 'string' && refDeAbrir.startsWith('ely:') && c.body) {
+        const chave = `${r.notification.request.identifier}:${r.notification.date}`;
+        if (respostaTratada.current === chave) return;
+        respostaTratada.current = chave;
+        N.clearLastNotificationResponseAsync().catch(() => {});
+        setFalaDaEly(c.body); setModoChat('ia'); setScreen('chat');
         return;
       }
       abrirCaixa(c.data);
@@ -517,6 +527,9 @@ function AppInner() {
       setSettingsModalVisible(false);
     });
   }, []);
+
+  // 25/11: o serviço das notificações entrega no endereço atual do PC (e esvazia a fila ao abrir).
+  useEffect(() => { if (pairing) enderecoMudou(pairing); }, [pairing]);
 
   const handleAdicionarPc = useCallback(() => {
     setSettingsModalVisible(false);

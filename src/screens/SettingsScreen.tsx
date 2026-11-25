@@ -27,6 +27,9 @@ import { ligarPalavra, palavraLigada, useEstadoPalavra } from '../lib/palavraNoC
 import { trocarModo, useModo } from '../lib/modo';
 import { ligarBrilhoSegueAparelho, useBrilhoSegueAparelho } from '../lib/brilhoAparelho';
 import { mudarBolota, useAjusteDaBolota } from '../lib/bolotaAjuste';
+import { ligarBarraVidro, useBarraVidro } from '../lib/barraVidro';
+import { BARRA_VIDRO } from '../components/BarraVidro';
+import { SecaoNotificacoes } from './ajustes/SecaoNotificacoes';
 import { VIDRO_NATIVO } from '../components/vidro/VidroNativo';
 import { confirmDestructive } from '../lib/confirm';
 import type { ModoDaLista } from '../lib/rpc';
@@ -107,6 +110,7 @@ export default function SettingsScreen({ pairing, onUnpair, onTrocarPc, onAdicio
       {secao === 'modos' && <SecaoModos pairing={pairing} />}
       {secao === 'memoria' && <PainelMemoria pairing={pairing} onError={(err, ctx) => Alert.alert(ctx, errMessage(err))} />}
       {/* Fase 22: uma seção só — o aviso local e o push do PC no mesmo cartão. */}
+      {secao === 'avisos' && <SecaoNotificacoes pairing={pairing} />}
       {secao === 'avisos' && (
         <Card glass style={{ gap: tokens.spacing.md }}>
           <AvisosLocais />
@@ -457,6 +461,7 @@ function SecaoAparencia() {
   const { name, palette, tokens, familia, familiaResolvida, setTheme, setFamilia } = useTheme();
   const segue = useBrilhoSegueAparelho();
   const bolota = useAjusteDaBolota();
+  const barraDeVidro = useBarraVidro();
   return (
     <View style={{ gap: tokens.spacing.lg }}>
       <View style={{ gap: tokens.spacing.sm }}>
@@ -552,6 +557,19 @@ function SecaoAparencia() {
           <VidroSwitch value={segue} onValueChange={ligarBrilhoSegueAparelho} accessibilityLabel="Brilho segue o celular" />
         </View>
       )}
+
+      {BARRA_VIDRO ? (
+        <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+          <Feather name="droplet" size={17} color={barraDeVidro ? palette.primary : palette.textMuted} />
+          <View style={{ flex: 1 }}>
+            <Text variant="body">Barra com liquid glass</Text>
+            <Text variant="caption" color={palette.textMuted}>
+              Desligada, fica a barra com desfoque.
+            </Text>
+          </View>
+          <VidroSwitch value={barraDeVidro} onValueChange={ligarBarraVidro} accessibilityLabel="Barra com liquid glass" />
+        </View>
+      ) : null}
 
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="circle" size={17} color={bolota.estado !== 'desligada' ? palette.primary : palette.textMuted} />

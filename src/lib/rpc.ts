@@ -148,6 +148,10 @@ export type RpcMethod =
   | 'spotify.playSearch'
   | 'spotify.shuffle'
   | 'spotify.repeat'
+  | 'notif.chave'
+  | 'notif.respondida'
+  | 'notif.resumo'
+  | 'notif.apagar'
   | 'gostos.get'
   | 'gostos.artistas'
   | 'gostos.buscar'
@@ -703,6 +707,10 @@ export type RpcResults = {
   'spotify.playSearch': { playing: { track: string; artist: string } };
   'spotify.shuffle': { ok: true };
   'spotify.repeat': { ok: true };
+  'notif.chave': { id: string; chave: string };
+  'notif.respondida': { ok: true };
+  'notif.resumo': { texto: string };
+  'notif.apagar': { ok: true };
   'gostos.get': EstadoDosGostos;
   'gostos.artistas': { artistas: { nome: string; foto: string | null }[] };
   'gostos.buscar': { artistas: { nome: string; foto: string | null }[] };

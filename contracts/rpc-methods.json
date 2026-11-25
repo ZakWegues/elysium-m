@@ -457,6 +457,22 @@
       "destructive": false
     },
     {
+      "method": "notif.apagar",
+      "destructive": false
+    },
+    {
+      "method": "notif.chave",
+      "destructive": false
+    },
+    {
+      "method": "notif.respondida",
+      "destructive": false
+    },
+    {
+      "method": "notif.resumo",
+      "destructive": false
+    },
+    {
       "method": "notify.ack",
       "destructive": false
     },

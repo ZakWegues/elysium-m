@@ -9,3 +9,5 @@ modules/*/android/.cxx/**/*
 **/.kotlin/**/*
 node_modules/expo-updates/expo-updates-gradle-plugin/build/**/*
 node_modules/expo-updates/expo-updates-gradle-plugin/.gradle/**/*
+# 25/11 (APK 2.14.0): o Gradle do masked-view reescreve este arquivo, e o `npm ci` o apagava.
+node_modules/@react-native-masked-view/masked-view/android/src/main/AndroidManifest.xml

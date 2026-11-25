@@ -12,6 +12,7 @@ import { receberFrameEstado } from './estadoPc';
 import { receberFrameModo } from './modo';
 import { receberFramePomodoro } from './pomodoro';
 import { receberMailboxNovo } from './mailboxAviso';
+import { receberNotifFrame } from './notifFrame';
 import { AuthError } from './http';
 import { marcarRecusa, marcarVivo, recusaDoErro } from './conexao/sinais';
 
@@ -305,6 +306,8 @@ export function openVoiceConnection(
       if (data.direction === 'toMobile' && data.id) receberMailboxNovo(data.id);
     } else if (data.type === 'pc.estado') {
       receberFrameEstado(data as Record<string, unknown>);
+    } else if (data.type === 'notif.responder') {
+      receberNotifFrame(data as Record<string, unknown>, pegarPairing());
     } else if (data.type === 'modo') {
       receberFrameModo(data as Record<string, unknown>);
     } else if (data.type === 'pomodoro') {
