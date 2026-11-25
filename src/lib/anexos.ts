@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cabecalhoAssinado } from './assinatura';
+import { baseDeArquivo } from './tls';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { toByteArray } from 'base64-js';
@@ -161,7 +162,7 @@ export async function baixarAnexo(
   if (destino.exists && (!tamanho || destino.size === tamanho)) return destino;
   if (destino.exists) destino.delete();
   try {
-    const urlRaw = `${pc.baseUrl}/api/mailbox/messages/${encodeURIComponent(id)}/raw`;
+    const urlRaw = `${baseDeArquivo(pc.baseUrl)}/api/mailbox/messages/${encodeURIComponent(id)}/raw`;
     const tarefa = File.createDownloadTask(urlRaw, destino, {
       headers: cabecalhoAssinado(pc.token, 'GET', urlRaw),
       onProgress: ({ bytesWritten, totalBytes }) => { if (totalBytes > 0) aoProgresso?.(bytesWritten / totalBytes); },
@@ -242,7 +243,7 @@ export async function enviarArquivoGrande(
   const tamanho = arquivo.size ?? 0;
   if (!tamanho) throw new Error('Não deu para ler o tamanho do arquivo.');
   if (tamanho > LIMITE_ENVIO_PARA_O_PC) throw new Error('O arquivo passa de 500 MB.');
-  const urlUp = urlDoUpload(pc.baseUrl, nome, tipoDoArquivo(nome, tipo), opcoes);
+  const urlUp = urlDoUpload(baseDeArquivo(pc.baseUrl), nome, tipoDoArquivo(nome, tipo), opcoes);
   const tarefa = arquivo.createUploadTask(urlUp, {
     httpMethod: 'PUT',
     headers: { ...cabecalhoAssinado(pc.token, 'PUT', urlUp), 'Content-Type': 'application/octet-stream' },

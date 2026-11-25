@@ -1,4 +1,5 @@
 import { hmacSha256, utf8 } from './assinatura';
+import { diagTela } from './telaDiag';
 
 /**
  * TLS com o PC (31/10, APK 2.6.0).
@@ -14,7 +15,7 @@ import { hmacSha256, utf8 } from './assinatura';
  * pede a impressão de novo na próxima sonda.
  */
 
-type ModuloConfianca = { fixar(sha256: string): void; fixados(): string[] };
+type ModuloConfianca = { fixar(sha256: string): void; fixados(): string[]; tomada?(host: string, porta: number): number };
 
 let modulo: ModuloConfianca | null | undefined;
 
@@ -34,16 +35,30 @@ export type InfoTls = { porta: number; sha256: string };
 
 /** O https caiu nesta sessão: fica em http até a próxima sonda refazer a fixação. */
 let semTlsNestaSessao = false;
+let avisouTls = false;
 
 export function tlsUtil(tls: InfoTls | undefined): boolean {
   return !!tls && !semTlsNestaSessao && nativo() !== null;
 }
 
 export function desligarTlsNestaSessao(): void {
+  if (!semTlsNestaSessao) diagTela('tls: o https não passou; em http assinado até a próxima sonda');
   semTlsNestaSessao = true;
 }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+
+/**
+ * 25/11: por onde os arquivos vão ao PC. O `expo-file-system` não conhece o certificado fixado; em TLS
+ * ele usa a porta local do módulo, que repassa tudo cifrado (a assinatura é do caminho, não do endereço).
+ */
+export function baseDeArquivo(base: string): string {
+  const m = /^https:\/\/([\w.-]+):(\d+)$/.exec(base);
+  if (!m) return base;
+  const porta = nativo()?.tomada?.(m[1], Number(m[2]));
+  if (!porta) throw new Error('Não consegui abrir o envio seguro. Tente de novo.');
+  return `http://127.0.0.1:${porta}`;
+}
 
 /** A assinatura que o PC manda com a impressão (o mesmo cálculo do `assinarImpressao`). Puro. */
 export function assinaturaEsperada(token: string, sha256: string, porta: number): string {
@@ -73,6 +88,7 @@ export function fixarSeValido(token: string, tls: { porta?: unknown; sha256?: un
     return null;
   }
   try { m.fixar(sha256); } catch { return null; }
+  if (semTlsNestaSessao || !avisouTls) { avisouTls = true; diagTela(`tls: ligado (porta ${porta})`); }
   semTlsNestaSessao = false;
   return { porta, sha256 };
 }
