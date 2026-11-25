@@ -203,6 +203,8 @@ export type RpcMethod =
   | 'rotinas.run'
   | 'padroes.listar'
   | 'tls.info'
+  | 'ponte.info'
+  | 'aparelho.adotar'
   | 'telas.salvas.listar'
   | 'telas.salvas.obter'
   | 'telas.salvas.salvar'
@@ -779,6 +781,8 @@ export type RpcResults = {
   'padroes.listar': { padroes: { chave: string; pedido: string; hora: string; dias: number; texto: string }[] };
   'padroes.aceitar': { rotina: Rotina };
   /** 31/10: porta TLS e impressão do certificado, assinadas com o token. null = PC sem TLS. */
+  'ponte.info': { ponte: unknown };
+  'aparelho.adotar': { id: string; proprio: boolean };
   'tls.info': { tls: { porta: number; sha256: string; assinatura: string } | null };
   /** 31/10: telas salvas no PC (com o estado). */
   'telas.salvas.listar': { telas: { id: string; titulo: string; em: number }[] };

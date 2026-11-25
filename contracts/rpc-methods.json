@@ -17,6 +17,10 @@
       "destructive": false
     },
     {
+      "method": "aparelho.adotar",
+      "destructive": false
+    },
+    {
       "method": "apps.close",
       "destructive": true
     },
@@ -534,6 +538,10 @@
     },
     {
       "method": "pomodoro.stop",
+      "destructive": false
+    },
+    {
+      "method": "ponte.info",
       "destructive": false
     },
     {

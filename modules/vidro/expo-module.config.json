@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["expo.modules.vidro.VidroModule", "expo.modules.vidro.barra.BarraModule"]
+    "modules": ["expo.modules.vidro.VidroModule", "expo.modules.vidro.FundoModule", "expo.modules.vidro.EsferaModule", "expo.modules.vidro.barra.BarraModule"]
   }
 }

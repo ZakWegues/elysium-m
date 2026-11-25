@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
 import { idDoPc, type Pairing } from './pairing';
 import { ligarNotifFrame } from './notifFrame';
+import { IP_DA_PONTE } from './ponte';
 import { callRpc } from './rpc';
 
 /**
@@ -35,8 +36,9 @@ export function useEscuta() {
 }
 
 /** Os endereços em que o nativo tenta entregar, o que respondeu por último na frente. Pura. */
-export function enderecosDe(p: Pick<Pairing, 'activeIp' | 'endpoints' | 'port'>): string[] {
-  return [...new Set([p.activeIp, ...p.endpoints])].filter(Boolean).slice(0, 6).map((ip) => `http://${ip}:${p.port}`);
+export function enderecosDe(p: Pick<Pairing, 'activeIp' | 'endpoints' | 'port' | 'ponte'>): string[] {
+  // A ponte por último: só quando nenhum endereço direto atende.
+  return [...new Set([p.activeIp, ...p.endpoints].filter((ip) => ip !== IP_DA_PONTE))].filter(Boolean).slice(0, 6).concat(p.ponte ? [IP_DA_PONTE] : []).map((ip) => `http://${ip}:${p.port}`);
 }
 
 export async function ligarEscuta(pairing: Pairing): Promise<void> {

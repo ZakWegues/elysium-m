@@ -1,5 +1,5 @@
-import { createContext, ReactNode, useContext, useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { createContext, ReactNode, useContext, useEffect, useRef, useSyncExternalStore } from 'react';
+import { AppState, StyleSheet, View } from 'react-native';
 
 /**
  * Uma aba que continua montada quando escondida (08/10 — ver `lib/abas.ts`).
@@ -13,6 +13,16 @@ const AbaAtivaContext = createContext(true);
 /** `true` fora de uma aba (gavetas, testes) — nada para sem motivo. */
 export function useAbaAtiva(): boolean {
   return useContext(AbaAtivaContext);
+}
+
+function assinarApp(f: () => void) {
+  const s = AppState.addEventListener('change', f);
+  return () => s.remove();
+}
+/** A aba está à vista E o app na frente (25/11): conexão e consulta contínua param fora disso. */
+export function useAVista(): boolean {
+  const naFrente = useSyncExternalStore(assinarApp, () => AppState.currentState === 'active');
+  return useAbaAtiva() && naFrente;
 }
 
 export function AbaViva({ ativa, children }: { ativa: boolean; children: ReactNode }) {

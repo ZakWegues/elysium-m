@@ -8,7 +8,9 @@ import { useTheme } from '../theme';
 import { reduzirUI } from '../lib/motion';
 import { envelopeDoTrecho, estadoDaBolota, nivelDaBolota, palavrasDoTrecho, useFaseDaBolota } from '../lib/bolota';
 import { RITMO_PENSANDO, fatorNoturno } from '../lib/esferaLogica';
-import { useAbaAtiva } from './AbaViva';
+import { useAbaAtiva, useAVista } from './AbaViva';
+import { ESFERA_VIVA, EsferaViva } from './EsferaViva';
+import { nivelDaVoz } from '../lib/ritmo';
 
 /**
  * A esfera 3D no fundo do Chat (fase 21) — a mesma do PC.
@@ -41,8 +43,72 @@ function fibonacci(): number[] {
   return p;
 }
 
+/** A caixa da esfera no Chat e os textos de boas-vindas; quem desenha é a nativa ou o SVG. */
 export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: string; dica?: string }) {
   const [caixa, setCaixa] = useState({ w: 0, h: 0 });
+  const { palette } = useTheme();
+  const tamanho = Math.max(1, Math.min(caixa.w, caixa.h) * (vazio ? 0.7 : 0.86));
+  const aoMedir = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width !== caixa.w || height !== caixa.h) setCaixa({ w: width, h: height });
+  };
+  // Vazia: um pouco acima do meio (o campo de texto ocupa o rodapé). Com conversa: no meio.
+  const topo = caixa.h * (vazio ? 0.42 : 0.5) - tamanho / 2;
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.caixa]} onLayout={aoMedir}>
+      {caixa.h > 0 && (
+        <View style={{ position: 'absolute', top: topo, left: (caixa.w - tamanho) / 2, width: tamanho, height: tamanho }}>
+          {ESFERA_VIVA ? <EsferaNativa vazio={vazio} /> : <EsferaSvg vazio={vazio} tamanho={tamanho} />}
+        </View>
+      )}
+      {/* Fase 23.1: como no PC — a saudação e uma dica curta embaixo da esfera, só com o chat vazio. */}
+      {caixa.h > 0 && vazio && titulo ? (
+        <Animated.View entering={FadeIn.duration(500)} style={{ position: 'absolute', left: 24, right: 24, top: topo + tamanho * 0.94, alignItems: 'center', gap: 6 }}>
+          <Text variant="heading" style={{ textAlign: 'center' }}>{titulo}</Text>
+          {dica ? <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center' }}>{dica}</Text> : null}
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+/** 25/11: a nativa (bateria). O JS só diz o estado; o nível da voz vai a 20 por segundo, e só quando há voz. */
+function EsferaNativa({ vazio }: { vazio: boolean }) {
+  const fala = useFala();
+  const fase = useFaseDaBolota();
+  const { palette } = useTheme();
+  const ativa = useAVista();
+  const estado = estadoDaBolota(fase, fala.falando);
+  const [noite, setNoite] = useState<[number, number, number]>(noiteAgora);
+  useEffect(() => {
+    if (!ativa) return;
+    setNoite((n) => { const agora = noiteAgora(); return agora.join() === n.join() ? n : agora; });
+    const id = setInterval(() => setNoite((n) => { const agora = noiteAgora(); return agora.join() === n.join() ? n : agora; }), 5 * 60_000);
+    return () => clearInterval(id);
+  }, [ativa]);
+  useEffect(() => {
+    if (estado !== 'ouvindo') return;
+    const id = setInterval(() => nivelDaVoz(Math.min(1, nivelDaBolota.value * 1.3)), 50);
+    return () => { clearInterval(id); nivelDaVoz(0); };
+  }, [estado]);
+  useEffect(() => {
+    if (!fala.falando || fala.pausada || !fala.trecho || !ativa) { nivelDaVoz(0); return; }
+    const { palavras, durMs } = palavrasDoTrecho(fala.trecho);
+    const env = envelopeDoTrecho(palavras, durMs, 50);
+    let i = 0;
+    const id = setInterval(() => { nivelDaVoz(env[i % env.length] ?? 0); i++; }, 50);
+    return () => clearInterval(id);
+  }, [fala.falando, fala.pausada, fala.trecho, ativa]);
+  const modo = estado === 'ouvindo' ? 1 : estado === 'pensando' ? 2 : estado === 'falando' ? 3 : 0;
+  return <EsferaViva modo={modo} cor={estado === 'dormindo' ? palette.primary : CORES[estado]} opacidade={vazio ? 0.95 : 0.3} ativa={ativa} noite={noite} />;
+}
+
+function noiteAgora(): [number, number, number] {
+  const f = fatorNoturno(new Date().getHours());
+  return [f.giro, f.respira, f.brilho];
+}
+
+function EsferaSvg({ vazio, tamanho }: { vazio: boolean; tamanho: number }) {
   const fala = useFala();
   const fase = useFaseDaBolota();
   const estado = estadoDaBolota(fase, fala.falando);
@@ -52,7 +118,6 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
   const pontos = useMemo(fibonacci, []);
   const ritmo = RITMO_PENSANDO;
 
-  const tamanho = Math.max(1, Math.min(caixa.w, caixa.h) * (vazio ? 0.7 : 0.86));
   const t = useSharedValue(0);
   const rot = useSharedValue(0);
   const nivel = useSharedValue(0);
@@ -152,19 +217,7 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
   const halo = useAnimatedProps(() => ({ r: tamanho * 0.42 * (1 + nivel.value * 0.12), opacity: opac.value * brilho.value * (0.55 + nivel.value * 0.45) }));
   const anel = useAnimatedProps(() => ({ r: tamanho * 0.3 * (1.32 + nivel.value * 0.08), stroke: corViva.value, opacity: opac.value * brilho.value * (0.18 + nivel.value * 0.35) }));
 
-  const aoMedir = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    if (width !== caixa.w || height !== caixa.h) setCaixa({ w: width, h: height });
-  };
-
-  // Vazia: um pouco acima do meio (o campo de texto ocupa o rodapé). Com conversa: no meio.
-  const topo = caixa.h * (vazio ? 0.42 : 0.5) - tamanho / 2;
-
-
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.caixa]} onLayout={aoMedir}>
-      {caixa.h > 0 && (
-        <View style={{ position: 'absolute', top: topo, left: (caixa.w - tamanho) / 2, width: tamanho, height: tamanho }}>
           <Svg width={tamanho} height={tamanho}>
             <Defs>
               <RadialGradient id="nucleoEsfera" cx="50%" cy="50%" r="50%">
@@ -179,16 +232,6 @@ export function Esfera3D({ vazio, titulo, dica }: { vazio: boolean; titulo?: str
             <AnimatedPath animatedProps={frente} />
             <AnimatedCircle cx={meio} cy={meio} strokeWidth={1.2} fill="none" animatedProps={anel} />
           </Svg>
-        </View>
-      )}
-      {/* Fase 23.1: como no PC — a saudação e uma dica curta embaixo da esfera, só com o chat vazio. */}
-      {caixa.h > 0 && vazio && titulo ? (
-        <Animated.View entering={FadeIn.duration(500)} style={{ position: 'absolute', left: 24, right: 24, top: topo + tamanho * 0.94, alignItems: 'center', gap: 6 }}>
-          <Text variant="heading" style={{ textAlign: 'center' }}>{titulo}</Text>
-          {dica ? <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center' }}>{dica}</Text> : null}
-        </Animated.View>
-      ) : null}
-    </View>
   );
 }
 

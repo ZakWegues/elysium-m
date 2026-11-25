@@ -36,6 +36,7 @@
  */
 
 import { AccessibilityInfo, Animated, Easing } from 'react-native';
+import { pausarNativo, tocouNaTela } from './ritmo';
 import {
   Easing as EasingUI, FadeInDown, FadeOut, LinearTransition, ReduceMotion,
   makeMutable, withSpring, withTiming,
@@ -195,6 +196,7 @@ export const SAI = FadeOut.duration(MOV.saida).reduceMotion(ReduceMotion.System)
 export const pausaFundo = makeMutable(false);
 let timerPausa: ReturnType<typeof setTimeout> | null = null;
 export function pausarFundoPor(ms: number): void {
+  pausarNativo(ms);
   pausaFundo.value = true;
   if (timerPausa) clearTimeout(timerPausa);
   timerPausa = setTimeout(() => { pausaFundo.value = false; timerPausa = null; }, ms);
@@ -215,6 +217,7 @@ export function mexeuNaTela(): void {
   // Um toque que se arrasta manda dezenas de eventos por segundo: só reinicia o timer a cada 250 ms.
   if (agora - ultimoToque < 250 && pausaToque.value) return;
   ultimoToque = agora;
+  tocouNaTela();
   pausaToque.value = true;
   if (timerToque) clearTimeout(timerToque);
   timerToque = setTimeout(() => { pausaToque.value = false; timerToque = null; }, 1500);

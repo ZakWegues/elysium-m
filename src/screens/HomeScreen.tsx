@@ -26,7 +26,7 @@ import { CARDS } from './inicio/cards';
 import CardArrastavel from './inicio/CardArrastavel';
 import { CARDS_PADRAO, CHAVE_AGENDAMENTO, CHAVE_CARDS, Ctx, Dados } from './inicio/tipos';
 import { CHAVE_LAYOUT_V2, migrarLayout, resumoDaInicio } from '../lib/layoutInicio';
-import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
+import { useAoReativar, useAVista } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import { EstadoPcLinha } from '../components/EstadoPc';
 
@@ -130,7 +130,7 @@ export default function HomeScreen({
   }, [agendado]);
 
   // Aba escondida (08/10, abas vivas) não segura um WebSocket de telemetria aberto à toa.
-  const ativa = useAbaAtiva();
+  const ativa = useAVista();
   useEffect(() => (ativa ? openTelemetryStream(pairing, setTelemetria, setStatus) : undefined),
     [ativa, pairing.activeIp, pairing.port, pairing.token]);
 

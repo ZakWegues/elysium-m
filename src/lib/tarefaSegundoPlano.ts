@@ -15,6 +15,7 @@ import { sincronizarNotificacoes } from './notificacoes';
  * Sem pareamento a tarefa roda e sai em silêncio (`sincronizarNotificacoes` devolve 0).
  */
 export const TAREFA_ENTREGAS = 'elysium-entregas';
+const INTERVALO_MIN = 60;
 
 TaskManager.defineTask(TAREFA_ENTREGAS, async () => {
   try {
@@ -31,8 +32,12 @@ export async function registrarTarefa(): Promise<boolean> {
   try {
     const status = await BackgroundTask.getStatusAsync();
     if (status !== BackgroundTask.BackgroundTaskStatus.Available) return false;
-    if (!(await TaskManager.isTaskRegisteredAsync(TAREFA_ENTREGAS))) {
-      await BackgroundTask.registerTaskAsync(TAREFA_ENTREGAS, { minimumInterval: 15 });
+    // 25/11: de hora em hora (era 15 min). O que tem pressa chega por push; cada rodada sobe o app inteiro.
+    const registrada = await TaskManager.isTaskRegisteredAsync(TAREFA_ENTREGAS);
+    const opcoes = registrada ? await TaskManager.getTaskOptionsAsync<{ minimumInterval?: number }>(TAREFA_ENTREGAS) : null;
+    if (opcoes?.minimumInterval !== INTERVALO_MIN) {
+      if (registrada) await BackgroundTask.unregisterTaskAsync(TAREFA_ENTREGAS);
+      await BackgroundTask.registerTaskAsync(TAREFA_ENTREGAS, { minimumInterval: INTERVALO_MIN });
     }
     return true;
   } catch (err) {

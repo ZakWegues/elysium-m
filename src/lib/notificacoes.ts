@@ -2,7 +2,7 @@ import { chavePorPc } from './pcAtivo';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { loadPairing, Pairing } from './pairing';
+import { loadPairing, Pairing, resolveActiveEndpoint } from './pairing';
 import { callRpc, Entrega, Reminder } from './rpc';
 import { registrarEncerramentoPc, type MotivoEncerramento } from './estadoPc';
 import { abrirUmaVez, alvoDoRef, tratarEntregaDeAbrir } from './abrirNoCelular';
@@ -274,8 +274,10 @@ export async function espelharLembretes(pairing: Pairing): Promise<void> {
 
 /** O ciclo completo, tolerante a falha. Usado pelo primeiro plano e pelo segundo plano. */
 export async function sincronizarNotificacoes(pairing?: Pairing | null): Promise<{ novas: number }> {
-  const p = pairing ?? (await loadPairing());
-  if (!p) return { novas: 0 };
+  const salvo = pairing ?? (await loadPairing());
+  if (!salvo) return { novas: 0 };
+  // Fora do app ninguém sondou: acha o caminho que responde agora (casa, túnel ou ponte).
+  const p = pairing ? salvo : (await resolveActiveEndpoint(salvo).catch(() => null)) ?? salvo;
   let novas = 0;
   try { novas = await buscarEntregas(p); } catch (err) { console.log('[notificacoes] fila indisponível', (err as Error).message); }
   try { await espelharLembretes(p); } catch (err) { console.log('[notificacoes] lembretes indisponíveis', (err as Error).message); }

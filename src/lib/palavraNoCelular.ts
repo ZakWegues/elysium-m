@@ -32,11 +32,12 @@ import { acharPalavra } from './palavraCasa';
  * foi dada, não aparece pedido nenhum, e isso é normal).
  */
 
-const CHAVE = 'elysium_palavra_no_celular_v1';
+// 25/11: desligada por padrão — o microfone e o reconhecedor do Google ligados gastavam bateria.
+const CHAVE = 'elysium_palavra_no_celular_v2';
 const SERVICOS_GOOGLE = ['com.google.android.googlequicksearchbox', 'com.google.android.as', 'com.google.android.tts'];
 
 export async function palavraLigada(): Promise<boolean> {
-  try { return (await AsyncStorage.getItem(CHAVE)) !== '0'; } catch { return true; }
+  try { return (await AsyncStorage.getItem(CHAVE)) === '1'; } catch { return false; }
 }
 
 /**

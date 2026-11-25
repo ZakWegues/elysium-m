@@ -12,6 +12,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import { aprenderDoPc } from './aprenderDoPc';
+import { prepararPonte } from './ponte';
 import { BloqueadoError, Pairing, resolveActiveEndpoint, scanSubnet, UnauthorizedError } from './pairing';
 import { callRpc } from './rpc';
 import { registrarConexao, registrarEstadoApp, useEstadoPc } from './estadoPc';
@@ -104,7 +106,7 @@ export function useConnection(
       // Os novos entram no fim: o que já está funcionando continua sendo tentado
       // primeiro, e o candidato novo é só mais uma alternativa.
       const comNovos = novos.length === 0 ? p : { ...p, endpoints: [...p.endpoints, ...novos] };
-      return await comTls(comNovos);
+      return await aprenderDoPc(await comTls(comNovos));
     } catch {
       // Desktop antigo, sem este método. Não é motivo pra considerar offline.
       return p;
@@ -165,6 +167,7 @@ export function useConnection(
   useEffect(() => {
     if (!pairing) return;
     stoppedRef.current = false;
+    prepararPonte(pairing);
     liberarCanais();
     primeira.current = true;
     evento({ tipo: 'acordou' });
@@ -173,7 +176,8 @@ export function useConnection(
     // O único ouvinte de AppState da conexão: voltar é o momento mais provável de a rede ter
     // mudado — mas o rádio ainda está acordando, então espera um instante e dá mais folga.
     const sub = AppState.addEventListener('change', s => {
-      if (s !== 'active') return;
+      // 25/11: no fundo a sonda para (o relógio dela andava a cada vez que um widget acordava o app).
+      if (s !== 'active') { if (timerRef.current) clearTimeout(timerRef.current); return; }
       evento({ tipo: 'acordou' });
       primeira.current = true;
       if (timerRef.current) clearTimeout(timerRef.current);

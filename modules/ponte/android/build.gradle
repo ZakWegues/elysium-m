@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.ponte'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.ponte"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // A mesma versão do OkHttp do React Native.
+  implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+}

@@ -27,7 +27,7 @@ import { BarraMidia } from '../components/BarraMidia';
 import { MiniTrackpad } from '../components/MiniTrackpad';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
 import { Sugestoes } from '../components/musica/Sugestoes';
-import { useAbaAtiva } from '../components/AbaViva';
+import { useAVista } from '../components/AbaViva';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import {
   Button, Card, GlassCircle, GlassModal, MetricBar, ScreenHeader, Text, Toque,
@@ -241,7 +241,7 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
   }, [pairing]);
 
   // Espelho só com a aba PC à vista (08/10): escondida, a aba fica montada mas não captura.
-  const ativa = useAbaAtiva();
+  const ativa = useAVista();
   useEffect(() => {
     if (!live || !ativa) return;
     grab();
@@ -637,7 +637,7 @@ function PainelMonitor({ pairing }: { pairing: Pairing }) {
   const [discos, setDiscos] = useState<DiskEntry[]>([]);
   const [pesados, setPesados] = useState<ProcessEntry[]>([]);
 
-  const ativa = useAbaAtiva();
+  const ativa = useAVista();
   useEffect(
     () => (ativa ? openTelemetryStream(pairing, setSnapshot, setStatus) : undefined),
     [ativa, pairing.activeIp, pairing.port, pairing.token],

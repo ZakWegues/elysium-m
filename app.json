@@ -3,7 +3,7 @@
     "name": "ELYSIUM-M",
     "slug": "neuroaxis-portal",
     "scheme": "elysium",
-    "version": "2.14.0",
+    "version": "2.15.0",
     "orientation": "portrait",
     "updates": {
       "url": "https://u.expo.dev/a9c62871-2d6d-4e05-b458-1e58655449b5",
@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.zak.elysium.m",
-      "versionCode": 36,
+      "versionCode": 37,
       "adaptiveIcon": {
         "backgroundColor": "#0a0c14",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -129,7 +129,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             },
             {
               "name": "Hoje",
@@ -142,7 +142,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             },
             {
               "name": "Clima",
@@ -155,7 +155,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             },
             {
               "name": "Musica",
@@ -168,7 +168,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             },
             {
               "name": "Foco",
@@ -181,7 +181,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             },
             {
               "name": "Listas",
@@ -194,7 +194,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             },
             {
               "name": "Rotinas",
@@ -207,7 +207,7 @@
               "maxResizeWidth": "600dp",
               "maxResizeHeight": "400dp",
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 3600000
             }
           ]
         }

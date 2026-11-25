@@ -8,6 +8,7 @@ import { avisoDeSomPc, descreverEstadoPc, detalhesEstadoPc, useEstadoPc, type To
 import { haptica } from '../lib/haptica';
 import { MOV } from '../lib/motion';
 import { useAbaAtiva } from './AbaViva';
+import { useOcioso } from '../lib/ritmo';
 
 /**
  * A linha "em que pé está o PC" da Início (08/10): ELYSIUM na tela, minimizado, na bandeja,
@@ -76,8 +77,9 @@ export function corDoTom(tom: Tom, palette: ReturnType<typeof useTheme>['palette
 /** O ponto colorido; "respira" quando o ELYSIUM está aberto e respondendo. */
 function Ponto({ cor, vivo }: { cor: string; vivo: boolean }) {
   const a = useSharedValue(1);
-  // 31/10: parado com a aba escondida.
-  const ativa = useAbaAtiva();
+  // 31/10: parado com a aba escondida. 25/11: e depois de 20 s sem toque.
+  const ocioso = useOcioso();
+  const ativa = useAbaAtiva() && !ocioso;
   useEffect(() => {
     a.value = vivo && ativa
       ? withRepeat(withSequence(withTiming(0.35, { duration: 1100, reduceMotion: ReduceMotion.System }), withTiming(1, { duration: 1100, reduceMotion: ReduceMotion.System })), -1)

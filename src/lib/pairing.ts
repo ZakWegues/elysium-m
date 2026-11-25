@@ -3,6 +3,7 @@ import { tlsUtil, type InfoTls } from './tls';
 import { cabecalhoAssinado } from './assinatura';
 import { fetchWithTimeout, PROBE_TIMEOUT_MS } from './http';
 import { definirPcAtivo } from './pcAtivo';
+import { IP_DA_PONTE, lerPonte, ponteUtil, type InfoPonte } from './ponte';
 
 /**
  * O token foi regenerado no PC, ou mudou, e este pareamento está inválido.
@@ -36,6 +37,9 @@ export type Pairing = {
   hostname?: string;
   /** 31/10: porta TLS e impressão do certificado do PC, fixada no módulo nativo confianca (lib/tls.ts). */
   tls?: InfoTls;
+  /** 25/11: a ponte do dono (fora de casa) e o id deste aparelho no PC — ver lib/ponte.ts. */
+  ponte?: InfoPonte;
+  aparelho?: string;
 };
 
 /**
@@ -63,9 +67,12 @@ function migrate(raw: unknown): Pairing | null {
   if (Array.isArray(obj.endpoints) && obj.endpoints.length > 0) {
     const endpoints = obj.endpoints.filter((e): e is string => typeof e === 'string');
     if (endpoints.length === 0) return null;
+    const ponte = lerPonte(obj.ponte);
     return {
       endpoints,
-      activeIp: typeof obj.activeIp === 'string' && endpoints.includes(obj.activeIp)
+      ...(ponte ? { ponte } : {}),
+      ...(typeof obj.aparelho === 'string' ? { aparelho: obj.aparelho } : {}),
+      activeIp: typeof obj.activeIp === 'string' && (endpoints.includes(obj.activeIp) || (ponte && obj.activeIp === IP_DA_PONTE))
         ? obj.activeIp
         : endpoints[0],
       port: obj.port,
@@ -204,6 +211,8 @@ export async function trocarPc(id: string): Promise<Pairing | null> {
 }
 
 export function baseUrl(pairing: Pairing): string {
+  // 25/11: pela ponte já vai cifrado; o TLS do PC não existe deste lado.
+  if (pairing.activeIp === IP_DA_PONTE) return `http://${IP_DA_PONTE}:${pairing.port}`;
   // 31/10: com o certificado do PC fixado, https na porta TLS (e o WebSocket vira wss junto).
   if (pairing.tls && tlsUtil(pairing.tls)) return `https://${pairing.activeIp}:${pairing.tls.porta}`;
   return `http://${pairing.activeIp}:${pairing.port}`;
@@ -304,6 +313,7 @@ async function probe(ip: string, port: number, token: string, prazoMs = PROBE_TI
  * é o token que está errado — não adianta tentar os outros.
  */
 export async function resolveActiveEndpoint(pairing: Pairing, prazoMs = PROBE_TIMEOUT_MS): Promise<Pairing | null> {
+  const naPonte = pairing.activeIp === IP_DA_PONTE;
   const others = pairing.endpoints.filter(ip => ip !== pairing.activeIp);
 
   // O endereço atual é SEMPRE preferido quando responde, mesmo que outro responda
@@ -313,7 +323,7 @@ export async function resolveActiveEndpoint(pairing: Pairing, prazoMs = PROBE_TI
   //
   // `currentOk` propaga UnauthorizedError: se o endereço atual devolve 401, já
   // sabemos que o token está inválido e não precisamos tentar os outros.
-  const currentOk = probe(pairing.activeIp, pairing.port, pairing.token, prazoMs)
+  const currentOk = naPonte ? Promise.resolve(false) : probe(pairing.activeIp, pairing.port, pairing.token, prazoMs)
     .then(() => true, (err) => { if (err instanceof UnauthorizedError || err instanceof BloqueadoError) throw err; return false; });
 
   // Os outros correm em paralelo, não depois: fora de casa o endereço local vai dar
@@ -321,16 +331,40 @@ export async function resolveActiveEndpoint(pairing: Pairing, prazoMs = PROBE_TI
   // lenta à toa.
   const fallback = firstSuccess(others.map(ip => probe(ip, pairing.port, pairing.token, prazoMs)));
 
-  if (await currentOk) return pairing;
-
-  const winner = await fallback;
+  // 25/11: a ponte só entra se o caminho direto não responder logo (ou se já estava nela). Direto
+  // é mais rápido e não passa pela nuvem, então ganha sempre que aparece.
+  const direto = currentOk.then(ok => ok ? pairing.activeIp : fallback);
+  const pelaPonte = ponteUtil(pairing) ? chegarPelaPonte(pairing, direto, naPonte ? 0 : 1200) : Promise.resolve(null);
+  const winner = await primeiroCaminho(direto, pelaPonte, naPonte ? 900 : 1500);
   if (!winner) return null;
+  if (winner === pairing.activeIp) return pairing;
 
   const updated = { ...pairing, activeIp: winner };
   // Grava só se ainda for o PC ativo; no pareamento novo (ainda fora do cofre) quem grava é
   // a tela de pareamento, com o endereço que respondeu.
   await savePairingSeAtivo(updated);
   return updated;
+}
+
+const PRAZO_PONTE_MS = 9000;
+
+async function chegarPelaPonte(p: Pairing, direto: Promise<string | null>, atrasoMs: number): Promise<string | null> {
+  if (atrasoMs) {
+    const antes = await Promise.race([direto.catch(() => null), new Promise<undefined>(r => setTimeout(() => r(undefined), atrasoMs))]);
+    if (antes) return null;
+  }
+  return probe(IP_DA_PONTE, p.port, p.token, PRAZO_PONTE_MS).catch((e) => {
+    if (e instanceof UnauthorizedError || e instanceof BloqueadoError) throw e;
+    return null;
+  });
+}
+
+/** O direto, se vier até `folgaMs`; senão, o primeiro que der certo. Exportada para os testes. */
+export async function primeiroCaminho(direto: Promise<string | null>, ponte: Promise<string | null>, folgaMs: number): Promise<string | null> {
+  const cedo = await Promise.race([direto, new Promise<undefined>(r => setTimeout(() => r(undefined), folgaMs))]);
+  if (cedo) return cedo;
+  ponte.catch(() => {});
+  return firstSuccess([direto, ponte].map(p => p.then(v => { if (!v) throw new Error('sem resposta'); return v; })));
 }
 
 /**

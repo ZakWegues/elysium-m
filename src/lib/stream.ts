@@ -89,6 +89,8 @@ export type VoiceConnection = {
   close(): void;
   /** A conexão está aberta e o PC deu sinal de vida há pouco? */
   viva(): boolean;
+  /** O app foi para o fundo: sem pedido em curso, solta a conexão (25/11, bateria). `reconectar` volta. */
+  descansar(): void;
   /** Refaz a conexão agora (app voltou para a frente, o endereço do PC mudou). */
   reconectar(): void;
   /**
@@ -198,7 +200,7 @@ export function openVoiceConnection(
     if (!abriuUmaVez) { abriuUmaVez = true; resolverReady(); }
     console.log('[voice-ws] conectado', ws ? streamUrl(pegarPairing()) : '');
     onEstado?.('conectado');
-    try { ws?.send(JSON.stringify({ type: 'ping' })); } catch { /* */ }
+    try { ws?.send(JSON.stringify({ type: 'ping' })); ws?.send(JSON.stringify({ type: 'semTelemetria' })); } catch { /* */ }
     const p = pending;
     if (!p) {
       // Caiu enquanto a tela era gerada: o PC guarda e manda de novo (reply + ui).
@@ -441,6 +443,14 @@ export function openVoiceConnection(
     return !encerrada && !!ws && ws.readyState === WebSocket.OPEN && (!suportaPong || Date.now() - ultimoSinal < SILENCIO_MAXIMO_MS);
   }
 
+  function descansar() {
+    if (encerrada || pending || telaEsperada || !abriuUmaVez) return;
+    if (timerReconexao) { clearTimeout(timerReconexao); timerReconexao = null; }
+    const velho = ws;
+    ws = null;
+    try { velho?.close(); } catch { /* */ }
+  }
+
   function reconectar() {
     if (encerrada) return;
     if (timerReconexao) { clearTimeout(timerReconexao); timerReconexao = null; }
@@ -476,7 +486,7 @@ export function openVoiceConnection(
     try { ws?.send(JSON.stringify({ type: 'ui.cancelar', id })); } catch { /* */ }
   }
 
-  return { ready, sendAudio, sendText, close, viva, reconectar, pedirTela, cancelarTela, retomarTela, enviarEstadoTela };
+  return { ready, sendAudio, sendText, close, viva, descansar, reconectar, pedirTela, cancelarTela, retomarTela, enviarEstadoTela };
 }
 
 /** 31/10: `memoria` do reply ([{id, text}]) → só os textos, no máximo 3. */

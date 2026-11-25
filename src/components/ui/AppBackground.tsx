@@ -11,6 +11,7 @@ import { PAPEIS, type PapelId } from '../../theme/fundo';
 import { useFala } from '../../lib/falar';
 import { estadoDaBolota, useFaseDaBolota } from '../../lib/bolota';
 import { ManchasSkia, TEM_SKIA } from '../vidro/ManchasSkia';
+import { FUNDO_VIVO, FundoVivo } from './FundoVivo';
 
 /**
  * Fundo do app — fase 23.1: PORTE CAMADA A CAMADA do `css/fundo.css` do desktop.
@@ -201,18 +202,11 @@ function Poeira({ cor }: { cor: string }) {
  * de lá vira um véu radial da cor do fundo por cima), e a varredura — uma faixa de 140 px
  * descendo a tela a cada 11 s (4 s com a Ely viva).
  */
-function GradeStark({ cor, fundo, largura, altura, vivo }: { cor: string; fundo: string; largura: number; altura: number; vivo: boolean }) {
+function Grade({ cor, fundo, largura, altura }: { cor: string; fundo: string; largura: number; altura: number }) {
   const passo = 46;
   const verticais = useMemo(() => Array.from({ length: Math.ceil(largura / passo) + 1 }, (_, i) => i * passo), [largura]);
   const horizontais = useMemo(() => Array.from({ length: Math.ceil(altura / passo) + 1 }, (_, i) => i * passo), [altura]);
-  // A faixa desce a tela inteira a cada 11 s (4 s com a Ely viva), pelo relógio do fundo.
-  const y = useDerivedValue(() => {
-    const ms = vivo ? 4000 : 11_000;
-    return -160 + (((relogioFundo.value * 1000) % ms) / ms) * (altura * 1.2 + 160);
-  });
-  const varre = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return (
-    <>
       <Svg width={largura} height={altura} style={StyleSheet.absoluteFill}>
         <Defs>
           <RadialGradient id="mascaraGrade" cx="50%" cy="35%" rx="70%" ry="60%">
@@ -224,6 +218,18 @@ function GradeStark({ cor, fundo, largura, altura, vivo }: { cor: string; fundo:
         {horizontais.map((h) => <Line key={`h${h}`} x1={0} y1={h} x2={largura} y2={h} stroke={cor} strokeOpacity={0.06} strokeWidth={1} />)}
         <Rect width={largura} height={altura} fill="url(#mascaraGrade)" />
       </Svg>
+  );
+}
+function GradeStark({ cor, fundo, largura, altura, vivo }: { cor: string; fundo: string; largura: number; altura: number; vivo: boolean }) {
+  // A faixa desce a tela inteira a cada 11 s (4 s com a Ely viva), pelo relógio do fundo.
+  const y = useDerivedValue(() => {
+    const ms = vivo ? 4000 : 11_000;
+    return -160 + (((relogioFundo.value * 1000) % ms) / ms) * (altura * 1.2 + 160);
+  });
+  const varre = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  return (
+    <>
+      <Grade cor={cor} fundo={fundo} largura={largura} altura={altura} />
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: 140 }, varre]}>
         <LinearGradient colors={['transparent', cor, 'transparent']} style={[StyleSheet.absoluteFill, { opacity: 0.07 }]} />
       </Animated.View>
@@ -269,6 +275,37 @@ export function PapelDeParede({ id, largura, altura }: { id: PapelId; largura: n
 }
 
 export function AppBackground() {
+  return FUNDO_VIVO ? <FundoNativo /> : <FundoEmJs />;
+}
+
+/** 25/11: no Android 13+, tudo o que se mexe é uma view nativa só (bateria). */
+function FundoNativo() {
+  const { palette, familiaResolvida, fundo } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const vivo = useVivo();
+  const cores = [...palette.blobs, palette.primary, palette.accent];
+  const caixa = [StyleSheet.absoluteFill, { backgroundColor: palette.background, overflow: 'hidden' as const }];
+  if (fundo.tipo !== 'animado') {
+    return (
+      <View style={caixa} pointerEvents="none">
+        {fundo.tipo === 'papel'
+          ? <PapelDeParede id={fundo.id} largura={width} altura={height} />
+          : <Image source={{ uri: fundo.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.22)' }]} />
+        <FundoVivo cores={cores} tema="poeira" vivo={false} />
+      </View>
+    );
+  }
+  const stark = familiaResolvida === 'stark';
+  return (
+    <View style={caixa} pointerEvents="none">
+      {stark && <Grade cor={palette.primary} fundo={palette.background} largura={width} altura={height} />}
+      <FundoVivo cores={cores} tema={stark ? 'stark' : familiaResolvida === 'glass' ? 'glass' : 'dark'} vivo={vivo} />
+    </View>
+  );
+}
+
+function FundoEmJs() {
   useRelogioDoFundo();
   const { palette, familiaResolvida, fundo } = useTheme();
   const { width, height } = useWindowDimensions();

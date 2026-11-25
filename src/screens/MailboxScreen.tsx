@@ -6,7 +6,7 @@ import { CampoDeMensagem } from '../components/chat/CampoDeMensagem';
 import { IrAoFim } from '../components/chat/IrAoFim';
 import { SumirNoTopo } from '../components/chat/SumirNoTopo';
 import { TextoComLinks } from '../components/TextoComLinks';
-import { useAbaAtiva, useAoReativar } from '../components/AbaViva';
+import { useAoReativar, useAVista } from '../components/AbaViva';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import Feather from '@expo/vector-icons/Feather';
@@ -77,7 +77,7 @@ export default function MailboxScreen({
   const fetchingImages = useRef<Set<string>>(new Set());
   const listRef = useRef<FlatList<MailboxMessage>>(null);
 
-  const ativa = useAbaAtiva();
+  const ativa = useAVista();
   const ativaRef = useRef(ativa);
   ativaRef.current = ativa;
 

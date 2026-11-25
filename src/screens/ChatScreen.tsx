@@ -356,6 +356,7 @@ export default function ChatScreen({
     const sub = AppState.addEventListener('change', (s) => {
       const c = voiceConnRef.current;
       if (s === 'active' && c && !c.viva()) c.reconectar();
+      if (s === 'background' && !liveRef.current) c?.descansar();
     });
     return () => sub.remove();
   }, []);

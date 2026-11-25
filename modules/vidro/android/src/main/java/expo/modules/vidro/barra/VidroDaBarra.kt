@@ -64,7 +64,10 @@ internal class MotorDoVidro(private val barra: BarraVidroView, private val appCo
   private var alvoId: Int? = null
   private var alvo: BlurTarget? = null
   private var observador: ViewTreeObserver? = null
-  private val aCadaQuadro = ViewTreeObserver.OnPreDrawListener { barra.vidroMudou(); true }
+  /** 25/11 (bateria): invalidar a cada pré-desenho nunca parava — ver VidroLiquidoView. Só se a barra andou. */
+  private val aCadaQuadro = ViewTreeObserver.OnPreDrawListener { acompanhar(); true }
+  private val agora = Matrix()
+  private val doAlvoAgora = Matrix()
   private val deNovo = Runnable { resolver() }
   var pronto = false
     private set
@@ -85,6 +88,16 @@ internal class MotorDoVidro(private val barra: BarraVidroView, private val appCo
   }
 
   fun ligar() = resolver()
+
+  private fun acompanhar() {
+    val t = alvo ?: return
+    if (!barra.isShown || AcessoAoAlvo.no(t)?.hasDisplayList() != true) return
+    agora.reset()
+    barra.transformMatrixToGlobal(agora)
+    doAlvoAgora.reset()
+    t.transformMatrixToGlobal(doAlvoAgora)
+    if (!pronto || agora != daBarra || doAlvoAgora != doAlvo) barra.vidroMudou()
+  }
 
   fun soltar() {
     observador?.takeIf { it.isAlive }?.removeOnPreDrawListener(aCadaQuadro)

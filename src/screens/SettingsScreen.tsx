@@ -28,6 +28,7 @@ import { trocarModo, useModo } from '../lib/modo';
 import { ligarBrilhoSegueAparelho, useBrilhoSegueAparelho } from '../lib/brilhoAparelho';
 import { mudarBolota, useAjusteDaBolota } from '../lib/bolotaAjuste';
 import { ligarBarraVidro, useBarraVidro } from '../lib/barraVidro';
+import { ligarEconomia, useEconomia } from '../lib/ritmo';
 import { BARRA_VIDRO } from '../components/BarraVidro';
 import { SecaoNotificacoes } from './ajustes/SecaoNotificacoes';
 import { VIDRO_NATIVO } from '../components/vidro/VidroNativo';
@@ -462,6 +463,7 @@ function SecaoAparencia() {
   const segue = useBrilhoSegueAparelho();
   const bolota = useAjusteDaBolota();
   const barraDeVidro = useBarraVidro();
+  const economia = useEconomia();
   return (
     <View style={{ gap: tokens.spacing.lg }}>
       <View style={{ gap: tokens.spacing.sm }}>
@@ -570,6 +572,17 @@ function SecaoAparencia() {
           <VidroSwitch value={barraDeVidro} onValueChange={ligarBarraVidro} accessibilityLabel="Barra com liquid glass" />
         </View>
       ) : null}
+
+      <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
+        <Feather name="battery" size={17} color={economia ? palette.primary : palette.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Text variant="body">Economia de bateria</Text>
+          <Text variant="caption" color={palette.textMuted}>
+            Para o fundo e a esfera. Desligada, entra sozinha com 20% ou com a economia do Android.
+          </Text>
+        </View>
+        <VidroSwitch value={economia} onValueChange={ligarEconomia} accessibilityLabel="Economia de bateria" />
+      </View>
 
       <View style={[styles.familiaBtn, { borderRadius: tokens.radii.md, borderColor: palette.border }]}>
         <Feather name="circle" size={17} color={bolota.estado !== 'desligada' ? palette.primary : palette.textMuted} />

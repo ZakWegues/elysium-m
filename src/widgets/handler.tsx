@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { registerWidgetTaskHandler, requestWidgetUpdate, type WidgetInfo, type WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { loadPairing, Pairing } from '../lib/pairing';
+import { loadPairing, Pairing, resolveActiveEndpoint } from '../lib/pairing';
 import { callRpc } from '../lib/rpc';
 import { paletaDosWidgets } from './tema';
 import { tamanhoDoWidget, type Tamanho } from './medidas';
@@ -20,6 +20,12 @@ import { chaveDoWidget } from '../lib/chaveWidget';
  * Os nomes ficaram os antigos onde o widget continua (Esfera = Ely, Estado = PC, Foco = Tempo):
  * quem já tinha esses na tela inicial não perde nada.
  */
+
+/** Fora do app ninguém sondou: o caminho que responde agora (casa, túnel ou ponte). */
+async function pcQueResponde(): Promise<Pairing | null> {
+  const p = await loadPairing();
+  return p && ((await resolveActiveEndpoint(p).catch(() => null)) ?? p);
+}
 
 export const WIDGET_ELY = 'Esfera';
 export const WIDGET_PC = 'Estado';
@@ -216,7 +222,7 @@ async function montar(info: Pick<WidgetInfo, 'widgetName' | 'width' | 'height'>,
   const t = tamanhoDoWidget(info.width, info.height, PADRAO[nome]);
   const [p, chave] = await Promise.all([paletaDosWidgets(), chaveDoWidget()]);
   if (nome === WIDGET_ELY) return <WidgetEly p={p} t={t} chave={chave} />;
-  const pairing = await loadPairing();
+  const pairing = await pcQueResponde();
   switch (nome) {
     case WIDGET_PC: return <WidgetPc p={p} t={t} d={await lerPc(pairing, t, aviso)} chave={chave} />;
     case WIDGET_HOJE: return <WidgetHoje p={p} t={t} h={await lerHoje(pairing, aviso)} chave={chave} />;
@@ -235,7 +241,7 @@ if (Platform.OS === 'android') registerWidgetTaskHandler(async (props: WidgetTas
   if (widgetAction === 'WIDGET_DELETED') return;
   let aviso: string | undefined;
   if (widgetAction === 'WIDGET_CLICK' && clickAction && clickAction !== 'OPEN_URI') {
-    aviso = await executarClique(clickAction, clickActionData as Record<string, unknown> | undefined, await loadPairing());
+    aviso = await executarClique(clickAction, clickActionData as Record<string, unknown> | undefined, await pcQueResponde());
   }
   const el = await montar(widgetInfo, aviso);
   if (!el) return;

@@ -1,6 +1,10 @@
 package expo.modules.vidro
 
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.Window
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -23,6 +27,27 @@ class VidroModule : Module() {
     }
 
     Function("estado") { VidroLiquidoView.estado }
+
+    // O ritmo do que se mexe sozinho (25/11, bateria) — ver Ritmo.kt.
+    Function("mexeu") { Ritmo.mexeu() }
+    Function("pausarFundo") { ms: Int -> Ritmo.pausar(ms.toLong()) }
+    Function("economia") { sempre: Boolean -> Ritmo.definirEconomia(sempre) }
+    // Quantos quadros a janela desenhou em `ms` — a prova, no log do PC, de que parado é parado.
+    AsyncFunction("contarQuadros") { ms: Int, promessa: Promise ->
+      val janela = appContext.currentActivity?.window
+      if (janela == null) { promessa.resolve(-1); return@AsyncFunction }
+      val fio = Handler(Looper.getMainLooper())
+      fio.post {
+        var n = 0
+        val ouvinte = Window.OnFrameMetricsAvailableListener { _, _, _ -> n++ }
+        runCatching { janela.addOnFrameMetricsAvailableListener(ouvinte, fio) }
+        fio.postDelayed({
+          runCatching { janela.removeOnFrameMetricsAvailableListener(ouvinte) }
+          promessa.resolve(n)
+        }, ms.toLong())
+      }
+    }
+    Function("nivelDaVoz") { v: Float -> EsferaView.nivelDeFora = v }
 
     View(VidroLiquidoView::class) {
       Prop("alvo") { view: VidroLiquidoView, id: Int? -> view.definirAlvo(id) }

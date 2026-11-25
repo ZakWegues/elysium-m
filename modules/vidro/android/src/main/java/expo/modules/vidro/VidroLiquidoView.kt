@@ -27,7 +27,15 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
   private var alvoId: Int? = null
   private var alvo: BlurTarget? = null
   private var observador: ViewTreeObserver? = null
-  private val aCadaQuadro = ViewTreeObserver.OnPreDrawListener { invalidate(); true }
+  /**
+   * 25/11 (bateria): aqui morava um `invalidate()`. Dentro do pré-desenho ele agenda outro quadro, e
+   * o app redesenhava a tela inteira para sempre, parado. Não precisa: o nó guarda a REFERÊNCIA do
+   * desenho das telas, e a GPU o atualiza sozinha. Só refaz quando a posição muda.
+   */
+  private val aCadaQuadro = ViewTreeObserver.OnPreDrawListener { acompanhar(); true }
+  private var gravado = false
+  private var ultimoX = 0
+  private var ultimoY = 0
   private val tentarDeNovo = Runnable { resolverAlvo() }
 
   private var lente = 0f
@@ -119,6 +127,7 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
       v == null -> "findView nulo (id=$alvoId)"
       else -> "sem BlurTarget em ${v.javaClass.simpleName} (${(v as? ViewGroup)?.childCount} filhos)"
     }
+    gravado = false
     observador?.takeIf { it.isAlive }?.removeOnPreDrawListener(aCadaQuadro)
     observador = alvo?.viewTreeObserver
     observador?.addOnPreDrawListener(aCadaQuadro)
@@ -174,6 +183,34 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     super.dispatchDraw(canvas)
   }
 
+  private fun medir(t: BlurTarget) {
+    getLocationOnScreen(meu)
+    t.getLocationOnScreen(dele)
+    ultimoX = dele[0] - meu[0]
+    ultimoY = dele[1] - meu[1]
+  }
+
+  private fun gravar(n: RenderNode, conteudo: RenderNode) {
+    n.setPosition(0, 0, width, height)
+    val gravacao = n.beginRecording(width, height)
+    gravacao.translate(ultimoX.toFloat(), ultimoY.toFloat())
+    gravacao.drawRenderNode(conteudo)
+    n.endRecording()
+    gravado = true
+  }
+
+  private fun acompanhar() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || width <= 0 || !isShown) return
+    val t = alvo ?: return
+    val conteudo = AcessoAoAlvo.no(t) ?: return
+    if (!conteudo.hasDisplayList()) return
+    if (!gravado) { invalidate(); return }
+    val x = ultimoX
+    val y = ultimoY
+    medir(t)
+    if (x != ultimoX || y != ultimoY) no?.let { gravar(it, conteudo) }
+  }
+
   private fun desenharLente(canvas: Canvas) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     // Sem alvo: tenta de novo daqui a meio segundo (resolver aqui dentro invalidaria todo quadro).
@@ -185,13 +222,8 @@ class VidroLiquidoView(context: Context, appContext: AppContext) : ExpoView(cont
     val conteudo = AcessoAoAlvo.no(t) ?: run { estado = "alvo sem RenderNode"; return }
     if (!conteudo.hasDisplayList()) { estado = "alvo sem desenho ainda"; return }
 
-    getLocationOnScreen(meu)
-    t.getLocationOnScreen(dele)
-    n.setPosition(0, 0, width, height)
-    val gravacao = n.beginRecording(width, height)
-    gravacao.translate((dele[0] - meu[0]).toFloat(), (dele[1] - meu[1]).toFloat())
-    gravacao.drawRenderNode(conteudo)
-    n.endRecording()
+    medir(t)
+    gravar(n, conteudo)
 
     s.setFloatUniform("tam", width.toFloat(), height.toFloat())
     s.setFloatUniform("dens", densidade)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated as RNAnimated, Keyboard, PanResponder, Pressable, StyleSheet, TextInput, ToastAndroid, View, useWindowDimensions } from 'react-native';
+import { Animated as RNAnimated, AppState, Keyboard, PanResponder, Pressable, StyleSheet, TextInput, ToastAndroid, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { SvgXml } from 'react-native-svg';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
@@ -71,6 +71,11 @@ export function BolotaDoApp({ pairing, visivel, onAbrirChat }: { pairing: Pairin
     if (ouvindoRef.current) liberarMicrofone('bolota');
     conexao.current?.close();
     if (timerSome.current) clearTimeout(timerSome.current);
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'background') conexao.current?.descansar(); });
+    return () => sub.remove();
   }, []);
 
   // A posição guardada chega depois da montagem, a tela gira: acompanha (menos no meio do arrasto).
