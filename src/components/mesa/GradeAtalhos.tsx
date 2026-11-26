@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, ToastAndroid, View } from 'react-native';
-import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../../theme';
 import { Text } from '../ui';
 import { haptica } from '../../lib/haptica';
 import { callRpc } from '../../lib/rpc';
 import type { Pairing } from '../../lib/pairing';
-import { ACOES, executarAtalho, ICONES, type Atalho, type SomMesa, type TipoAtalho } from '../../lib/mesa';
+import { ACOES, executarAtalho, ICONES, POR_PAGINA, teclaQueCabe, type Atalho, type SomMesa, type TipoAtalho } from '../../lib/mesa';
 
 const TIPOS: { tipo: TipoAtalho; rotulo: string; dica: string }[] = [
   { tipo: 'acao', rotulo: 'Ação', dica: '' },
@@ -17,22 +17,29 @@ const TIPOS: { tipo: TipoAtalho; rotulo: string; dica: string }[] = [
 ];
 
 /**
- * Os atalhos do Modo Mesa, tipo Stream Deck. Toque faz; segurar edita; o "+" cria. Guardados no PC
- * (mesa.atalhos), então valem para qualquer celular pareado.
+ * Os atalhos do Modo Mesa, tipo Stream Deck: páginas de 4 × 4 que enchem o espaço (nada pela metade),
+ * uma fileira por grupo (sistema, copiar e colar, programas, funções) com a cor do grupo no ícone.
+ * Toque faz; segurar edita; o "+" das abas cria. Guardados no PC (mesa.atalhos): valem para
+ * qualquer celular pareado. Mais de 16, desliza para a próxima página.
  */
-export function GradeAtalhos({ pairing, colunas, som, acento, aoAbrirJanelas, aoErro }: {
-  pairing: Pairing; colunas: number; som: SomMesa | null; acento: string;
+export function GradeAtalhos({ pairing, som, acento, pedirNovo, aoAbrirJanelas, aoErro }: {
+  pairing: Pairing; som: SomMesa | null; acento: string;
+  /** Muda (+1) quando o "+" das abas é tocado. */
+  pedirNovo: number;
   aoAbrirJanelas: () => void; aoErro: (e: unknown) => void;
 }) {
   const { palette, tokens } = useTheme();
   const [lista, setLista] = useState<Atalho[] | null>(null);
   const [fazendo, setFazendo] = useState<string | null>(null);
   const [editando, setEditando] = useState<Atalho | 'novo' | null>(null);
-  const [largura, setLargura] = useState(0);
+  const [caixa, setCaixa] = useState({ w: 0, h: 0 });
+  const [pagina, setPagina] = useState(0);
+  const cores = [acento, palette.accent, palette.success, '#f2c14e'];
 
   useEffect(() => {
     callRpc(pairing, 'mesa.atalhos', {}, { timeoutMs: 8000 }).then((r) => setLista(r.atalhos)).catch(() => setLista([]));
   }, [pairing]);
+  useEffect(() => { if (pedirNovo > 0 && lista && lista.length < 24) setEditando('novo'); }, [pedirNovo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function salvar(nova: Atalho[]) {
     setLista(nova);
@@ -50,37 +57,49 @@ export function GradeAtalhos({ pairing, colunas, som, acento, aoAbrirJanelas, ao
     } catch (e) { aoErro(e); } finally { setFazendo(null); }
   }
 
-  const gap = 10;
-  const lado = largura ? Math.floor((largura - gap * (colunas - 1)) / colunas) : 0;
-  return (
-    <View onLayout={(e) => setLargura(e.nativeEvent.layout.width)} style={[styles.grade, { gap }]}>
-      {lista === null ? <ActivityIndicator color={palette.primary} /> : null}
-      {lado > 0 && lista?.map((a, i) => {
-        const ativo = a.tipo === 'acao' && a.valor === 'microfone' && som?.micMudo === true;
-        return (
-          <Animated.View key={a.id} entering={FadeInDown.delay(i * 25).duration(220)} layout={LinearTransition.duration(220)} style={{ width: lado }}>
-            <Pressable onPress={() => tocar(a)} onLongPress={() => { void haptica.medio(); setEditando(a); }} delayLongPress={380}
-              accessibilityRole="button" accessibilityLabel={a.rotulo} accessibilityHint="Segure para editar"
-              style={({ pressed }) => [styles.tecla, {
-                height: Math.min(96, lado * 0.92), borderRadius: tokens.radii.md,
-                backgroundColor: ativo ? palette.errorSoft : pressed ? palette.primarySoft : 'rgba(255,255,255,0.06)',
-                borderColor: ativo ? palette.error : 'rgba(255,255,255,0.08)', transform: [{ scale: pressed ? 0.95 : 1 }],
-              }]}>
-              {fazendo === a.id
-                ? <ActivityIndicator color={acento} />
-                : <Feather name={(ativo ? 'mic-off' : a.icone) as keyof typeof Feather.glyphMap} size={22} color={ativo ? palette.error : acento} />}
-              <Text variant="caption" numberOfLines={2} color={palette.text} style={styles.rotulo}>{a.rotulo}</Text>
-            </Pressable>
-          </Animated.View>
-        );
-      })}
-      {lado > 0 && lista !== null && lista.length < 24 && (
-        <Pressable onPress={() => { void haptica.leve(); setEditando('novo'); }} accessibilityRole="button" accessibilityLabel="Novo atalho"
-          style={[styles.tecla, styles.mais, { width: lado, height: Math.min(96, lado * 0.92), borderRadius: tokens.radii.md, borderColor: 'rgba(255,255,255,0.16)' }]}>
-          <Feather name="plus" size={22} color={palette.textMuted} />
-          <Text variant="caption" color={palette.textMuted}>Novo</Text>
+  const gap = 8;
+  const paginas = lista ? Math.max(1, Math.ceil(lista.length / POR_PAGINA)) : 1;
+  const pontos = paginas > 1 ? 14 : 0;
+  const { lado, alto } = teclaQueCabe(caixa.w, Math.max(0, caixa.h - pontos), gap);
+  const tecla = (a: Atalho, i: number) => {
+    const ativo = a.tipo === 'acao' && a.valor === 'microfone' && som?.micMudo === true;
+    const cor = cores[Math.floor((i % POR_PAGINA) / 4)];
+    return (
+      <Animated.View key={a.id} entering={FadeInDown.delay((i % POR_PAGINA) * 20).duration(200)} style={{ width: lado, height: alto }}>
+        <Pressable onPress={() => tocar(a)} onLongPress={() => { void haptica.medio(); setEditando(a); }} delayLongPress={380}
+          accessibilityRole="button" accessibilityLabel={a.rotulo} accessibilityHint="Segure para editar"
+          style={({ pressed }) => [styles.tecla, {
+            flex: 1, borderRadius: tokens.radii.md, gap: alto < 64 ? 3 : 6,
+            backgroundColor: ativo ? palette.errorSoft : pressed ? palette.primarySoft : 'rgba(255,255,255,0.06)',
+            borderColor: ativo ? palette.error : 'rgba(255,255,255,0.08)', transform: [{ scale: pressed ? 0.95 : 1 }],
+          }]}>
+          {fazendo === a.id
+            ? <ActivityIndicator color={cor} />
+            : <Feather name={(ativo ? 'mic-off' : a.icone) as keyof typeof Feather.glyphMap} size={alto < 64 ? 19 : 22} color={ativo ? palette.error : cor} />}
+          <Text variant="caption" numberOfLines={alto < 64 ? 1 : 2} color={palette.text} style={[styles.rotulo, alto < 64 && { fontSize: 11, lineHeight: 13 }]}>{a.rotulo}</Text>
         </Pressable>
-      )}
+      </Animated.View>
+    );
+  };
+
+  return (
+    <View style={{ flex: 1 }} onLayout={(e) => { const { width: w, height: h } = e.nativeEvent.layout; setCaixa((c) => (c.w === w && c.h === h ? c : { w, h })); }}>
+      {lista === null ? <ActivityIndicator color={palette.primary} style={{ marginTop: 24 }} /> : null}
+      {lado > 0 && lista ? (
+        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEnabled={paginas > 1}
+          onMomentumScrollEnd={(e) => setPagina(Math.round(e.nativeEvent.contentOffset.x / Math.max(1, caixa.w)))}>
+          {Array.from({ length: paginas }, (_, p) => (
+            <View key={p} style={[styles.grade, { width: caixa.w, gap }]}>
+              {lista.slice(p * POR_PAGINA, (p + 1) * POR_PAGINA).map((a, k) => tecla(a, p * POR_PAGINA + k))}
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+      {paginas > 1 ? (
+        <View style={styles.pontos}>
+          {Array.from({ length: paginas }, (_, p) => <View key={p} style={[styles.ponto, { backgroundColor: p === pagina ? palette.text : 'rgba(255,255,255,0.25)' }]} />)}
+        </View>
+      ) : null}
       {editando && lista && (
         <EditorDeAtalho pairing={pairing} atalho={editando === 'novo' ? null : editando} posicao={editando === 'novo' ? -1 : lista.findIndex((x) => x.id === editando.id)} total={lista.length}
           aoFechar={() => setEditando(null)}
@@ -195,9 +214,10 @@ function EditorDeAtalho({ pairing, atalho, posicao, total, aoFechar, aoSalvar, a
 }
 
 const styles = StyleSheet.create({
-  grade: { flexDirection: 'row', flexWrap: 'wrap' },
+  grade: { flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start' },
+  pontos: { flexDirection: 'row', justifyContent: 'center', gap: 6, height: 14, alignItems: 'flex-end' },
+  ponto: { width: 6, height: 6, borderRadius: 3 },
   tecla: { alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 6 },
-  mais: { borderStyle: 'dashed', backgroundColor: 'transparent' },
   rotulo: { textAlign: 'center' },
   veu: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 16 },
   folha: { maxHeight: '90%', width: '100%', maxWidth: 520, alignSelf: 'center', overflow: 'hidden' },

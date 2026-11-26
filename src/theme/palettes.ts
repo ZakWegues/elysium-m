@@ -4,7 +4,7 @@
  * tinha um deles gravado cai no Dark (ver `resolverFamiliaEscolhida`).
  */
 
-export type ThemeName = 'elisio' | 'mare' | 'crepusculo';
+export type ThemeName = 'elisio' | 'mare' | 'crepusculo' | 'neon';
 
 export type Familia = 'dark' | 'glass' | 'stark';
 
@@ -130,6 +130,11 @@ const CORES: Record<Familia, Record<ThemeName, Cor>> = {
       blobs: ['#7a4520', '#6b2f47', '#3b2a6b'],
       primary: '#f0a850', accent: '#e07a9b', primarySoft: 'rgba(240,168,80,0.20)',
       background: '#0b0818', surface: '#171232', surfaceRaised: '#110d26' } },
+    // 25/11: Neon — pôr do sol de praia à noite: rosa-choque, roxo e azul-piscina.
+    neon: { label: 'Neon', rotulo: 'Dark — Neon', face: {
+      blobs: ['#6b1f5c', '#3a2580', '#14507a'],
+      primary: '#ff6fb5', accent: '#5fd4ff', primarySoft: 'rgba(255,111,181,0.20)',
+      background: '#0a0618', surface: '#17102e', surfaceRaised: '#110b24' } },
   },
   glass: {
     elisio: { label: 'Elísio', rotulo: 'Glass — Âmbar', face: {
@@ -144,6 +149,10 @@ const CORES: Record<Familia, Record<ThemeName, Cor>> = {
       blobs: ['#6d4aff', '#22b8cf', '#c04bd8'],
       primary: '#a58cff', accent: '#4fd6e8', primarySoft: 'rgba(165,140,255,0.22)',
       background: '#0a0720', surface: '#171236', surfaceRaised: '#110d2a' } },
+    neon: { label: 'Neon', rotulo: 'Glass — Neon', face: {
+      blobs: ['#ff3d8b', '#7a3dff', '#1aa8ff'],
+      primary: '#ff4fa8', accent: '#3fd2ff', primarySoft: 'rgba(255,79,168,0.22)',
+      background: '#0c051c', surface: '#1a0d34', surfaceRaised: '#13092a' } },
   },
   stark: {
     elisio: { label: 'Elísio', rotulo: 'Stark — Mark', face: {
@@ -158,6 +167,10 @@ const CORES: Record<Familia, Record<ThemeName, Cor>> = {
       blobs: ['#1a2a3a', '#123a35', '#20283a'],
       primary: '#7fb8d8', accent: '#64ffda', primarySoft: 'rgba(127,184,216,0.18)',
       background: '#03050a', surface: '#0a0f18', surfaceRaised: '#070b12' } },
+    neon: { label: 'Neon', rotulo: 'Stark — Neon', face: {
+      blobs: ['#4a1240', '#24145a', '#0f3a52'],
+      primary: '#ff4fa8', accent: '#36e0ff', primarySoft: 'rgba(255,79,168,0.18)',
+      background: '#07040e', surface: '#120a1f', surfaceRaised: '#0d0718' } },
   },
 };
 
@@ -230,7 +243,7 @@ function build(name: ThemeName, familia: Familia): Palette {
 }
 
 /** A ordem em que as cores aparecem na tela — a mesma do `THEMES` do desktop. */
-const names: ThemeName[] = ['crepusculo', 'mare', 'elisio'];
+const names: ThemeName[] = ['crepusculo', 'mare', 'elisio', 'neon'];
 
 const TODAS: Record<Familia, Record<ThemeName, Palette>> = {
   dark: Object.fromEntries(names.map(n => [n, build(n, 'dark')])) as Record<ThemeName, Palette>,

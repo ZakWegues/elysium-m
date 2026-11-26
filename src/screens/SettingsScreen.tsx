@@ -506,7 +506,7 @@ function SecaoAparencia() {
       <View style={{ gap: tokens.spacing.sm }}>
         <Text variant="subheading">Cor</Text>
         <Text variant="caption" color={palette.textMuted}>
-          Três cores dentro do estilo {ROTULO_FAMILIA[familiaResolvida]}.
+          Quatro cores dentro do estilo {ROTULO_FAMILIA[familiaResolvida]}.
         </Text>
         <View style={styles.swatchRow}>
           {(Object.keys(palettes) as ThemeName[]).map((key) => {

@@ -39,7 +39,7 @@ export function SomDaMesa({ pairing, som, aoErro }: { pairing: Pairing; som: Som
   }
 
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ zIndex: aberto ? 20 : 0 }}>
       <View style={styles.linha}>
         <Pressable onPress={() => { void haptica.medio(); callRpc(pairing, 'volume.set', { level: som?.mudo ? 'unmute' : 'mute' }).catch(aoErro); }}
           accessibilityRole="button" accessibilityLabel={som?.mudo ? 'Tirar do mudo' : 'Mudo'} hitSlop={8}
@@ -57,7 +57,9 @@ export function SomDaMesa({ pairing, som, aoErro }: { pairing: Pairing; som: Som
         </Pressable>
       </View>
       {aberto && (
-        <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={{ gap: 6 }}>
+        // Por cima do player (não empurra nada): a Mesa cabe inteira na tela.
+        <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}
+          style={[styles.lista, { backgroundColor: palette.surfaceRaised, borderColor: palette.glassBorder, borderRadius: tokens.radii.lg }]}>
           {saidas === null ? <ActivityIndicator color={palette.primary} /> : saidas.map((s) => (
             <Pressable key={s.id} onPress={() => usar(s)} accessibilityRole="button" accessibilityState={{ selected: s.padrao }}
               style={[styles.opcao, { borderRadius: tokens.radii.md, backgroundColor: s.padrao ? palette.primarySoft : 'rgba(255,255,255,0.05)' }]}>
@@ -76,5 +78,6 @@ const styles = StyleSheet.create({
   linha: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   mudo: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   saida: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 40 },
+  lista: { position: 'absolute', left: 0, right: 0, bottom: 52, gap: 6, padding: 8, borderWidth: StyleSheet.hairlineWidth, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16 },
   opcao: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, minHeight: 46 },
 });

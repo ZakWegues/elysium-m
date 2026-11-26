@@ -6,7 +6,7 @@ const chamadas: { m: string; p: unknown; o: unknown }[] = [];
 vi.mock('../src/lib/rpc', () => ({ callRpc: async (_p: unknown, m: string, p: unknown, o: unknown) => { chamadas.push({ m, p, o }); return m === 'screen.screenshot' ? { message: 'ok' } : {}; } }));
 vi.mock('../src/lib/telemetry', () => ({ openTelemetryStream: () => () => {} }));
 
-const { acentoDaCapa, executarAtalho, layoutDaMesa, nomeCurto, posicaoAgora, teclasDoAtalho, tempo } = await import('../src/lib/mesa');
+const { acentoDaCapa, ehNavegador, executarAtalho, layoutDaMesa, nomeCurto, posicaoAgora, teclaQueCabe, teclasDoAtalho, tempo } = await import('../src/lib/mesa');
 const pc = { endpoints: ['192.168.0.2'], activeIp: '192.168.0.2', port: 4200, token: 't' };
 
 describe('Modo Mesa (25/11)', () => {
@@ -25,9 +25,15 @@ describe('Modo Mesa (25/11)', () => {
   });
 
   it('o layout segue o jeito do celular', () => {
-    expect(layoutDaMesa(390, 844)).toEqual({ deitado: false, colunas: 3 });
+    expect(layoutDaMesa(390, 844)).toEqual({ deitado: false, colunas: 4 });
     expect(layoutDaMesa(844, 390)).toEqual({ deitado: true, colunas: 4 });
-    expect(layoutDaMesa(1000, 600)).toEqual({ deitado: true, colunas: 5 });
+    // A página de 4 × 4 cabe inteira: deitado, a altura manda; em pé, quase quadrada.
+    const d = teclaQueCabe(430, 300, 8);
+    expect(d.lado * 4 + 24).toBeLessThanOrEqual(430);
+    expect(d.alto * 4 + 24).toBeLessThanOrEqual(300);
+    expect(teclaQueCabe(361, 0, 8)).toEqual({ lado: 84, alto: 72 });
+    expect(ehNavegador('Chrome')).toBe(true);
+    expect(ehNavegador('SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify')).toBe(false);
   });
 
   it('teclas de um atalho', () => {

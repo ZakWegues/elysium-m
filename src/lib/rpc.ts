@@ -214,6 +214,7 @@ export type RpcMethod =
   | 'mesa.atalhos.salvar'
   | 'mesa.por'
   | 'mesa.abrir'
+  | 'midia.telaCheia'
   | 'aparelho.adotar'
   | 'telas.salvas.listar'
   | 'telas.salvas.obter'
@@ -802,6 +803,7 @@ export type RpcResults = {
   'mesa.atalhos.salvar': { atalhos: import('./mesa').Atalho[] };
   'mesa.por': { fala: string };
   'mesa.abrir': { fala: string };
+  'midia.telaCheia': { ok: boolean };
   'aparelho.adotar': { id: string; proprio: boolean };
   'tls.info': { tls: { porta: number; sha256: string; assinatura: string } | null };
   /** 31/10: telas salvas no PC (com o estado). */

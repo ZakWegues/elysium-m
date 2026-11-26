@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, ToastAndroid, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -13,33 +13,55 @@ import { CanalInput } from '../../lib/inputCanal';
 import { acelerar, SENSIBILIDADE_PADRAO } from '../../lib/trackpad';
 import { guardarRecente, lerRecentes } from '../../lib/mesa';
 
-export type AbaBancada = 'mouse' | 'teclado' | 'janelas';
+export type AbaBancada = 'atalhos' | 'mouse' | 'teclado' | 'janelas';
 
 /**
- * A parte de baixo do Modo Mesa: o mouse, o teclado e as janelas do PC, numa aba cada. O canal do
- * mouse abre no primeiro toque e fecha 30 s depois do último.
+ * O painel do Modo Mesa: os atalhos, o mouse, o teclado e as janelas do PC, numa aba cada, sempre do
+ * mesmo tamanho (nada rola para fora). Estreito (deitado), as abas são só o ícone. O canal
+ * do mouse abre no primeiro toque e fecha 30 s depois do último.
  */
-export function Bancada({ pairing, aba, setAba, aoErro }: { pairing: Pairing; aba: AbaBancada; setAba: (a: AbaBancada) => void; aoErro: (e: unknown) => void }) {
+export function Bancada({ pairing, aba, setAba, aoErro, atalhos, aoNovoAtalho, estreito, direita }: {
+  pairing: Pairing; aba: AbaBancada; setAba: (a: AbaBancada) => void; aoErro: (e: unknown) => void;
+  atalhos: ReactNode; aoNovoAtalho: () => void; estreito: boolean;
+  /** O que fica à direita das abas (deitado: a pílula do PC). */
+  direita?: ReactNode;
+}) {
   const { palette, tokens } = useTheme();
   const abas: { id: AbaBancada; rotulo: string; icone: keyof typeof Feather.glyphMap }[] = [
+    { id: 'atalhos', rotulo: 'Atalhos', icone: 'grid' },
     { id: 'mouse', rotulo: 'Mouse', icone: 'mouse-pointer' },
     { id: 'teclado', rotulo: 'Teclado', icone: 'type' },
     { id: 'janelas', rotulo: 'Janelas', icone: 'layers' },
   ];
   return (
     <View style={{ gap: 10, flex: 1 }}>
-      <View style={[styles.abas, { borderRadius: tokens.radii.full, backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-        {abas.map((a) => (
-          <Pressable key={a.id} onPress={() => { void haptica.tique(); setAba(a.id); }} accessibilityRole="tab" accessibilityState={{ selected: aba === a.id }}
-            style={[styles.aba, { borderRadius: tokens.radii.full, backgroundColor: aba === a.id ? palette.primarySoft : 'transparent' }]}>
-            <Feather name={a.icone} size={14} color={aba === a.id ? palette.primary : palette.textMuted} />
-            <Text variant="caption" color={aba === a.id ? palette.primary : palette.textMuted}>{a.rotulo}</Text>
+      <View style={styles.linhaAbas}>
+        <View style={[styles.abas, { borderRadius: tokens.radii.full, backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+          {abas.map((a) => {
+            const sel = aba === a.id;
+            return (
+              <Pressable key={a.id} onPress={() => { void haptica.tique(); setAba(a.id); }} accessibilityRole="tab" accessibilityLabel={a.rotulo} accessibilityState={{ selected: sel }}
+                style={[styles.aba, { flex: 1, borderRadius: tokens.radii.full, backgroundColor: sel ? palette.primarySoft : 'transparent' }]}>
+                <Feather name={a.icone} size={14} color={sel ? palette.primary : palette.textMuted} />
+                {!estreito ? <Text variant="caption" numberOfLines={1} color={sel ? palette.primary : palette.textMuted}>{a.rotulo}</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        {aba === 'atalhos' ? (
+          <Pressable onPress={() => { void haptica.leve(); aoNovoAtalho(); }} accessibilityRole="button" accessibilityLabel="Novo atalho" hitSlop={6}
+            style={[styles.novo, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+            <Feather name="plus" size={16} color={palette.textMuted} />
           </Pressable>
-        ))}
+        ) : null}
+        {direita}
       </View>
-      {aba === 'mouse' && <Mouse pairing={pairing} />}
-      {aba === 'teclado' && <Teclado pairing={pairing} aoErro={aoErro} />}
-      {aba === 'janelas' && <Janelas pairing={pairing} aoErro={aoErro} />}
+      <View style={{ flex: 1 }}>
+        {aba === 'atalhos' && atalhos}
+        {aba === 'mouse' && <Mouse pairing={pairing} />}
+        {aba === 'teclado' && <Teclado pairing={pairing} aoErro={aoErro} />}
+        {aba === 'janelas' && <Janelas pairing={pairing} aoErro={aoErro} />}
+      </View>
     </View>
   );
 }
@@ -120,7 +142,7 @@ function Teclado({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unknown) =
     try { await callRpc(pairing, 'input.type', { text: t }); } catch (e) { aoErro(e); }
   }
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 10, flex: 1 }}>
       <View style={styles.linha}>
         <TextInput value={texto} onChangeText={setTexto} onSubmitEditing={mandar} placeholder="Digite e mande para o PC" placeholderTextColor={palette.textMuted}
           returnKeyType="send" blurOnSubmit={false}
@@ -155,7 +177,7 @@ function Janelas({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unknown) =
   if (lista === null) return <ActivityIndicator color={palette.primary} />;
   if (!lista.length) return <Text variant="caption" color={palette.textMuted}>Nenhuma janela aberta.</Text>;
   return (
-    <ScrollView nestedScrollEnabled style={{ maxHeight: 280 }} contentContainerStyle={{ gap: 6 }}>
+    <ScrollView nestedScrollEnabled style={{ flex: 1 }} contentContainerStyle={{ gap: 6 }}>
       {lista.map((j) => (
         <Animated.View key={j.hwnd} entering={FadeIn.duration(160)} style={[styles.janela, { borderRadius: tokens.radii.md, backgroundColor: 'rgba(255,255,255,0.05)' }]}>
           <Pressable onPress={() => agir(j, 'focar')} style={{ flex: 1, gap: 1 }} accessibilityRole="button" accessibilityLabel={`Trazer ${j.titulo} para a frente`}>
@@ -180,6 +202,7 @@ export function PorNoPc({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unk
   const [ocupado, setOcupado] = useState(false);
   const [recentes, setRecentes] = useState<string[]>([]);
   const [resposta, setResposta] = useState<string | null>(null);
+  const [focado, setFocado] = useState(false);
   useEffect(() => { void lerRecentes().then(setRecentes); }, []);
   async function mandar(t = texto) {
     const pedido = t.trim();
@@ -202,7 +225,8 @@ export function PorNoPc({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unk
     { id: 'ely', icone: 'message-circle', dica: 'Pedir para a Ely' },
   ];
   return (
-    <View style={{ gap: 8 }}>
+    // Os últimos pedidos e a resposta da Ely abrem por cima (não empurram nada): a Mesa cabe inteira.
+    <View style={{ zIndex: focado || resposta ? 20 : 0 }}>
       <View style={[styles.campoPor, { borderColor: palette.glassBorder, borderRadius: tokens.radii.lg, backgroundColor: 'rgba(255,255,255,0.04)' }]}>
         {destinos.map((d) => (
           <Pressable key={d.id} onPress={() => { void haptica.tique(); setDestino(d.id); }} accessibilityLabel={d.dica} accessibilityState={{ selected: destino === d.id }} hitSlop={4}
@@ -211,6 +235,7 @@ export function PorNoPc({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unk
           </Pressable>
         ))}
         <TextInput value={texto} onChangeText={setTexto} onSubmitEditing={() => mandar()} returnKeyType="send"
+          onFocus={() => setFocado(true)} onBlur={() => setFocado(false)}
           placeholder={destino === 'ely' ? 'Pedir para a Ely…' : destino === 'youtube' ? 'Pôr um vídeo no PC…' : 'Pôr uma música no PC…'}
           placeholderTextColor={palette.textMuted} style={[styles.campoTexto, { color: palette.text }]} />
         <Pressable onPress={() => mandar()} disabled={!texto.trim() || ocupado} accessibilityLabel="Mandar" hitSlop={6}
@@ -219,13 +244,13 @@ export function PorNoPc({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unk
         </Pressable>
       </View>
       {resposta ? (
-        <Animated.View entering={FadeIn.duration(180)} style={[styles.resposta, { borderRadius: tokens.radii.md, backgroundColor: palette.bolhaEla ?? 'rgba(255,255,255,0.06)' }]}>
+        <Animated.View entering={FadeIn.duration(180)} style={[styles.flutua, styles.resposta, { borderRadius: tokens.radii.md, backgroundColor: palette.surfaceRaised, borderColor: palette.glassBorder }]}>
           <Text variant="body" style={{ flex: 1 }}>{resposta}</Text>
           <Pressable onPress={() => setResposta(null)} hitSlop={8} accessibilityLabel="Fechar a resposta"><Feather name="x" size={16} color={palette.textMuted} /></Pressable>
         </Animated.View>
       ) : null}
-      {recentes.length && destino !== 'ely' ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} keyboardShouldPersistTaps="handled">
+      {focado && !resposta && recentes.length && destino !== 'ely' ? (
+        <ScrollView horizontal style={[styles.flutua, { backgroundColor: palette.surfaceRaised, borderColor: palette.glassBorder, borderRadius: tokens.radii.lg }]} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, padding: 8 }} keyboardShouldPersistTaps="handled">
           {recentes.map((r) => (
             <Pressable key={r} onPress={() => mandar(r)} accessibilityLabel={`Pôr ${r} de novo`}
               style={[styles.recente, { borderRadius: tokens.radii.full, backgroundColor: 'rgba(255,255,255,0.06)' }]}>
@@ -240,21 +265,25 @@ export function PorNoPc({ pairing, aoErro }: { pairing: Pairing; aoErro: (e: unk
 }
 
 const styles = StyleSheet.create({
-  abas: { flexDirection: 'row', padding: 3, alignSelf: 'stretch' },
+  linhaAbas: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  abas: { flex: 1, flexDirection: 'row', padding: 3 },
+  novo: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   aba: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
-  linhaMouse: { flexDirection: 'row', gap: 8, flex: 1, minHeight: 180 },
+  linhaMouse: { flexDirection: 'row', gap: 8, flex: 1 },
   area: { flex: 1, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.03)' },
   roda: { width: 44, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, backgroundColor: 'rgba(255,255,255,0.03)' },
   linha: { flexDirection: 'row', gap: 8 },
   campo: { borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   enviar: { width: 48, alignItems: 'center', justifyContent: 'center' },
-  teclas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tecla: { minWidth: 52, height: 40, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', flexGrow: 1 },
+  // As fileiras esticam até o fim do painel (nada sobrando embaixo).
+  teclas: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignContent: 'stretch', gap: 6 },
+  tecla: { minWidth: 52, minHeight: 40, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', flexGrow: 1 },
   janela: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 12, paddingRight: 4, minHeight: 52 },
   mini: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   campoPor: { flexDirection: 'row', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, padding: 5, gap: 2 },
   destino: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  campoTexto: { flex: 1, fontSize: 15, paddingHorizontal: 8, paddingVertical: 6 },
+  campoTexto: { flex: 1, minWidth: 0, fontSize: 15, paddingHorizontal: 8, paddingVertical: 6 },
   resposta: { flexDirection: 'row', gap: 8, padding: 12, alignItems: 'flex-start' },
+  flutua: { position: 'absolute', top: 54, left: 0, right: 0, borderWidth: StyleSheet.hairlineWidth, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 16 },
   recente: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6 },
 });

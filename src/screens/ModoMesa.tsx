@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, AppState, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,8 @@ import { AuthError } from '../lib/http';
 import { avisarTokenRecusado } from '../lib/erroRpc';
 import type { Pairing } from '../lib/pairing';
 import { IP_DA_PONTE } from '../lib/ponte';
-import { acentoDaCapa, layoutDaMesa, useDescanso, useMesaAoVivo, type MidiaMesa } from '../lib/mesa';
+import { acentoDaCapa, layoutDaMesa, teclaQueCabe, useDescanso, useMesaAoVivo, type MidiaMesa } from '../lib/mesa';
+import { barrasDoSistema, useBateria, type Bateria } from '../lib/mesaNativo';
 import { TocandoAgora } from '../components/mesa/TocandoAgora';
 import { SomDaMesa } from '../components/mesa/SomMesa';
 import { GradeAtalhos } from '../components/mesa/GradeAtalhos';
@@ -28,8 +29,9 @@ const CHAVE_KEEP_AWAKE = 'modo-mesa';
 
 /**
  * Modo Mesa (25/11): o celular apoiado ao lado do PC vira a central de controle. Abre crescendo a
- * partir do botão embaixo do preview; em pé ou deitado, o layout acompanha. A tela fica acesa e, 20 s
- * sem toque, escurece para o relógio e a música (um toque volta).
+ * partir do botão embaixo do preview; em pé ou deitado, o layout acompanha e tudo cabe na tela, sem
+ * rolar (25/11 noite: sem as barras do Android, só a seta e a pílula no alto). A tela fica acesa e,
+ * 20 s sem toque, escurece para o relógio e a música (um toque volta).
  */
 export function ModoMesa({ pairing, visivel, origem, aoFechar }: { pairing: Pairing; visivel: boolean; origem: Origem | null; aoFechar: () => void }) {
   const [montado, setMontado] = useState(visivel);
@@ -42,13 +44,14 @@ function Conteudo({ pairing, visivel, origem, aoFechar, aoSumir }: { pairing: Pa
   const { palette, tokens } = useTheme();
   const { width: W, height: H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { deitado, colunas } = layoutDaMesa(W, H);
+  const { deitado } = layoutDaMesa(W, H);
   const [naFrente, setNaFrente] = useState(AppState.currentState === 'active');
   useEffect(() => { const s = AppState.addEventListener('change', (a) => setNaFrente(a === 'active')); return () => s.remove(); }, []);
   const vivo = useMesaAoVivo(pairing, visivel && naFrente);
   const { descansando, tocou } = useDescanso(DESCANSO_MS, visivel && naFrente);
-  const [aba, setAba] = useState<AbaBancada>('mouse');
-  const rolagem = useRef<ScrollView>(null);
+  const [aba, setAba] = useState<AbaBancada>('atalhos');
+  const [pedirNovo, setPedirNovo] = useState(0);
+  const bateria = useBateria(visivel && naFrente);
   const midia = vivo.estado?.midia ?? null;
   const acento = acentoDaCapa(midia?.cor, palette.primary);
 
@@ -67,8 +70,12 @@ function Conteudo({ pairing, visivel, origem, aoFechar, aoSumir }: { pairing: Pa
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
       deactivateKeepAwake(CHAVE_KEEP_AWAKE).catch(() => {});
       Brightness.restoreSystemBrightnessAsync().catch(() => {});
+      barrasDoSistema(true);
     };
   }, [visivel]);
+
+  // As barras do Android somem no modo; girar ou voltar ao app pode trazê-las: some de novo.
+  useEffect(() => { if (visivel && naFrente) barrasDoSistema(false); }, [visivel, naFrente, deitado]);
 
   // Descansando: o brilho cai (só nesta janela); acordou, volta ao do sistema.
   useEffect(() => {
@@ -100,61 +107,60 @@ function Conteudo({ pairing, visivel, origem, aoFechar, aoSumir }: { pairing: Pa
   const ondeEsta = pairing.activeIp === IP_DA_PONTE ? 'fora de casa' : /^100\./.test(pairing.activeIp) ? 'pelo túnel' : 'em casa';
   const cpu = Number(vivo.telemetria?.cpu_pct);
   const ram = Number(vivo.telemetria?.ram_pct);
-  const pad = { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12, paddingLeft: insets.left + 16, paddingRight: insets.right + 16 };
+  // Sem as barras do Android, só a câmera (recorte) ainda pede margem.
+  const pad = { paddingTop: Math.max(insets.top, 10), paddingBottom: Math.max(insets.bottom, 10), paddingLeft: insets.left + 14, paddingRight: insets.right + 14 };
+  const gap = 10;
+  // Em pé, o painel tem a altura da página de 4 × 4 (abas 36 + espaço + teclas); o player fica com o resto.
+  const painelEmPe = 36 + gap + teclaQueCabe(W - pad.paddingLeft - pad.paddingRight, 0, 8).alto * 4 + 8 * 3;
 
+  const fechar = (
+    <Pressable onPress={() => { void haptica.leve(); aoFechar(); }} accessibilityRole="button" accessibilityLabel="Fechar o Modo Mesa" hitSlop={10}
+      style={[styles.fechar, { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.10)' }]}>
+      <Feather name="chevron-down" size={22} color={palette.text} />
+    </Pressable>
+  );
+  const pilula = <Pilula conectado={vivo.status === 'open'} ondeEsta={ondeEsta} cpu={cpu} ram={ram} bateria={bateria} />;
   const blocoMusica = (
-    <View style={[styles.cartao, { borderRadius: tokens.radii.xl }]}>
-      <TocandoAgora pairing={pairing} midia={midia} acento={acento} parado={descansando} compacto={deitado ? H < 420 : H < 700} aoErro={aoErro} />
+    <View style={[styles.cartao, { flex: 1, borderRadius: tokens.radii.xl }]}>
+      <TocandoAgora pairing={pairing} midia={midia} acento={acento} parado={descansando} aoErro={aoErro} />
       <SomDaMesa pairing={pairing} som={vivo.estado?.som ?? null} aoErro={aoErro} />
     </View>
   );
-  const blocoAtalhos = (
-    <GradeAtalhos pairing={pairing} colunas={colunas} som={vivo.estado?.som ?? null} acento={acento} aoErro={aoErro}
-      aoAbrirJanelas={() => { setAba('janelas'); setTimeout(() => rolagem.current?.scrollToEnd({ animated: true }), 60); }} />
+  const painel = (
+    <Bancada pairing={pairing} aba={aba} setAba={setAba} aoErro={aoErro} estreito={deitado} direita={deitado ? pilula : undefined}
+      aoNovoAtalho={() => setPedirNovo((n) => n + 1)}
+      atalhos={<GradeAtalhos pairing={pairing} som={vivo.estado?.som ?? null} acento={acento} pedirNovo={pedirNovo} aoErro={aoErro} aoAbrirJanelas={() => setAba('janelas')} />} />
   );
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={aoFechar} supportedOrientations={['portrait', 'landscape']}>
+    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={aoFechar} supportedOrientations={['portrait', 'landscape']}
+      onShow={() => barrasDoSistema(false)}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: palette.background }, entrada]}
           onTouchStart={tocou}>
           <Fundo midia={midia} acento={acento} fundo={palette.background} />
-          <View style={[styles.topo, { paddingTop: pad.paddingTop, paddingLeft: pad.paddingLeft, paddingRight: pad.paddingRight }]}>
-            <Pressable onPress={() => { void haptica.leve(); aoFechar(); }} accessibilityRole="button" accessibilityLabel="Fechar o Modo Mesa" hitSlop={10}
-              style={[styles.fechar, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
-              <Feather name="chevron-down" size={22} color={palette.text} />
-            </Pressable>
-            <View style={{ flex: 1, gap: 1 }}>
-              <Text variant="label">Modo Mesa</Text>
-              <View style={styles.status}>
-                <View style={[styles.ponto, { backgroundColor: vivo.status === 'open' ? palette.success : palette.textMuted }]} />
-                <Text variant="caption" color={palette.textMuted}>{vivo.status === 'open' ? `PC ligado · ${ondeEsta}` : 'conectando…'}</Text>
-              </View>
-            </View>
-            {Number.isFinite(cpu) ? <Medida rotulo="CPU" valor={cpu} /> : null}
-            {Number.isFinite(ram) ? <Medida rotulo="RAM" valor={ram} /> : null}
-            <Relogio grande={false} />
-          </View>
-
           {deitado ? (
-            <View style={[styles.deitado, { paddingLeft: pad.paddingLeft, paddingRight: pad.paddingRight, paddingBottom: pad.paddingBottom }]}>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
+            <View style={[styles.deitado, pad, { gap: 14 }]}>
+              <View style={{ flex: 1, gap }}>
+                <View style={styles.linhaTopo}>
+                  {fechar}
+                  <View style={{ flex: 1 }}><PorNoPc pairing={pairing} aoErro={aoErro} /></View>
+                </View>
                 {blocoMusica}
-                <PorNoPc pairing={pairing} aoErro={aoErro} />
-              </ScrollView>
-              <ScrollView ref={rolagem} style={{ flex: 1.15 }} contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {blocoAtalhos}
-                <Bancada pairing={pairing} aba={aba} setAba={setAba} aoErro={aoErro} />
-              </ScrollView>
+              </View>
+              <View style={{ flex: 1.15 }}>{painel}</View>
             </View>
           ) : (
-            <ScrollView ref={rolagem} contentContainerStyle={{ gap: 16, paddingLeft: pad.paddingLeft, paddingRight: pad.paddingRight, paddingBottom: pad.paddingBottom, paddingTop: 6 }}
-              showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={[{ flex: 1, gap }, pad]}>
+              <View style={styles.linhaTopo}>
+                {fechar}
+                <View style={{ flex: 1 }} />
+                {pilula}
+              </View>
               {blocoMusica}
               <PorNoPc pairing={pairing} aoErro={aoErro} />
-              {blocoAtalhos}
-              <Bancada pairing={pairing} aba={aba} setAba={setAba} aoErro={aoErro} />
-            </ScrollView>
+              <View style={{ height: painelEmPe }}>{painel}</View>
+            </View>
           )}
 
           {descansando ? <Descanso midia={midia} deitado={deitado} aoAcordar={tocou} /> : null}
@@ -178,13 +184,49 @@ function Fundo({ midia, acento, fundo }: { midia: MidiaMesa | null; acento: stri
   );
 }
 
-function Medida({ rotulo, valor }: { rotulo: string; valor: number }) {
-  const { palette } = useTheme();
-  const cor = valor >= 90 ? palette.error : valor >= 70 ? palette.accent : palette.textMuted;
+/** A pílula do canto: PC (CPU, RAM), a hora e a bateria do celular. O ponto diz se o PC responde. */
+function Pilula({ conectado, ondeEsta, cpu, ram, bateria }: { conectado: boolean; ondeEsta: string; cpu: number; ram: number; bateria: Bateria | null }) {
+  const { palette, tokens } = useTheme();
+  const agora = useHora();
+  const hora = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+  const corDe = (v: number) => (v >= 90 ? palette.error : v >= 70 ? palette.accent : palette.text);
+  const fraca = !!bateria && !bateria.carregando && bateria.nivel < 20;
+  const corBateria = bateria?.carregando ? palette.success : fraca ? palette.error : palette.text;
+  const sep = <View style={[styles.sep, { backgroundColor: 'rgba(255,255,255,0.14)' }]} />;
+  const rotulo = [
+    conectado ? `PC ligado, ${ondeEsta}` : 'Conectando ao PC',
+    Number.isFinite(cpu) ? `CPU ${Math.round(cpu)} por cento` : '',
+    Number.isFinite(ram) ? `RAM ${Math.round(ram)} por cento` : '',
+    hora,
+    bateria ? `bateria ${bateria.nivel} por cento${bateria.carregando ? ', carregando' : ''}` : '',
+  ].filter(Boolean).join(', ');
   return (
-    <View style={styles.medida} accessible accessibilityLabel={`${rotulo} ${Math.round(valor)} por cento`}>
+    <View accessible accessibilityLabel={rotulo}
+      style={[styles.pilula, { borderRadius: tokens.radii.full, backgroundColor: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.10)' }]}>
+      <View style={[styles.ponto, { backgroundColor: conectado ? palette.success : palette.textMuted }]} />
+      {Number.isFinite(cpu) ? <Medida rotulo="CPU" valor={`${Math.round(cpu)}%`} cor={corDe(cpu)} /> : null}
+      {Number.isFinite(ram) ? <Medida rotulo="RAM" valor={`${Math.round(ram)}%`} cor={corDe(ram)} /> : null}
+      {sep}
+      <Text variant="label" style={styles.numero}>{hora}</Text>
+      {bateria ? (
+        <>
+          {sep}
+          <View style={styles.bateria}>
+            <Feather name={bateria.carregando ? 'battery-charging' : 'battery'} size={15} color={corBateria} />
+            <Text variant="caption" color={corBateria} style={styles.numero}>{bateria.nivel}%</Text>
+          </View>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function Medida({ rotulo, valor, cor }: { rotulo: string; valor: string; cor: string }) {
+  const { palette } = useTheme();
+  return (
+    <View style={styles.medida}>
       <Text variant="caption" color={palette.textMuted} style={styles.mini}>{rotulo}</Text>
-      <Text variant="caption" color={cor} style={styles.numero}>{Math.round(valor)}%</Text>
+      <Text variant="caption" color={cor} style={styles.numero}>{valor}</Text>
     </View>
   );
 }
@@ -236,15 +278,17 @@ function Descanso({ midia, deitado, aoAcordar }: { midia: MidiaMesa | null; deit
 }
 
 const styles = StyleSheet.create({
-  topo: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 10 },
-  fechar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  linhaTopo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  fechar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
+  pilula: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 40, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth },
+  sep: { width: StyleSheet.hairlineWidth, height: 18 },
+  bateria: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ponto: { width: 7, height: 7, borderRadius: 4 },
   medida: { alignItems: 'center' },
-  mini: { fontSize: 10, lineHeight: 12 },
+  mini: { fontSize: 9, lineHeight: 11 },
   numero: { fontVariant: ['tabular-nums'] },
-  cartao: { padding: 16, gap: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.09)' },
-  deitado: { flex: 1, flexDirection: 'row', gap: 16 },
+  cartao: { padding: 14, gap: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.09)' },
+  deitado: { flex: 1, flexDirection: 'row' },
   descanso: { backgroundColor: 'rgba(0,0,0,0.94)' },
   centro: { alignItems: 'center', justifyContent: 'center' },
   relogioGrande: { fontSize: 84, lineHeight: 92, fontWeight: '200', letterSpacing: 2 },

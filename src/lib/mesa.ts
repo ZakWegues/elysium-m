@@ -13,7 +13,7 @@ import { openTelemetryStream, type TelemetryFrame, type TelemetryStatus } from '
 export type MidiaMesa = {
   app: string; nomeApp: string; titulo: string; artista: string; album: string;
   tocando: boolean; pos: number; posEm: number; dur: number;
-  podeVoltar: boolean; podeAvancar: boolean; capa: string; capaUrl: string; cor: string;
+  podeVoltar: boolean; podeAvancar: boolean; podePular?: boolean; capa: string; capaUrl: string; cor: string;
 };
 export type SomMesa = { volume: number; mudo: boolean; micMudo: boolean | null };
 export type EstadoMesa = { midia: MidiaMesa | null; som: SomMesa };
@@ -33,7 +33,7 @@ export const ACOES: { valor: string; rotulo: string; icone: string }[] = [
   { valor: 'janelas', rotulo: 'Janelas', icone: 'layers' },
 ];
 /** Os ícones que dá para escolher num atalho (Feather). */
-export const ICONES = ['zap', 'globe', 'terminal', 'code', 'music', 'film', 'youtube', 'message-circle', 'mail', 'folder', 'chrome', 'command', 'monitor', 'moon', 'sun', 'coffee', 'book', 'shopping-cart', 'star', 'heart', 'camera', 'mic', 'headphones', 'lock'] as const;
+export const ICONES = ['zap', 'copy', 'clipboard', 'rotate-ccw', 'layers', 'maximize', 'activity', 'target', 'clock', 'globe', 'terminal', 'code', 'music', 'film', 'youtube', 'message-circle', 'mail', 'folder', 'chrome', 'command', 'monitor', 'moon', 'sun', 'coffee', 'book', 'shopping-cart', 'star', 'heart', 'camera', 'mic', 'headphones', 'lock'] as const;
 
 /** Onde a música está agora (segundos), andando o relógio enquanto toca. Pura. */
 export function posicaoAgora(m: Pick<MidiaMesa, 'pos' | 'posEm' | 'dur' | 'tocando'>, agora = Date.now()): number {
@@ -48,10 +48,26 @@ export function tempo(s: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(seg).padStart(2, '0')}` : `${m}:${String(seg).padStart(2, '0')}`;
 }
 
-/** Quantas colunas e se divide em duas metades, pelo tamanho da tela. Pura. */
+/** Se divide em duas metades, pelo tamanho da tela. A grade é sempre 4 × 4 (quatro grupos). Pura. */
 export function layoutDaMesa(largura: number, altura: number): { deitado: boolean; colunas: number } {
-  const deitado = largura > altura;
-  return { deitado, colunas: deitado ? (largura >= 900 ? 5 : 4) : largura >= 420 ? 4 : 3 };
+  return { deitado: largura > altura, colunas: 4 };
+}
+
+export const POR_PAGINA = 16;
+
+/**
+ * O tamanho das teclas para a página de 4 × 4 caber inteira no espaço (sem rolar). Em pé a altura é
+ * livre (`altura` 0): a tecla fica quase quadrada, no máximo 84. Pura.
+ */
+export function teclaQueCabe(largura: number, altura: number, gap: number): { lado: number; alto: number } {
+  const lado = Math.max(0, Math.floor((largura - gap * 3) / 4));
+  const alto = altura > 0 ? Math.max(44, Math.floor((altura - gap * 3) / 4)) : Math.min(84, Math.round(lado * 0.86));
+  return { lado, alto };
+}
+
+/** Navegador tocando (YouTube etc.): aí entram os ±10 s e a tela cheia. Pura. */
+export function ehNavegador(app: string | undefined): boolean {
+  return /chrome|msedge|edge|brave|firefox|opera|vivaldi/i.test(app ?? '');
 }
 
 /** A cor da capa vira o destaque, se der para ler o botão nela; escura demais, fica a do tema. Pura. */

@@ -457,6 +457,10 @@
       "destructive": false
     },
     {
+      "method": "midia.telaCheia",
+      "destructive": false
+    },
+    {
       "method": "modos.delete",
       "destructive": true
     },
