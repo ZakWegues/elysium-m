@@ -413,6 +413,26 @@
       "destructive": false
     },
     {
+      "method": "mesa.abrir",
+      "destructive": false
+    },
+    {
+      "method": "mesa.atalhos",
+      "destructive": false
+    },
+    {
+      "method": "mesa.atalhos.salvar",
+      "destructive": false
+    },
+    {
+      "method": "mesa.estado",
+      "destructive": false
+    },
+    {
+      "method": "mesa.por",
+      "destructive": false
+    },
+    {
       "method": "metas.delete",
       "destructive": true
     },
@@ -422,6 +442,18 @@
     },
     {
       "method": "metas.save",
+      "destructive": false
+    },
+    {
+      "method": "microfone.mudo",
+      "destructive": false
+    },
+    {
+      "method": "midia.comando",
+      "destructive": false
+    },
+    {
+      "method": "midia.pular",
       "destructive": false
     },
     {
@@ -614,6 +646,14 @@
     },
     {
       "method": "rotinas.toggle",
+      "destructive": false
+    },
+    {
+      "method": "saida.listar",
+      "destructive": false
+    },
+    {
+      "method": "saida.usar",
       "destructive": false
     },
     {

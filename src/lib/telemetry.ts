@@ -16,7 +16,9 @@ export type TelemetryStatus = 'connecting' | 'open' | 'closed';
 export function openTelemetryStream(
   pairing: Pairing,
   onSnapshot: (data: TelemetryFrame) => void,
-  onStatusChange?: (status: TelemetryStatus) => void
+  onStatusChange?: (status: TelemetryStatus) => void,
+  /** 25/11: o Modo Mesa — o PC manda o que toca e o volume quando mudam. */
+  opcoes?: { mesa?: (f: Record<string, unknown>) => void },
 ): () => void {
   const url = streamUrl(pairing);
 
@@ -39,6 +41,7 @@ export function openTelemetryStream(
       attempt = 0;
       ultimoSinal = Date.now();
       onStatusChange?.('open');
+      if (opcoes?.mesa) { try { socket.send(JSON.stringify({ type: 'mesa', ligado: true })); } catch { /* o onclose cuida */ } }
       // Socket morto pela suspensão do Android fica "aberto" até o TCP desistir: o ping
       // descobre antes, e o silêncio longo derruba e reabre.
       if (batida) clearInterval(batida);
@@ -68,6 +71,8 @@ export function openTelemetryStream(
         receberFrameModo(data);
       } else if (data.type === 'pomodoro') {
         receberFramePomodoro(data);
+      } else if (data.type === 'mesa') {
+        opcoes?.mesa?.(data);
       }
     };
 

@@ -23,6 +23,8 @@ import { openTelemetryStream, TelemetryFrame, TelemetryStatus } from '../lib/tel
 import { findMetric } from '../lib/telemetryFormat';
 import { useTheme } from '../theme';
 import TrackpadFullscreen from './TrackpadFullscreen';
+import { ModoMesa, type Origem } from './ModoMesa';
+import { LinearGradient } from 'expo-linear-gradient';
 import { BarraMidia } from '../components/BarraMidia';
 import { MiniTrackpad } from '../components/MiniTrackpad';
 import SpotifyPlayer, { SpotifyBar } from './SpotifyPlayer';
@@ -105,6 +107,8 @@ export default function ControlScreen({
   useEffect(() => { if (pedidoTrackpad) setTrackpadOpen(true); }, [pedidoTrackpad]);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [painel, setPainel] = useState<PainelId | null>(null);
+  // 25/11: Modo Mesa — a central de controle com o celular ao lado do PC.
+  const [mesa, setMesa] = useState<{ aberta: boolean; origem: Origem | null }>({ aberta: false, origem: null });
 
   const handleError = useCallback<ErrorHandler>((err, context) => {
     if (err instanceof AuthError) {
@@ -124,7 +128,7 @@ export default function ControlScreen({
       <ScreenHeader title="PC" flutuante />
 
       <ScrollView onScroll={aoRolar} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: tokens.spacing.lg, paddingTop: folgaTopo, gap: tokens.spacing.md, paddingBottom: tokens.spacing.lg + folgaDaBarra }}>
-        <MirrorPanel pairing={pairing} onError={handleError} />
+        <MirrorPanel pairing={pairing} onError={handleError} aoAbrirMesa={(origem) => setMesa({ aberta: true, origem })} />
 
         {/* Só aparece quando há algo tocando. Toque abre o player em tela cheia. */}
         <SpotifyBar pairing={pairing} onOpen={() => setPlayerOpen(true)} />
@@ -175,6 +179,8 @@ export default function ControlScreen({
         onClose={() => setPlayerOpen(false)}
       />
 
+      <ModoMesa pairing={pairing} visivel={mesa.aberta} origem={mesa.origem} aoFechar={() => setMesa((m) => ({ ...m, aberta: false }))} />
+
       {/* Um só GlassModal para todos os painéis: o conteúdo é decidido pelo id. O corpo
           monta quando a gaveta abre e desmonta ao fechar — é o que faz cada painel
           carregar os dados dele só quando alguém pede, como as gavetas faziam. */}
@@ -195,7 +201,7 @@ export default function ControlScreen({
 
 // ── Espelho (sempre visível) ──────────────────────────────────────────────────
 
-function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHandler }) {
+function MirrorPanel({ pairing, onError, aoAbrirMesa }: { pairing: Pairing; onError: ErrorHandler; aoAbrirMesa: (origem: Origem | null) => void }) {
   const { palette, tokens } = useTheme();
   const [frame, setFrame] = useState<CapturedFrame | null>(null);
   const [screens, setScreens] = useState<ScreenInfo[]>([]);
@@ -288,20 +294,27 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
 
   return (
     <View style={{ gap: tokens.spacing.sm }}>
-      {frame ? (
-        <Image
-          source={{ uri: `data:image/jpeg;base64,${frame.base64}` }}
-          style={{ width: '100%', aspectRatio: aspect, borderRadius: tokens.radii.md, backgroundColor: '#000' }}
-          resizeMode="contain"
-        />
-      ) : (
-        <Card style={styles.centerCard}>
-          <ActivityIndicator color={palette.primary} />
-          <Text variant="caption" color={palette.textMuted} style={{ marginTop: tokens.spacing.sm }}>
-            Capturando a tela do PC…
-          </Text>
-        </Card>
-      )}
+      {/* 25/11: o preview e o botão do Modo Mesa são um bloco só — a tela "desce" e vira botão. */}
+      <View>
+        {frame ? (
+          <View>
+            <Image
+              source={{ uri: `data:image/jpeg;base64,${frame.base64}` }}
+              style={{ width: '100%', aspectRatio: aspect, borderTopLeftRadius: tokens.radii.md, borderTopRightRadius: tokens.radii.md, backgroundColor: '#000' }}
+              resizeMode="contain"
+            />
+            <LinearGradient pointerEvents="none" colors={['transparent', 'rgba(0,0,0,0.55)']} style={styles.descida} />
+          </View>
+        ) : (
+          <Card style={[styles.centerCard, { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
+            <ActivityIndicator color={palette.primary} />
+            <Text variant="caption" color={palette.textMuted} style={{ marginTop: tokens.spacing.sm }}>
+              Capturando a tela do PC…
+            </Text>
+          </Card>
+        )}
+        <BotaoMesa aoAbrir={aoAbrirMesa} />
+      </View>
 
       <View style={styles.toolbar}>
         <Pressable hitSlop={4} accessibilityRole="button"
@@ -377,6 +390,39 @@ function MirrorPanel({ pairing, onError }: { pairing: Pairing; onError: ErrorHan
 
       {error && <Text variant="caption" color={palette.error}>{error}</Text>}
     </View>
+  );
+}
+
+/**
+ * O botão do Modo Mesa (25/11): continua o preview para baixo, na mesma largura, e só os cantos de
+ * baixo são redondos. Um fio de luz marca o encontro; a central abre crescendo a partir dele.
+ */
+function BotaoMesa({ aoAbrir }: { aoAbrir: (origem: Origem | null) => void }) {
+  const { palette, tokens } = useTheme();
+  const ref = useRef<View>(null);
+  function abrir() {
+    void haptica.medio();
+    const v = ref.current;
+    if (!v) { aoAbrir(null); return; }
+    v.measureInWindow((x, y, w, h) => aoAbrir(w > 0 ? { x, y, w, h } : null));
+  }
+  return (
+    <Pressable ref={ref} onPress={abrir} accessibilityRole="button" accessibilityLabel="Modo Mesa" accessibilityHint="Abre a central de controle do PC, para usar com o celular ao lado"
+      style={({ pressed }) => [styles.mesa, {
+        borderBottomLeftRadius: tokens.radii.md, borderBottomRightRadius: tokens.radii.md,
+        borderColor: palette.glassBorder, opacity: pressed ? 0.85 : 1,
+      }]}>
+      <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.55)', palette.primarySoft]} locations={[0, 1]} style={StyleSheet.absoluteFill} />
+      <View pointerEvents="none" style={[styles.fioMesa, { backgroundColor: palette.primary }]} />
+      <View style={[styles.iconeMesa, { backgroundColor: palette.primarySoft }]}>
+        <Feather name="sliders" size={18} color={palette.primary} />
+      </View>
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text variant="label">Modo Mesa</Text>
+        <Text variant="caption" color={palette.textMuted} numberOfLines={1}>Música, atalhos e o PC na mão, com o celular ao lado</Text>
+      </View>
+      <Feather name="maximize-2" size={16} color={palette.textMuted} />
+    </Pressable>
   );
 }
 
@@ -1289,6 +1335,10 @@ function Vazio({ icone, texto }: { icone: keyof typeof Feather.glyphMap; texto: 
 
 const styles = StyleSheet.create({
   centerCard: { alignItems: 'center', paddingVertical: 40 },
+  descida: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 28 },
+  mesa: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 60, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderTopWidth: 0 },
+  fioMesa: { position: 'absolute', top: 0, left: 14, right: 14, height: StyleSheet.hairlineWidth * 2, opacity: 0.55 },
+  iconeMesa: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, minHeight: 36 },
   linhaHero: { flexDirection: 'row', alignItems: 'center', gap: 12 },

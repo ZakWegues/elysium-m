@@ -204,6 +204,16 @@ export type RpcMethod =
   | 'padroes.listar'
   | 'tls.info'
   | 'ponte.info'
+  | 'mesa.estado'
+  | 'midia.comando'
+  | 'midia.pular'
+  | 'saida.listar'
+  | 'saida.usar'
+  | 'microfone.mudo'
+  | 'mesa.atalhos'
+  | 'mesa.atalhos.salvar'
+  | 'mesa.por'
+  | 'mesa.abrir'
   | 'aparelho.adotar'
   | 'telas.salvas.listar'
   | 'telas.salvas.obter'
@@ -782,6 +792,16 @@ export type RpcResults = {
   'padroes.aceitar': { rotina: Rotina };
   /** 31/10: porta TLS e impressão do certificado, assinadas com o token. null = PC sem TLS. */
   'ponte.info': { ponte: unknown };
+  'mesa.estado': { estado: unknown };
+  'midia.comando': { ok: boolean };
+  'midia.pular': { ok: boolean };
+  'saida.listar': { saidas: { id: string; nome: string; padrao: boolean }[] };
+  'saida.usar': { ok: boolean };
+  'microfone.mudo': { ok: boolean };
+  'mesa.atalhos': { atalhos: import('./mesa').Atalho[]; padrao: import('./mesa').Atalho[] };
+  'mesa.atalhos.salvar': { atalhos: import('./mesa').Atalho[] };
+  'mesa.por': { fala: string };
+  'mesa.abrir': { fala: string };
   'aparelho.adotar': { id: string; proprio: boolean };
   'tls.info': { tls: { porta: number; sha256: string; assinatura: string } | null };
   /** 31/10: telas salvas no PC (com o estado). */
