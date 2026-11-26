@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, ToastAndroid, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import Feather from '@expo/vector-icons/Feather';
 import { useTheme } from '../../theme';
 import { Text } from '../ui';
 import { haptica } from '../../lib/haptica';
 import { callRpc } from '../../lib/rpc';
 import type { Pairing } from '../../lib/pairing';
-import { ACOES, executarAtalho, ICONES, POR_PAGINA, teclaQueCabe, type Atalho, type SomMesa, type TipoAtalho } from '../../lib/mesa';
+import { ACOES, coresDosGrupos, executarAtalho, ICONES, POR_PAGINA, teclaQueCabe, type Atalho, type SomMesa, type TipoAtalho } from '../../lib/mesa';
 
 const TIPOS: { tipo: TipoAtalho; rotulo: string; dica: string }[] = [
   { tipo: 'acao', rotulo: 'Ação', dica: '' },
@@ -15,6 +15,11 @@ const TIPOS: { tipo: TipoAtalho; rotulo: string; dica: string }[] = [
   { tipo: 'teclas', rotulo: 'Teclas', dica: 'Com +, como ctrl+shift+esc ou alt+tab' },
   { tipo: 'link', rotulo: 'Link', dica: 'https://…' },
 ];
+
+/** A última lista vista: girar o celular (o layout troca de árvore) ou reabrir o modo não pisca. */
+let ultimaLista: Atalho[] | null = null;
+/** Ações cujo aviso diz algo (o nome do print, área de transferência vazia); as outras só ganham o ✓. */
+const COM_AVISO = new Set(['print', 'copiar', 'colar']);
 
 /**
  * Os atalhos do Modo Mesa, tipo Stream Deck: páginas de 4 × 4 que enchem o espaço (nada pela metade),
@@ -29,15 +34,17 @@ export function GradeAtalhos({ pairing, som, acento, pedirNovo, aoAbrirJanelas, 
   aoAbrirJanelas: () => void; aoErro: (e: unknown) => void;
 }) {
   const { palette, tokens } = useTheme();
-  const [lista, setLista] = useState<Atalho[] | null>(null);
+  const [lista, setListaCrua] = useState<Atalho[] | null>(ultimaLista);
+  const setLista = (l: Atalho[] | null) => { ultimaLista = l; setListaCrua(l); };
   const [fazendo, setFazendo] = useState<string | null>(null);
+  const [feito, setFeito] = useState<string | null>(null);
   const [editando, setEditando] = useState<Atalho | 'novo' | null>(null);
   const [caixa, setCaixa] = useState({ w: 0, h: 0 });
   const [pagina, setPagina] = useState(0);
-  const cores = [acento, palette.accent, palette.success, '#f2c14e'];
+  const cores = coresDosGrupos(acento, palette.accent);
 
   useEffect(() => {
-    callRpc(pairing, 'mesa.atalhos', {}, { timeoutMs: 8000 }).then((r) => setLista(r.atalhos)).catch(() => setLista([]));
+    callRpc(pairing, 'mesa.atalhos', {}, { timeoutMs: 8000 }).then((r) => setLista(r.atalhos)).catch(() => { if (!ultimaLista) setLista([]); });
   }, [pairing]);
   useEffect(() => { if (pedirNovo > 0 && lista && lista.length < 24) setEditando('novo'); }, [pedirNovo]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -53,7 +60,10 @@ export function GradeAtalhos({ pairing, som, acento, pedirNovo, aoAbrirJanelas, 
     try {
       const frase = await executarAtalho(pairing, a, som);
       void haptica.sucesso();
-      ToastAndroid.show(frase, ToastAndroid.SHORT);
+      // Feito: um ✓ na própria tecla; aviso embaixo só quando ele diz alguma coisa.
+      setFeito(a.id);
+      setTimeout(() => setFeito((f) => (f === a.id ? null : f)), 900);
+      if (a.tipo === 'acao' && COM_AVISO.has(a.valor)) ToastAndroid.show(frase, ToastAndroid.SHORT);
     } catch (e) { aoErro(e); } finally { setFazendo(null); }
   }
 
@@ -70,11 +80,13 @@ export function GradeAtalhos({ pairing, som, acento, pedirNovo, aoAbrirJanelas, 
           accessibilityRole="button" accessibilityLabel={a.rotulo} accessibilityHint="Segure para editar"
           style={({ pressed }) => [styles.tecla, {
             flex: 1, borderRadius: tokens.radii.md, gap: alto < 64 ? 3 : 6,
-            backgroundColor: ativo ? palette.errorSoft : pressed ? palette.primarySoft : 'rgba(255,255,255,0.06)',
-            borderColor: ativo ? palette.error : 'rgba(255,255,255,0.08)', transform: [{ scale: pressed ? 0.95 : 1 }],
+            backgroundColor: ativo ? palette.errorSoft : feito === a.id ? `${cor}2e` : pressed ? palette.primarySoft : 'rgba(255,255,255,0.06)',
+            borderColor: ativo ? palette.error : feito === a.id ? `${cor}88` : 'rgba(255,255,255,0.08)', transform: [{ scale: pressed ? 0.95 : 1 }],
           }]}>
           {fazendo === a.id
             ? <ActivityIndicator color={cor} />
+            : feito === a.id
+            ? <Animated.View entering={ZoomIn.springify().damping(14)}><Feather name="check" size={alto < 64 ? 19 : 22} color={cor} /></Animated.View>
             : <Feather name={(ativo ? 'mic-off' : a.icone) as keyof typeof Feather.glyphMap} size={alto < 64 ? 19 : 22} color={ativo ? palette.error : cor} />}
           <Text variant="caption" numberOfLines={alto < 64 ? 1 : 2} color={palette.text} style={[styles.rotulo, alto < 64 && { fontSize: 11, lineHeight: 13 }]}>{a.rotulo}</Text>
         </Pressable>

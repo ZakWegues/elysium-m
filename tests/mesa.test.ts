@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getPalette, type Familia, type ThemeName } from '../src/theme/palettes';
 
 vi.mock('expo-clipboard', () => ({ setStringAsync: async () => true, getStringAsync: async () => '' }));
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: { getItem: async () => null, setItem: async () => {} } }));
@@ -6,7 +7,7 @@ const chamadas: { m: string; p: unknown; o: unknown }[] = [];
 vi.mock('../src/lib/rpc', () => ({ callRpc: async (_p: unknown, m: string, p: unknown, o: unknown) => { chamadas.push({ m, p, o }); return m === 'screen.screenshot' ? { message: 'ok' } : {}; } }));
 vi.mock('../src/lib/telemetry', () => ({ openTelemetryStream: () => () => {} }));
 
-const { acentoDaCapa, ehNavegador, executarAtalho, layoutDaMesa, nomeCurto, posicaoAgora, teclaQueCabe, teclasDoAtalho, tempo } = await import('../src/lib/mesa');
+const { acentoDaCapa, coresDosGrupos, ehNavegador, matiz, executarAtalho, layoutDaMesa, nomeCurto, posicaoAgora, teclaQueCabe, teclasDoAtalho, tempo } = await import('../src/lib/mesa');
 const pc = { endpoints: ['192.168.0.2'], activeIp: '192.168.0.2', port: 4200, token: 't' };
 
 describe('Modo Mesa (25/11)', () => {
@@ -63,5 +64,23 @@ describe('Modo Mesa (25/11)', () => {
   it('nome curto da saída de som', () => {
     expect(nomeCurto('SAMSUNG (NVIDIA High Definition Audio)')).toBe('SAMSUNG');
     expect(nomeCurto('Fones')).toBe('Fones');
+  });
+});
+
+describe('Modo Mesa — cores das fileiras (26/11)', () => {
+  it('quatro matizes afastados em todos os temas, e o Glass Âmbar não repete', () => {
+    for (const f of ['dark', 'glass', 'stark'] as Familia[]) {
+      for (const t of ['elisio', 'mare', 'crepusculo', 'neon'] as ThemeName[]) {
+        const p = getPalette(t, f);
+        const c = coresDosGrupos(p.primary, p.accent);
+        expect(new Set(c).size).toBe(4);
+        for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+          const d = Math.abs(matiz(c[i]) - matiz(c[j])) % 360;
+          expect(Math.min(d, 360 - d), `${f}/${t}: ${c}`).toBeGreaterThanOrEqual(30);
+        }
+      }
+    }
+    const ambar = getPalette('elisio', 'glass');
+    expect(coresDosGrupos(ambar.primary, ambar.accent)).not.toContain('#f2c14e');
   });
 });

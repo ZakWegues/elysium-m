@@ -79,6 +79,33 @@ export function acentoDaCapa(cor: string | undefined, padrao: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 70 ? padrao : cor!;
 }
 
+/** Matiz (0–360) de um #rrggbb. Pura. */
+export function matiz(cor: string): number {
+  const n = parseInt(cor.slice(1, 7), 16);
+  const [r, g, b] = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (!d) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+const distancia = (a: number, b: number) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+/**
+ * As quatro cores das fileiras da grade (26/11): a primeira é o acento; as outras, a do tema e
+ * depois as da lista, pulando a que ficar perto demais (< 60°) de uma já escolhida — no Glass
+ * Âmbar o detalhe do tema é o mesmo âmbar fixo que a 4ª fileira usava, e as duas repetiam. Pura.
+ */
+export function coresDosGrupos(acento: string, detalhe: string): string[] {
+  const candidatas = [detalhe, '#4ade80', '#5fb4ff', '#b58cff', '#ff7a9a', '#f2c14e', '#3fe0c8'];
+  const escolhidas = [acento];
+  while (escolhidas.length < 4) {
+    const longe = (c: string) => Math.min(...escolhidas.map((e) => distancia(matiz(e), matiz(c))));
+    const livres = candidatas.filter((c) => !escolhidas.includes(c));
+    escolhidas.push(livres.find((c) => longe(c) >= 60) ?? livres.reduce((m, c) => (longe(c) > longe(m) ? c : m)));
+  }
+  return escolhidas;
+}
+
 /** Nome curto da saída: "SAMSUNG (NVIDIA High Definition Audio)" → "SAMSUNG". Pura. */
 export function nomeCurto(nome: string): string {
   return nome.replace(/\s*\(.*\)\s*$/, '').trim() || nome;

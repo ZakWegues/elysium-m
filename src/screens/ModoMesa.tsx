@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { Easing, FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -85,6 +86,22 @@ function Conteudo({ pairing, visivel, origem, aoFechar, aoSumir }: { pairing: Pa
   }, [descansando, visivel]);
 
   // Abre crescendo a partir do botão; fecha voltando para ele (deitado: só encolhe e some).
+  // 26/11: tombar o celular gira o conteúdo de leve para o lugar novo (mola macia), com um tique.
+  const giro = useSharedValue(1);
+  const deitadoAntes = useRef(deitado);
+  useEffect(() => {
+    if (deitadoAntes.current === deitado) return;
+    deitadoAntes.current = deitado;
+    giro.value = 0;
+    giro.value = withSpring(1, { damping: 18, stiffness: 170 });
+    void haptica.leve();
+  }, [deitado]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sentido = deitado ? -1 : 1;
+  const girando = useAnimatedStyle(() => ({
+    flex: 1,
+    opacity: 0.25 + 0.75 * Math.min(1, giro.value),
+    transform: [{ rotate: `${(1 - giro.value) * 8 * sentido}deg` }, { scale: 0.94 + 0.06 * giro.value }],
+  }));
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withTiming(visivel ? 1 : 0, { duration: visivel ? 320 : 220, easing: Easing.bezier(0.22, 1, 0.36, 1) }, (fim) => { if (fim && !visivel) runOnJS(aoSumir)(); });
@@ -139,6 +156,7 @@ function Conteudo({ pairing, visivel, origem, aoFechar, aoSumir }: { pairing: Pa
         <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: palette.background }, entrada]}
           onTouchStart={tocou}>
           <Fundo midia={midia} acento={acento} fundo={palette.background} />
+          <Animated.View style={girando}>
           {deitado ? (
             <View style={[styles.deitado, pad, { gap: 14 }]}>
               <View style={{ flex: 1, gap }}>
@@ -162,8 +180,9 @@ function Conteudo({ pairing, visivel, origem, aoFechar, aoSumir }: { pairing: Pa
               <View style={{ height: painelEmPe }}>{painel}</View>
             </View>
           )}
+          </Animated.View>
 
-          {descansando ? <Descanso midia={midia} deitado={deitado} aoAcordar={tocou} /> : null}
+          {descansando ? <Descanso midia={midia} deitado={deitado} aoAcordar={tocou} bateria={bateria} conectado={vivo.status === 'open'} /> : null}
         </Animated.View>
       </GestureHandlerRootView>
     </Modal>
@@ -185,7 +204,10 @@ function Fundo({ midia, acento, fundo }: { midia: MidiaMesa | null; acento: stri
 }
 
 /** A pílula do canto: PC (CPU, RAM), a hora e a bateria do celular. O ponto diz se o PC responde. */
+/** Tocar na pílula alterna para o modo enxuto (só hora e bateria); vale até fechar o app. */
+let pilulaEnxuta = false;
 function Pilula({ conectado, ondeEsta, cpu, ram, bateria }: { conectado: boolean; ondeEsta: string; cpu: number; ram: number; bateria: Bateria | null }) {
+  const [enxuta, setEnxuta] = useState(pilulaEnxuta);
   const { palette, tokens } = useTheme();
   const agora = useHora();
   const hora = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
@@ -201,12 +223,13 @@ function Pilula({ conectado, ondeEsta, cpu, ram, bateria }: { conectado: boolean
     bateria ? `bateria ${bateria.nivel} por cento${bateria.carregando ? ', carregando' : ''}` : '',
   ].filter(Boolean).join(', ');
   return (
-    <View accessible accessibilityLabel={rotulo}
+    <Pressable accessible accessibilityLabel={rotulo} accessibilityHint="Toque para mostrar menos ou mais" accessibilityRole="button"
+      onPress={() => { void haptica.tique(); pilulaEnxuta = !enxuta; setEnxuta(!enxuta); }}
       style={[styles.pilula, { borderRadius: tokens.radii.full, backgroundColor: 'rgba(255,255,255,0.07)', borderColor: 'rgba(255,255,255,0.10)' }]}>
       <View style={[styles.ponto, { backgroundColor: conectado ? palette.success : palette.textMuted }]} />
-      {Number.isFinite(cpu) ? <Medida rotulo="CPU" valor={`${Math.round(cpu)}%`} cor={corDe(cpu)} /> : null}
-      {Number.isFinite(ram) ? <Medida rotulo="RAM" valor={`${Math.round(ram)}%`} cor={corDe(ram)} /> : null}
-      {sep}
+      {!enxuta && Number.isFinite(cpu) ? <Medida rotulo="CPU" valor={`${Math.round(cpu)}%`} cor={corDe(cpu)} /> : null}
+      {!enxuta && Number.isFinite(ram) ? <Medida rotulo="RAM" valor={`${Math.round(ram)}%`} cor={corDe(ram)} /> : null}
+      {!enxuta ? sep : null}
       <Text variant="label" style={styles.numero}>{hora}</Text>
       {bateria ? (
         <>
@@ -217,7 +240,7 @@ function Pilula({ conectado, ondeEsta, cpu, ram, bateria }: { conectado: boolean
           </View>
         </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -254,7 +277,7 @@ function Relogio({ grande }: { grande: boolean }) {
  * O descanso: preto, o relógio grande e a música. Anda 1 px a cada minuto (a tela não marca), e
  * qualquer toque acorda — o toque não chega aos botões de baixo.
  */
-function Descanso({ midia, deitado, aoAcordar }: { midia: MidiaMesa | null; deitado: boolean; aoAcordar: () => void }) {
+function Descanso({ midia, deitado, aoAcordar, bateria, conectado }: { midia: MidiaMesa | null; deitado: boolean; aoAcordar: () => void; bateria: Bateria | null; conectado: boolean }) {
   const agora = useHora();
   const m = agora.getMinutes();
   const deslocar = { transform: [{ translateX: (m % 7) - 3 }, { translateY: (Math.floor(m / 7) % 7) - 3 }] };
@@ -271,6 +294,16 @@ function Descanso({ midia, deitado, aoAcordar }: { midia: MidiaMesa | null; deit
               <Text variant="caption" color="rgba(255,255,255,0.7)" numberOfLines={1} style={{ maxWidth: 260 }}>{midia.titulo}{midia.artista ? ` · ${midia.artista}` : ''}</Text>
             </View>
           ) : null}
+          {/* 26/11: o PC e a bateria, discretos — de longe dá para ver se precisa pôr na tomada. */}
+          <View style={styles.tocandoDescanso}>
+            <View style={[styles.ponto, { backgroundColor: conectado ? 'rgba(74,222,128,0.7)' : 'rgba(255,255,255,0.3)' }]} />
+            {bateria ? (
+              <>
+                <Feather name={bateria.carregando ? 'battery-charging' : 'battery'} size={14} color={!bateria.carregando && bateria.nivel < 20 ? '#ff6b6b' : 'rgba(255,255,255,0.55)'} />
+                <Text variant="caption" color="rgba(255,255,255,0.55)" style={styles.numero}>{bateria.nivel}%</Text>
+              </>
+            ) : null}
+          </View>
         </View>
       </Pressable>
     </Animated.View>
