@@ -81,7 +81,10 @@ export type SituacaoAtualizacao = {
 };
 
 export async function situacaoAtualizacao(pairing: Pairing, verificar = false): Promise<SituacaoAtualizacao> {
-  const r = await callRpc(pairing, 'update.status', verificar ? { verificar: true } : {}, verificar ? { timeoutMs: 30000 } : {});
+  // 27/11: a versão nativa vai junto — o PC não guarda o APK (~165 MB) que este celular já tem.
+  const vc = vcInstalado();
+  const versaoNativa = { versaoNativa: versaoInstalada(), ...(vc ? { versionCode: vc } : {}) };
+  const r = await callRpc(pairing, 'update.status', verificar ? { verificar: true, ...versaoNativa } : versaoNativa, verificar ? { timeoutMs: 30000 } : {});
   const cel = r.celular;
   const nova = cel ? pacoteMaisNovo(cel, versaoInstalada(), vcInstalado()) : false;
   return {

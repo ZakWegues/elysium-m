@@ -109,7 +109,7 @@ export type OpcoesDeTexto = { canal?: 'voz' | 'texto'; refazer?: boolean; onEtap
 export type VoiceConnection = {
   ready: Promise<void>;
   /** Manda o áudio gravado; o PC transcreve (`onTranscript`, antes dos pedaços) e responde. */
-  sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult>;
+  sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void, onEtapa?: (e: Etapa) => void): Promise<StreamResult>;
   /** Manda texto pelo mesmo WebSocket — é o caminho que recebe a resposta em pedaços. */
   /** `canal: 'texto'` = digitado (resposta de chat); sem ele, o curto da voz (bloco 130). */
   sendText(text: string, onChunk?: OnChunk, opcoes?: OpcoesDeTexto): Promise<StreamResult>;
@@ -442,11 +442,15 @@ export function openVoiceConnection(
     return p;
   }
 
-  function sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult> {
+  function sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void, onEtapa?: (e: Etapa) => void): Promise<StreamResult> {
     return new Promise((resolve, reject) => {
       const p = abrirPedido(resolve, reject, onChunk, onTranscript);
       if (!p) return;
       p.enviado = true;
+      // 27/11: as etapas também na voz ("Mandando…", "O PC recebeu", o que a Ely está fazendo). Sem o
+      // "Tentar de novo" de 10 s: o áudio não fica guardado para reenviar com o mesmo id.
+      p.onEtapa = onEtapa;
+      onEtapa?.({ fase: 'enviando' });
       // 31/10: com id, o áudio vira pedido como o texto (retomada e telas) — PC antigo ignora o anúncio.
       p.id = novoIdDePedido();
 

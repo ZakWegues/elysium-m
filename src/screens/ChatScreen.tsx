@@ -919,7 +919,7 @@ export default function ChatScreen({
       const { reply, rapidas, id, desfazer, memoria, musicas } = await conn.sendAudio(uri, (parcial) => { setPensandoVoz(false); bolha.onChunk(parcial); ant.aoPedaco(parcial); }, (transcript) => {
         transcricao = transcript;
         setMessages((prev) => prev.map((m) => (m.id === idAudio ? { ...m, text: transcript } : m)));
-      });
+      }, setEtapa);
       if (paradoRef.current) { fala?.abortar(); return null; }
       // Com o id, a tela que o PC mandar depois (pedido de tela por voz) acha esta bolha.
       bolha.fechar(reply, undefined, false, rapidas, id, desfazer, memoria, false, musicas);
@@ -932,6 +932,7 @@ export default function ChatScreen({
       return null;
     } finally {
       setSending(false);
+      setEtapa(null);
       setPensandoVoz(false);
       bolhaAtualRef.current = null;
     }
