@@ -5,7 +5,7 @@ import { useTheme } from '../../theme';
 import { Text, Toque } from '../ui';
 import { MOV } from '../../lib/motion';
 
-export type AcaoErro = 'refazer' | 'depois' | 'cancelar';
+export type AcaoErro = 'refazer' | 'tentar' | 'depois' | 'cancelar';
 
 /**
  * Erro no chat como cartão com saída (26/10, pedido do dono): antes era texto vermelho solto, e as
@@ -24,7 +24,7 @@ export function CartaoErro({
 }) {
   const { palette, tokens } = useTheme();
   const cor = fila ? palette.primary : palette.error;
-  const rotulo: Record<AcaoErro, string> = { refazer: 'Refazer', depois: 'Mandar depois', cancelar: 'Cancelar envio' };
+  const rotulo: Record<AcaoErro, string> = { refazer: 'Refazer', tentar: 'Tentar de novo', depois: 'Mandar depois', cancelar: 'Cancelar envio' };
   return (
     <Animated.View
       entering={FadeInDown.withInitialValues({ transform: [{ translateY: 6 }] }).duration(MOV.base).reduceMotion(ReduceMotion.System)}

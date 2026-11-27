@@ -26,7 +26,7 @@ class WsFalso {
 }
 (globalThis as unknown as { WebSocket: unknown }).WebSocket = WsFalso;
 
-const { openVoiceConnection, recuo, novoIdDePedido } = await import("../src/lib/stream");
+const { openVoiceConnection, recuo, novoIdDePedido, SemConfirmacao } = await import("../src/lib/stream");
 const pairing = { endpoints: ["192.168.0.5"], activeIp: "192.168.0.5", port: 4200, token: "x".repeat(40) };
 
 describe("conexão firme do chat (21/10)", () => {
@@ -151,6 +151,58 @@ describe("desfazer (31/10)", () => {
     const id2 = JSON.parse(WsFalso.todos[0].enviados.filter(e => e.includes("command"))[1]).id;
     WsFalso.todos[0].pc({ type: "reply", reply: "Oi!", id: id2 });
     expect((await r2).desfazer).toBeUndefined();
+    conn.close();
+  });
+
+  // 27/11: "às vezes parece que tá, mas não tá" — a bolha diz a etapa e desiste cedo sem o "recebi".
+  it("PC antigo sem nenhum sinal: desiste aos 16 s com o mesmo id para tentar de novo", async () => {
+    const conn = openVoiceConnection(pairing);
+    WsFalso.todos[0].abrir();
+    await conn.ready;
+    const etapas: string[] = [];
+    const r = conn.sendText("oi", undefined, { canal: "texto", onEtapa: (e) => etapas.push(e.fase) });
+    const id = JSON.parse(WsFalso.todos[0].enviados.find(e => e.includes("command"))!).id;
+    const verificacao = expect(r).rejects.toBeInstanceOf(SemConfirmacao);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(WsFalso.todos).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await verificacao;
+    await r.catch((e) => expect(e.id).toBe(id));
+    expect(etapas).toEqual(["enviando"]);
+    // O socket mudo foi trocado; "Tentar de novo" sai com o mesmo id.
+    await vi.advanceTimersByTimeAsync(1_100);
+    WsFalso.todos[1].abrir();
+    const r2 = conn.sendText("oi", undefined, { canal: "texto", id });
+    expect(JSON.parse(WsFalso.todos[1].enviados.find(e => e.includes("command"))!).id).toBe(id);
+    WsFalso.todos[1].pc({ type: "reply", reply: "Oi!", id });
+    await expect(r2).resolves.toMatchObject({ reply: "Oi!" });
+    conn.close();
+  });
+
+  it("etapas: enviando, recebido e o que a Ely está fazendo; com o recebido o prazo some", async () => {
+    const conn = openVoiceConnection(pairing);
+    WsFalso.todos[0].abrir();
+    await conn.ready;
+    const etapas: string[] = [];
+    const r = conn.sendText("toca lo-fi", undefined, { canal: "texto", onEtapa: (e) => etapas.push(e.texto ? `${e.fase}:${e.texto}` : e.fase) });
+    const id = JSON.parse(WsFalso.todos[0].enviados.find(e => e.includes("command"))!).id;
+    WsFalso.todos[0].pc({ type: "andamento", id, recebido: true });
+    WsFalso.todos[0].pc({ type: "andamento", id, estado: "Tocando lo-fi…" });
+    await vi.advanceTimersByTimeAsync(30_000);
+    WsFalso.todos[0].pc({ type: "reply", reply: "Tocando.", id });
+    await expect(r).resolves.toMatchObject({ reply: "Tocando." });
+    expect(etapas).toEqual(["enviando", "recebido", "trabalhando:Tocando lo-fi…"]);
+    conn.close();
+  });
+
+  it("PC que confirma: sem o recebido, desiste aos 10 s", async () => {
+    const conn = openVoiceConnection(pairing);
+    WsFalso.todos[0].abrir();
+    await conn.ready;
+    const r = conn.sendText("oi", undefined, { canal: "texto" });
+    const verificacao = expect(r).rejects.toThrow(/não confirmou/);
+    await vi.advanceTimersByTimeAsync(10_100);
+    await verificacao;
     conn.close();
   });
 });

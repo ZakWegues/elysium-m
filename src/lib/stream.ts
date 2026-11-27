@@ -34,6 +34,20 @@ export type EstadoConexao = 'conectado' | 'reconectando' | 'caiu';
 /** O WebSocket nem abriu: aí, e só aí, vale cair no HTTP (o comando não chegou ao PC). */
 export class ConexaoNaoAbriu extends Error {}
 
+/**
+ * 27/11: o PC não confirmou que recebeu (ou a mensagem nem saiu) a tempo. "Tentar de novo" pode
+ * mandar o MESMO id: o PC que já tinha recebido só reconecta, não roda duas vezes.
+ */
+export class SemConfirmacao extends Error {
+  constructor(msg: string, readonly id: string) { super(msg); }
+}
+
+/**
+ * 27/11: em que pé está o pedido, para a bolha dizer em vez de só três pontinhos ("parece que tá,
+ * mas não tá"). `trabalhando.texto` é o que a Ely está fazendo ("Tocando lo-fi…").
+ */
+export type Etapa = { fase: 'enviando' | 'recebido' | 'trabalhando' | 'reconectando'; texto?: string };
+
 type Pending = {
   /** Pedido de texto com id (PC 2.14+ guarda a resposta e deixa retomar). Áudio não tem. */
   id?: string;
@@ -54,6 +68,10 @@ type Pending = {
   onChunk?: OnChunk;
   onTranscript?: (texto: string) => void;
   timeout: ReturnType<typeof setTimeout>;
+  /** 27/11: etapas para a bolha e o prazo do "recebi" do PC. */
+  onEtapa?: (e: Etapa) => void;
+  confirmado?: boolean;
+  prazoConfirmacao?: ReturnType<typeof setTimeout>;
 };
 
 /**
@@ -67,6 +85,14 @@ const BATIDA_MS = 15000;
 const SILENCIO_MAXIMO_MS = 35000;
 /** Quanto tempo um pedido espera a conexão voltar antes de desistir. */
 const ESPERA_RETOMADA_MS = 90000;
+/**
+ * 27/11: sem nenhum sinal do PC sobre o pedido (nem o "recebi"), desiste cedo com "Tentar de novo"
+ * — antes eram até 90 s de três pontinhos. O PC 2.66+ confirma na hora; o antigo só manda o
+ * primeiro `andamento` aos 12 s, então com ele o prazo é maior.
+ */
+const CONFIRMACAO_MS = 10000;
+const CONFIRMACAO_PC_ANTIGO_MS = 16000;
+let pcConfirma = false;
 
 /** Id do pedido: o PC aceita `[A-Za-z0-9-]{8,64}`. */
 export function novoIdDePedido(): string {
@@ -78,13 +104,15 @@ export function recuo(tentativa: number): number {
   return Math.min(15000, 1000 * 2 ** Math.max(0, tentativa));
 }
 
+export type OpcoesDeTexto = { canal?: 'voz' | 'texto'; refazer?: boolean; onEtapa?: (e: Etapa) => void; id?: string };
+
 export type VoiceConnection = {
   ready: Promise<void>;
   /** Manda o áudio gravado; o PC transcreve (`onTranscript`, antes dos pedaços) e responde. */
   sendAudio(audioUri: string, onChunk?: OnChunk, onTranscript?: (texto: string) => void): Promise<StreamResult>;
   /** Manda texto pelo mesmo WebSocket — é o caminho que recebe a resposta em pedaços. */
   /** `canal: 'texto'` = digitado (resposta de chat); sem ele, o curto da voz (bloco 130). */
-  sendText(text: string, onChunk?: OnChunk, opcoes?: { canal?: 'voz' | 'texto'; refazer?: boolean }): Promise<StreamResult>;
+  sendText(text: string, onChunk?: OnChunk, opcoes?: OpcoesDeTexto): Promise<StreamResult>;
   /** O "Parar" e a saída da tela: avisa o PC (que descarta a resposta) e encerra de vez. */
   close(): void;
   /** A conexão está aberta e o PC deu sinal de vida há pouco? */
@@ -151,6 +179,7 @@ export function openVoiceConnection(
     const p = pending;
     pending = null;
     clearTimeout(p.timeout);
+    clearTimeout(p.prazoConfirmacao);
     if (timerRetomada) { clearTimeout(timerRetomada); timerRetomada = null; }
     fn(p);
   }
@@ -170,6 +199,30 @@ export function openVoiceConnection(
     }, INATIVIDADE_MS);
   }
 
+  /** O PC deu sinal sobre este pedido: acabou o prazo do "recebi". */
+  function confirmar(p: Pending) {
+    if (p.confirmado) return;
+    p.confirmado = true;
+    clearTimeout(p.prazoConfirmacao);
+  }
+
+  /** 27/11: sem sinal do PC a tempo, a conexão está morta (ou o PC não recebeu): desiste e refaz a conexão. */
+  function armarConfirmacao(p: Pending) {
+    clearTimeout(p.prazoConfirmacao);
+    p.prazoConfirmacao = setTimeout(() => {
+      if (pending !== p || p.confirmado || !p.id) return;
+      const id = p.id;
+      diagTela(`ws: sem confirmação do PC (${p.enviado ? 'enviado' : 'nem saiu'})`);
+      settlePending((x) => x.reject(new SemConfirmacao(x.enviado ? 'O PC não confirmou que recebeu a mensagem.' : 'Não consegui mandar a mensagem ao PC.', id)));
+      // Socket que aceita envio e não devolve nada é zumbi: troca por outro.
+      const velho = ws;
+      ws = null;
+      try { velho?.close(); } catch { /* */ }
+      onEstado?.('reconectando');
+      agendarReconexao();
+    }, pcConfirma ? CONFIRMACAO_MS : CONFIRMACAO_PC_ANTIGO_MS);
+  }
+
   function enviarComando(p: Pending) {
     if (!ws || ws.readyState !== WebSocket.OPEN || !p.texto) return;
     try {
@@ -177,6 +230,7 @@ export function openVoiceConnection(
       // `telas`: este app desenha telas inteligentes (Fase 4) — PC antigo ignora.
       ws.send(JSON.stringify({ type: 'command', text: p.texto, id: p.id, canal: p.canal, refazer: p.refazer, telas: p.canal === 'texto', abre: true }));
       p.enviado = true;
+      if (!p.confirmado) { p.onEtapa?.({ fase: 'enviando' }); armarConfirmacao(p); }
     } catch (err) {
       console.warn('[voice-ws] envio falhou, tenta ao reconectar', errMessage(err));
     }
@@ -223,6 +277,7 @@ export function openVoiceConnection(
       // Pedido de texto: espera a conexão voltar e retoma (ou envia, se nem tinha saído).
       if (p.enviado) { p.aguardandoRetomada = true; if (!p.caiuEm) p.caiuEm = Date.now(); }
       onEstado?.('reconectando');
+      p.onEtapa?.({ fase: 'reconectando' });
     } else if (p) {
       settlePending((x) => x.reject(new Error('A conexão com o PC caiu antes da resposta.')));
       onEstado?.('caiu');
@@ -241,7 +296,7 @@ export function openVoiceConnection(
   }
 
   function tratarMensagem(event: MessageEvent) {
-    let data: { abrir?: unknown; desfazer?: unknown; memoria?: unknown; musicas?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
+    let data: { recebido?: unknown; estado?: unknown; abrir?: unknown; desfazer?: unknown; memoria?: unknown; musicas?: unknown; rapidas?: unknown; type?: string; text?: string; reply?: string; error?: string; fontes?: Fonte[]; sugestoes?: string[]; local?: boolean; semCensura?: boolean; id?: string; direction?: string } & Partial<Entrega>;
     try {
       data = JSON.parse(event.data);
     } catch (err) {
@@ -255,10 +310,19 @@ export function openVoiceConnection(
       suportaPong = true;
     } else if (data.type === 'andamento') {
       // 23/11: o PC ainda está trabalhando nesta resposta (pesquisa longa, modelo lento).
-      if (pending && data.id === pending.id) rearmar(pending);
+      // 27/11: `recebido` = o "recebi" na hora; `estado` = o que a Ely está fazendo.
+      if (data.recebido === true) pcConfirma = true;
+      if (pending && data.id === pending.id) {
+        confirmar(pending);
+        rearmar(pending);
+        const estado = typeof data.estado === 'string' ? data.estado.trim().slice(0, 80) : '';
+        if (estado) pending.onEtapa?.({ fase: 'trabalhando', texto: estado });
+        else if (data.recebido === true && !pending.parcial) pending.onEtapa?.({ fase: 'recebido' });
+      }
     } else if (data.type === 'transcript') {
       if (pending) {
         pending.transcript = data.text;
+        confirmar(pending);
         rearmar(pending);
         if (data.text) pending.onTranscript?.(data.text);
       }
@@ -268,7 +332,9 @@ export function openVoiceConnection(
         pending.aguardandoRetomada = false;
         pending.caiuEm = 0;
         pending.parcial = data.text ?? pending.parcial;
+        confirmar(pending);
         rearmar(pending);
+        if (!pending.parcial) pending.onEtapa?.({ fase: 'recebido' });
         if (pending.parcial) pending.onChunk?.(pending.parcial);
       }
     } else if (data.type === 'retomada_falhou') {
@@ -281,6 +347,7 @@ export function openVoiceConnection(
     } else if (data.type === 'chunk') {
       if (pending && doPedido(data.id)) {
         pending.parcial += data.text ?? '';
+        confirmar(pending);
         rearmar(pending);
         pending.onChunk?.(pending.parcial);
       }
@@ -409,15 +476,18 @@ export function openVoiceConnection(
     });
   }
 
-  function sendText(text: string, onChunk?: OnChunk, opcoes: { canal?: 'voz' | 'texto'; refazer?: boolean } = {}): Promise<StreamResult> {
+  function sendText(text: string, onChunk?: OnChunk, opcoes: OpcoesDeTexto = {}): Promise<StreamResult> {
     return new Promise((resolve, reject) => {
       const p = abrirPedido(resolve, reject, onChunk);
       if (!p) return;
-      p.id = novoIdDePedido();
+      // 27/11: "Tentar de novo" manda o mesmo id — o PC que já tinha recebido não roda duas vezes.
+      p.id = opcoes.id && /^[A-Za-z0-9-]{8,64}$/.test(opcoes.id) ? opcoes.id : novoIdDePedido();
       p.texto = text;
       p.canal = opcoes.canal;
       p.refazer = opcoes.refazer;
-      // Aberta: sai agora. Reconectando: sai assim que abrir (aoAbrir).
+      p.onEtapa = opcoes.onEtapa;
+      // Aberta: sai agora. Reconectando: sai assim que abrir (aoAbrir) — e o prazo já corre.
+      armarConfirmacao(p);
       enviarComando(p);
     });
   }

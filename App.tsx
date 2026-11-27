@@ -25,6 +25,7 @@ import { AlturaAvisosContext, FolgaDaBarraContext } from './src/lib/folgaBarra';
 import { AjustesProvider, AppBackground, BarraBlurProvider, BlurTargetProvider, GlassModal, SobreposicaoContext, TopoFlutuante } from './src/components/ui';
 import { CamadaEstouros, registrarToque } from './src/components/Estouros';
 import { IndicadorConexao } from './src/components/conexao/IndicadorConexao';
+import { IP_DA_PONTE, ponteUtil } from './src/lib/ponte';
 import { useConnection } from './src/lib/useConnection';
 import { enderecoMudou } from './src/lib/notificacoesLidas';
 import { useKeyboard } from './src/lib/useKeyboard';
@@ -660,6 +661,8 @@ function AppInner() {
         onTentar={() => { void recheck(); }}
         onProcurar={() => { void runScan(); }}
         onLerQr={() => setAdicionandoPc(true)}
+        caminho={pairing?.activeIp === IP_DA_PONTE ? 'ponte' : 'casa'}
+        temPonte={!!pairing && ponteUtil(pairing)}
       />
       <AvisoOta pendente={ota.pendente} />
       </View>

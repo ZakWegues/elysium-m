@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Feather from '@expo/vector-icons/Feather';
@@ -20,9 +20,13 @@ import type { Descricao } from '../../lib/estadoPc';
  */
 export function IndicadorConexao({
   estado, queued, scanning, scanProgress, hasTunnel, motivo, bloqueadoAte, ultimoContato,
-  onTentar, onProcurar, onLerQr,
+  onTentar, onProcurar, onLerQr, caminho = 'casa', temPonte = false,
 }: {
   estado: EstadoConexao;
+  /** 27/11: por onde está falando com o PC agora (a pílula de "voltou" diz). */
+  caminho?: 'casa' | 'ponte';
+  /** 27/11: a ponte do Cloudflare está configurada — o cartão de offline não fala mais do Tailscale. */
+  temPonte?: boolean;
   queued: number;
   scanning: boolean;
   scanProgress: number;
@@ -37,6 +41,20 @@ export function IndicadorConexao({
   const [recolhido, setRecolhido] = useState(false);
   const [mostrarTexto, setMostrarTexto] = useState(false);
   const serio = estado === 'offline' || estado === 'token' || estado === 'bloqueado';
+  // 27/11 ("às vezes parece que não tá, mas tá"): quando a volta foi visível (pílula com texto ou
+  // cartão), a confirmação aparece por 2,5 s dizendo por onde voltou. Volta rápida continua muda.
+  const avisouQueda = useRef(false);
+  const [voltou, setVoltou] = useState(false);
+  useEffect(() => {
+    if (serio || mostrarTexto) avisouQueda.current = true;
+  }, [serio, mostrarTexto]);
+  useEffect(() => {
+    if (estado !== 'conectado' || !avisouQueda.current) return;
+    avisouQueda.current = false;
+    setVoltou(true);
+    const t = setTimeout(() => setVoltou(false), 2500);
+    return () => clearTimeout(t);
+  }, [estado]);
 
   // O cartão volta a aparecer se o estado piorar depois de recolhido.
   useEffect(() => { if (!serio) setRecolhido(false); }, [serio]);
@@ -51,14 +69,20 @@ export function IndicadorConexao({
   if (scanning) return <Pilula texto={`Procurando o PC na rede… ${scanProgress}%`} />;
   if (serio && !recolhido) {
     return (
-      <CartaoConexao estado={estado} motivo={motivo} hasTunnel={hasTunnel} queued={queued} bloqueadoAte={bloqueadoAte}
+      <CartaoConexao estado={estado} motivo={motivo} hasTunnel={hasTunnel} temPonte={temPonte} queued={queued} bloqueadoAte={bloqueadoAte}
         ultimoContato={ultimoContato} onTentar={onTentar} onProcurar={onProcurar} onLerQr={onLerQr} onRecolher={() => setRecolhido(true)} />
     );
   }
   if (serio) return <Pilula texto={queued > 0 ? `Offline · ${queued} na fila` : 'Offline'} icone="wifi-off" onPress={() => setRecolhido(false)} />;
   if (estado === 'reconectando' || estado === 'procurando') return <Pilula texto={mostrarTexto ? 'Reconectando ao PC…' : null} />;
   if (queued > 0) return <Pilula texto={`Reenviando ${queued} comando${queued > 1 ? 's' : ''}…`} icone="upload-cloud" />;
+  if (voltou) return <Pilula texto={textoDoCaminho(caminho)} icone="check" />;
   return null;
+}
+
+/** 27/11: a pílula de quando a conexão volta. Pura. */
+export function textoDoCaminho(caminho: 'casa' | 'ponte'): string {
+  return caminho === 'ponte' ? 'Conectado ao PC · pela ponte' : 'Conectado ao PC · em casa';
 }
 
 /** A aura: um anel que respira na cor do tema. Para com "reduzir movimento". */
@@ -102,9 +126,9 @@ function Pilula({ texto, icone, onPress }: { texto: string | null; icone?: keyof
 }
 
 function CartaoConexao({
-  estado, motivo, hasTunnel, queued, bloqueadoAte, ultimoContato, onTentar, onProcurar, onLerQr, onRecolher,
+  estado, motivo, hasTunnel, temPonte, queued, bloqueadoAte, ultimoContato, onTentar, onProcurar, onLerQr, onRecolher,
 }: {
-  estado: EstadoConexao; motivo: Descricao | null; hasTunnel: boolean | null; queued: number; bloqueadoAte: number | null;
+  estado: EstadoConexao; motivo: Descricao | null; hasTunnel: boolean | null; temPonte: boolean; queued: number; bloqueadoAte: number | null;
   ultimoContato: number | null; onTentar: () => void; onProcurar: () => void; onLerQr: () => void; onRecolher: () => void;
 }) {
   const { palette, tokens } = useTheme();
@@ -118,9 +142,12 @@ function CartaoConexao({
   const sabido = motivo && motivo.titulo !== 'PC sem resposta' ? motivo : null;
   let icone: keyof typeof Feather.glyphMap = 'wifi-off';
   let titulo = 'Sem contato com o PC';
-  let detalhe = hasTunnel === false
-    ? 'Sem acesso remoto: fora de casa ele não alcança o PC.'
-    : hasTunnel ? 'Fora de casa? O Tailscale do celular pode ter caído.' : 'O PC pode estar desligado ou fora desta rede.';
+  // 27/11: com a ponte do Cloudflare, "o Tailscale caiu" era um motivo falso.
+  let detalhe = temPonte
+    ? 'Nem em casa nem pela ponte. O PC pode estar desligado, sem internet ou com o ELYSIUM fechado.'
+    : hasTunnel === false
+      ? 'Sem acesso remoto: fora de casa ele não alcança o PC.'
+      : hasTunnel ? 'Fora de casa? O Tailscale do celular pode ter caído.' : 'O PC pode estar desligado ou fora desta rede.';
   if (estado === 'token') { icone = 'key'; titulo = 'O PC recusou este celular'; detalhe = 'O QR foi gerado de novo no ELYSIUM. Leia o QR novo para voltar.'; }
   else if (estado === 'bloqueado') {
     const s = Math.max(0, Math.ceil(((bloqueadoAte ?? agora) - agora) / 1000));
@@ -133,7 +160,7 @@ function CartaoConexao({
   if (estado === 'token') botoes.push({ rotulo: 'Ler QR', acao: onLerQr, principal: true });
   else if (estado !== 'bloqueado') {
     botoes.push({ rotulo: 'Tentar agora', acao: onTentar, principal: true });
-    if (hasTunnel) botoes.push({ rotulo: 'Abrir Tailscale', acao: abrirTailscale });
+    if (hasTunnel && !temPonte) botoes.push({ rotulo: 'Abrir Tailscale', acao: abrirTailscale });
     else botoes.push({ rotulo: 'Procurar na rede', acao: onProcurar });
   }
   botoes.push({ rotulo: 'Trabalhar offline', acao: onRecolher });

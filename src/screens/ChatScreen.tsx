@@ -30,7 +30,7 @@ import { Pairing } from '../lib/pairing';
 import { AuthError, pedidoDaTela, sendCommand } from '../lib/api';
 import { TimeoutError } from '../lib/http';
 import { enqueueCommand, removeFromQueue } from '../lib/commandQueue';
-import { ConexaoNaoAbriu, EstadoConexao, novoIdDePedido, openVoiceConnection, VoiceConnection } from '../lib/stream';
+import { ConexaoNaoAbriu, EstadoConexao, Etapa, novoIdDePedido, openVoiceConnection, SemConfirmacao, VoiceConnection } from '../lib/stream';
 import { callRpc } from '../lib/rpc';
 import { errMessage } from '../lib/errors';
 import { haptica } from '../lib/haptica';
@@ -171,6 +171,8 @@ export default function ChatScreen({
   const [sending, setSendingEstado] = useState(false);
   /** 21/10: a conexão caiu no meio de uma resposta — mostra "Reconectando…" em vez de erro. */
   const [conexao, setConexao] = useState<EstadoConexao>('conectado');
+  /** 27/11: em que pé está a mensagem (mandando, o PC recebeu, o que a Ely está fazendo). */
+  const [etapa, setEtapa] = useState<Etapa | null>(null);
   /** O pareamento ATUAL: a conexão reabre sempre no endereço que está valendo agora. */
   const pairingRef = useRef(pairing);
   pairingRef.current = pairing;
@@ -614,7 +616,7 @@ export default function ChatScreen({
     finally { setSending(false); }
   }
 
-  async function handleSend(texto?: string, opcoes: { refazer?: boolean } = {}) {
+  async function handleSend(texto?: string, opcoes: { refazer?: boolean; /** 27/11: "Tentar de novo" — o mesmo pedido. */ id?: string } = {}) {
     const text = (texto ?? draft).trim();
     if (!text || enviandoRef.current) return;
     // Fase 21: "modo live" digitado liga a conversa contínua pelo microfone do celular.
@@ -644,7 +646,8 @@ export default function ChatScreen({
     coladoNoFim.current = true;
     ultimoEnvio.current = Date.now();
     // Refazer (bloco 130): a pergunta já está na tela; só a resposta antiga saiu.
-    if (!opcoes.refazer) setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
+    // "Tentar de novo" (27/11): a pergunta também já está na tela.
+    if (!opcoes.refazer && !opcoes.id) setMessages((prev) => [...prev, { id: `me-${Date.now()}`, from: 'me', text, ts: Date.now() }]);
     setSending(true);
 
     const bolha = bolhaEmPedacos();
@@ -672,7 +675,7 @@ export default function ChatScreen({
           new Promise<never>((_, rej) => { prazoWs = setTimeout(() => rej(new Error('WebSocket demorou a abrir')), 5000); }),
         ]).finally(() => clearTimeout(prazoWs));
         // Bloco 130: digitado = canal "texto" — resposta de chat, com markdown.
-        const r = await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer });
+        const r = await conn.sendText(text, bolha.onChunk, { canal: 'texto', refazer: opcoes.refazer, id: opcoes.id, onEtapa: setEtapa });
         reply = r.reply;
         fontes = r.fontes;
         local = r.local === true;
@@ -705,6 +708,17 @@ export default function ChatScreen({
         return;
       }
 
+      // 27/11: o PC não confirmou a tempo (ou a mensagem nem saiu): diz isso em ~10 s, em vez de
+      // 90 s de três pontinhos. Tentar de novo manda o mesmo id — não roda duas vezes no PC.
+      if (err instanceof SemConfirmacao) {
+        const naoSaiu = /não consegui mandar/i.test(err.message);
+        setMessages((prev) => [...prev, { id: `err-${Date.now()}`, from: 'error', text: naoSaiu ? 'A mensagem não saiu' : 'O PC não confirmou', ts: Date.now(),
+          erro: naoSaiu
+            ? { titulo: 'A mensagem não saiu', detalhe: 'Sem conexão com o PC agora.', acoes: ['tentar', 'depois'], pergunta: text, pedidoId: err.id }
+            : { titulo: 'O PC não confirmou que recebeu', detalhe: 'A conexão travou no caminho. Tentar de novo não repete o pedido.', acoes: ['tentar', 'depois'], pergunta: text, pedidoId: err.id } }]);
+        return;
+      }
+
       // PC fora do ar: em vez de perder o comando, guarda pra reenviar quando voltar.
       // Erro de resposta do servidor (comando chegou e falhou lá) não entra na fila —
       // repetir não conserta.
@@ -724,6 +738,7 @@ export default function ChatScreen({
         erro: { ...t, acoes: ['refazer', 'depois'], pergunta: text } }]);
     } finally {
       setSending(false);
+      setEtapa(null);
       setConexao('conectado');
       bolhaAtualRef.current = null;
     }
@@ -1249,7 +1264,7 @@ export default function ChatScreen({
         onContentSizeChange={aoCrescerConteudo}
         // 14/11 (o dono: "os 3 pontinhos ficam numa faixa que corta a tela"): a pílula vai DENTRO da
         // lista, logo depois da última mensagem, e rola junto — sem faixa de lado a lado.
-        ListFooterComponent={sending && !escrevendoId ? <BolhaPensando /> : null}
+        ListFooterComponent={sending && !escrevendoId ? <BolhaPensando texto={textoDaEtapa(etapa, conexao)} /> : null}
         onScroll={(e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
           deslocamento.current = contentOffset.y;
@@ -1275,6 +1290,7 @@ export default function ChatScreen({
                   // O cartão sai da conversa; a ação decide o que vem no lugar.
                   setMessages((prev) => prev.filter((m) => m.id !== item.id));
                   if (a === 'refazer' && erro.pergunta) void handleSend(erro.pergunta, { refazer: true });
+                  else if (a === 'tentar' && erro.pergunta) void handleSend(erro.pergunta, erro.pedidoId ? { id: erro.pedidoId } : {});
                   else if (a === 'depois' && erro.pergunta) void enqueueCommand(erro.pergunta).then((q) => setMessages((prev) => [...prev, { id: `queued-${Date.now()}`, from: 'error', text: 'Guardado.', ts: Date.now(), erro: { titulo: 'Guardei para mandar depois', detalhe: 'Mando sozinho assim que o PC responder.', acoes: ['cancelar'], filaId: q.id } }]));
                   else if (a === 'cancelar' && erro.filaId) void removeFromQueue(erro.filaId);
                 }} /></>
@@ -1383,10 +1399,6 @@ export default function ChatScreen({
 
       {semCabecalho && messages.length ? <SumirNoTopo altura={folgaTopo} /> : null}
       <IrAoFim visivel={longe} novas={novas} acima={alturaCampo + 12} aoTocar={() => { coladoNoFim.current = true; setNovas(false); listRef.current?.scrollToEnd({ animated: true }); }} />
-
-      {sending && conexao === 'reconectando' && (
-        <Text variant="caption" color={palette.textMuted} style={{ textAlign: 'center', paddingBottom: 6 }}>Reconectando ao PC… a resposta continua de onde parou.</Text>
-      )}
 
       {/* Encostadas na barra de escrita, porque é de lá que a próxima mensagem sai. */}
       {/* "/" = comandos de IA (bloco 137): toque escolhe, depois escreva ou cole o texto. */}
@@ -1567,7 +1579,19 @@ function BolhaEntrando({ style, children }: { style: StyleProp<ViewStyle>; child
  *
  * 22.1: o "acordando o cérebro…" depois de 6 s saiu — só os três pontos.
  */
-function BolhaPensando() {
+/**
+ * 27/11: a frase ao lado dos pontinhos. "Parece que tá, mas não tá": agora a bolha diz se a
+ * mensagem ainda está saindo, se o PC recebeu e o que a Ely está fazendo. Pura.
+ */
+export function textoDaEtapa(etapa: Etapa | null, conexao: EstadoConexao): string | null {
+  if (conexao === 'reconectando' || etapa?.fase === 'reconectando') return 'Reconectando… continua de onde parou';
+  if (etapa?.fase === 'enviando') return 'Mandando…';
+  if (etapa?.fase === 'recebido') return 'O PC recebeu';
+  if (etapa?.fase === 'trabalhando') return etapa.texto ?? null;
+  return null;
+}
+
+function BolhaPensando({ texto }: { texto?: string | null }) {
   const { palette, tokens } = useTheme();
 
   return (
@@ -1585,6 +1609,7 @@ function BolhaPensando() {
         ]}
       >
         {[0, 1, 2].map(i => <Ponto key={i} atraso={i * 160} cor={palette.textMuted} />)}
+        {texto ? <Text variant="caption" color={palette.textMuted} numberOfLines={1} style={{ marginLeft: 4, maxWidth: 230 }}>{texto}</Text> : null}
       </AnimatedReanimated.View>
     </View>
   );
